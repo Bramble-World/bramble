@@ -1,12 +1,19 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { sequenceFor, FREEFORM_CHOICE, type StoryChoice } from "@/lib/demo/story-beats"
+import {
+  sequenceFor,
+  FREEFORM_CHOICE,
+  type StoryChoice,
+  type StoryEmail,
+} from "@/lib/demo/story-beats"
 import type { Scenario } from "@/lib/demo/scenarios"
+import { EmailMockup } from "./email-mockup"
 import { PhoneMockup } from "./phone-mockup"
 
-// Playing a scenario. Phone on the left showing messages as they land, the story
-// and its branches on the right.
+// Playing a scenario. The surface the thread actually lives on sits on the left
+// — a phone lock screen for iMessage, a mail client for email — and the story
+// and its branches sit on the right.
 //
 // Note the type shift from the rest of the demo: onboarding and the graph are
 // set in a grotesque, and this screen is a serif. The graph is a product
@@ -34,10 +41,14 @@ export function StoryView({ scenario, onBack }: { scenario: Scenario; onBack: ()
 
   const beat = script[index]
   const isFinal = beat.choices.length === 0
-  const incoming = script
-    .slice(0, index + 1)
+  const seen = script.slice(0, index + 1)
+  const incoming = seen
     .map((entry) => entry.incomingMessage)
     .filter((message): message is string => Boolean(message))
+  const incomingEmails = seen
+    .map((entry) => entry.incomingEmail)
+    .filter((email): email is StoryEmail => Boolean(email))
+  const isEmail = scenario.surface === "email"
 
   function commit(choice: StoryChoice, freeText?: string) {
     if (isAdvancing || index + 1 >= script.length) return
@@ -100,17 +111,37 @@ export function StoryView({ scenario, onBack }: { scenario: Scenario; onBack: ()
         </button>
       </div>
 
-      {/* Left — the phone. Deliberately taller than the column and cropped at
+      {/* Left — the surface. Deliberately taller than the column and cropped at
           the bottom, so it reads as a real object sitting in the frame rather
-          than an icon that happens to be phone-shaped. */}
-      <div className="relative flex shrink-0 justify-center overflow-hidden pt-16 md:h-full md:w-[44%] md:justify-center md:pt-[13vh]">
-        <div className="w-[54vw] max-w-[300px] md:w-[23.5vw] md:max-w-none">
-          <PhoneMockup
-            contactName={scenario.personaName}
-            portrait={scenario.portrait}
-            notifications={incoming}
-            isTyping={isAdvancing}
-          />
+          than an icon that happens to be phone- or window-shaped. */}
+      <div
+        className={`relative flex shrink-0 justify-center overflow-hidden pt-16 md:h-full md:w-[44%] md:justify-center ${
+          isEmail ? "md:pt-[9vh]" : "md:pt-[13vh]"
+        }`}
+      >
+        <div
+          className={
+            isEmail
+              ? "w-[92vw] max-w-[520px] md:w-[36vw] md:max-w-none"
+              : "w-[54vw] max-w-[300px] md:w-[23.5vw] md:max-w-none"
+          }
+        >
+          {isEmail ? (
+            <EmailMockup
+              personaName={scenario.personaName}
+              portrait={scenario.portrait}
+              history={scenario.history}
+              emails={incomingEmails}
+              isReceiving={isAdvancing}
+            />
+          ) : (
+            <PhoneMockup
+              contactName={scenario.personaName}
+              portrait={scenario.portrait}
+              notifications={incoming}
+              isTyping={isAdvancing}
+            />
+          )}
         </div>
         <div
           className="pointer-events-none absolute bottom-0 left-0 h-24 w-full md:h-[14%]"
@@ -133,11 +164,15 @@ export function StoryView({ scenario, onBack }: { scenario: Scenario; onBack: ()
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/45 md:[font-size:0.92vw]">
                 {scenario.personaName}
               </span>
-              <p
-                className="w-fit rounded-lg bg-[#e0e0e0] px-3 py-2 text-sm text-black/85 md:[font-size:1.35vw] md:[border-radius:1.1vw] md:[padding:0.9vw_1.2vw]"
-              >
-                {beat.incomingMessage}
-              </p>
+              {isEmail ? (
+                <p className="border-l-2 border-black/20 pl-3 text-sm italic text-black/75 md:[font-size:1.35vw] md:[padding-left:1.1vw]">
+                  {beat.incomingMessage}
+                </p>
+              ) : (
+                <p className="w-fit rounded-lg bg-[#e0e0e0] px-3 py-2 text-sm text-black/85 md:[font-size:1.35vw] md:[border-radius:1.1vw] md:[padding:0.9vw_1.2vw]">
+                  {beat.incomingMessage}
+                </p>
+              )}
             </div>
           )}
 

@@ -99,6 +99,11 @@ export const SCENARIO_ANCHORS = [
   { x: 0.7, y: 0.615 },
   { x: 0.315, y: 0.64 },
   { x: 0.545, y: 0.705 },
+  // The two email threads, slotted into the gaps left above and to the left of
+  // the core rather than appended anywhere free — the five original anchors are
+  // load-bearing for a rehearsed walkthrough and none of them move.
+  { x: 0.5, y: 0.255 },
+  { x: 0.24, y: 0.47 },
 ]
 
 export const CENTER_ANCHOR = { x: 0.5, y: 0.455 }
@@ -199,4 +204,5 @@ export const VOCABULARY: string[] = [
   "Jack Fan", "Syriana Lee", "Angela Lozano", "Daniel Silva", "Sawyer",
   "Harvin Park", "Honeypls", "Destiny", "Iced Tea", "Green Juice",
   "Gunpla", "Nikon F4", "1989", "Offline", "Random Convos", "Internet Strangers",
+  "Ray", "Priya", "Inbox", "Archived", "Unsent Drafts",
 ]

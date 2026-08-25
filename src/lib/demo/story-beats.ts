@@ -15,11 +15,34 @@ export type StoryChoice = {
   isFreeform: boolean
 }
 
+/**
+ * One email in a thread. Only the email surface renders these; the persona's
+ * display name and portrait come from the scenario, so a beat only carries what
+ * changes from message to message.
+ */
+export type StoryEmail = {
+  subject: string
+  fromAddress: string
+  /** Display strings, Gmail-style — the player is just "me". */
+  to: string[]
+  cc?: string[]
+  sentAt: string
+  /** One string per paragraph. */
+  body: string[]
+  attachments?: string[]
+}
+
 export type StoryBeat = {
   /** Sets the scene — "Your phone lights up." */
   narration: string
-  /** What they sent, shown on the phone and in the transcript. */
+  /**
+   * What they sent. The messages surface renders this as the notification; both
+   * surfaces use it as the pull-quote in the story column, which is why an
+   * email beat sets it to the line worth quoting rather than the whole body.
+   */
   incomingMessage: string | null
+  /** The full email, on scenarios whose surface is "email". */
+  incomingEmail?: StoryEmail
   /** The pause before the decision — "You stare at it for a few seconds." */
   reaction: string
   /** Empty means the chapter is over. */
@@ -192,12 +215,186 @@ const slowFade: StoryBeat[] = [
   },
 ]
 
+
+// MARK: Ray — email
+
+const FROM_RAY = "raymond.osei@icloud.com"
+
+const theLongEmail: StoryBeat[] = [
+  {
+    narration: "It landed at 2:14 in the morning. You have read it four times since.",
+    incomingMessage: "I am not writing to ask you for anything. I want to be clear about that first.",
+    incomingEmail: {
+      subject: "Some things I should have said",
+      fromAddress: FROM_RAY,
+      to: ["me"],
+      sentAt: "2:14 AM",
+      body: [
+        "I am not writing to ask you for anything. I want to be clear about that first, because I know how this looks arriving at this hour after this long.",
+        "I have started this email a number of times over the last four years. Each time I read it back it sounded like a man explaining himself, and I did not want to send you that.",
+        "I do not have a version that sounds better. So this is the one I am sending.",
+        "Your mother would have written it much sooner.",
+      ],
+    },
+    reaction: "Four years, and he still opens with a disclaimer.",
+    choices: choices(["Reply before you lose your nerve", "Read it a fifth time", "Ask him why now"]),
+  },
+  {
+    narration: "The reply comes back the same afternoon. Much shorter.",
+    incomingMessage:
+      "I did not know how to be at that funeral and be your father on the same day. So I was neither.",
+    incomingEmail: {
+      subject: "Re: Some things I should have said",
+      fromAddress: FROM_RAY,
+      to: ["me"],
+      sentAt: "1:47 PM",
+      body: [
+        "Why now is a fair question and I do not have a clean answer for it.",
+        "I did not know how to be at that funeral and be your father on the same day. So I was neither, and then it had been a year, and then it had been four.",
+        "That is not an excuse. It is only the actual sequence.",
+      ],
+    },
+    reaction: "It is the first honest sentence he has ever put in writing to you.",
+    choices: choices([
+      "Tell him what that day was like",
+      "Tell him four years is a long time",
+      "Ask what he wants from this",
+    ]),
+  },
+  {
+    narration: "Three days of nothing. Then, at a reasonable hour for once:",
+    incomingMessage: "I am not asking to be forgiven. I am asking for a Tuesday.",
+    incomingEmail: {
+      subject: "Re: Some things I should have said",
+      fromAddress: FROM_RAY,
+      to: ["me"],
+      sentAt: "10:31 AM",
+      body: [
+        "I have read your last message more times than is dignified.",
+        "I am not asking to be forgiven. I know that is not a thing which gets handed over by email.",
+        "I am asking for a Tuesday. Any Tuesday. Coffee, an hour, somewhere public enough that either of us can leave.",
+      ],
+    },
+    reaction: "He picked the smallest thing he could think to ask for.",
+    choices: choices(["Say yes", "Say not yet", "Name a condition"]),
+  },
+  {
+    narration: "A one-line reply, and an attachment.",
+    incomingMessage: "Tuesday. It is refundable, so please do not feel you have spent anything by saying yes.",
+    incomingEmail: {
+      subject: "Re: Some things I should have said",
+      fromAddress: FROM_RAY,
+      to: ["me"],
+      sentAt: "10:58 AM",
+      body: [
+        "Tuesday. It is refundable, so please do not feel you have spent anything by saying yes.",
+      ],
+      attachments: ["BA1476-tue-0810.pdf"],
+    },
+    reaction: "He booked the flight before he asked.",
+    choices: [],
+  },
+]
+
+// MARK: Priya — email
+
+const FROM_PRIYA = "p.raman@northgate.co"
+const THREAD = "Re: Q3 launch — status"
+
+const replyAll: StoryBeat[] = [
+  {
+    narration: "It went out to eleven people. One of them is your skip-level.",
+    incomingMessage:
+      "The slip traces back to the copy handoff, which sat on Blossom's side of the fence for most of last week.",
+    incomingEmail: {
+      subject: THREAD,
+      fromAddress: FROM_PRIYA,
+      to: ["q3-launch@northgate.co"],
+      cc: ["j.whitfield@northgate.co", "+9 others"],
+      sentAt: "4:58 PM",
+      body: [
+        "Adding a quick note here just to close the loop for everyone's visibility.",
+        "The slip on the launch date traces back to the copy handoff, which sat on Blossom's side of the fence for most of last week. Engineering were ready on time and I don't want that to get lost.",
+        "Nothing to action over the weekend — flagging now so that Monday's review can be a short meeting.",
+        "Have great weekends all!",
+      ],
+    },
+    reaction: "It is 4:58 on a Friday and yours is the only name in the sentence.",
+    choices: choices([
+      "Reply all with the timeline",
+      "Reply to Priya only",
+      "Leave it until Monday",
+    ]),
+  },
+  {
+    narration: "Ninety seconds later, a second email. This one has only your name in the To field.",
+    incomingMessage: "hey — I don't think that landed the way I meant it to. long week.",
+    incomingEmail: {
+      subject: THREAD,
+      fromAddress: FROM_PRIYA,
+      to: ["me"],
+      sentAt: "5:00 PM",
+      body: [
+        "hey — I don't think that landed the way I meant it to.",
+        "It's been a long week and Whitfield has been on me about the date since Tuesday. I wasn't trying to make it about you.",
+        "Drink next week? My shout.",
+      ],
+    },
+    reaction: "Two registers, one person, ninety seconds apart.",
+    choices: choices([
+      "Tell her it's fine",
+      "Point out the thread is still sitting there",
+      "Ask her to correct it publicly",
+    ]),
+  },
+  {
+    narration: "Eleven minutes, which for Priya is a very long time.",
+    incomingMessage:
+      "You're right, and I'll fix it. I'd rather do it Monday though — nobody is reading that thread at 5pm on a Friday.",
+    incomingEmail: {
+      subject: THREAD,
+      fromAddress: FROM_PRIYA,
+      to: ["me"],
+      sentAt: "5:11 PM",
+      body: [
+        "You're right, and I'll fix it.",
+        "I'd rather do it Monday morning though — nobody is reading that thread at 5pm on a Friday, and a correction tonight looks like we spent the weekend arguing about it.",
+        "Is that ok? I'm not trying to bury it.",
+      ],
+    },
+    reaction: "Reasonable. Also exactly what you would write if you were hoping it blew over.",
+    choices: choices(["Take Monday", "Ask her to send it tonight", "Say you'll send your own"]),
+  },
+  {
+    narration: "Monday, 9:04. Same subject line, same eleven recipients.",
+    incomingMessage:
+      "The copy handoff was delayed on my side, not Blossom's. It was flagged to me twice and I missed both.",
+    incomingEmail: {
+      subject: THREAD,
+      fromAddress: FROM_PRIYA,
+      to: ["q3-launch@northgate.co"],
+      cc: ["j.whitfield@northgate.co", "+9 others"],
+      sentAt: "9:04 AM",
+      body: [
+        "Correcting my note from Friday ahead of this morning's review.",
+        "The copy handoff was delayed on my side, not Blossom's. It was flagged to me twice — on the 12th and again on the 14th — and I missed both. Full timeline attached.",
+        "Apologies for the noise on a Friday evening.",
+      ],
+      attachments: ["q3-copy-handoff-timeline.pdf"],
+    },
+    reaction: "She used your name again. Differently.",
+    choices: [],
+  },
+]
+
 const SCRIPTS: Record<string, StoryBeat[]> = {
   "unsent-apology": unsentApology,
   "three-days-of-maybe": threeDaysOfMaybe,
   "operation-birthday": operationBirthday,
   "the-ask": theAsk,
   "slow-fade": slowFade,
+  "the-long-email": theLongEmail,
+  "reply-all": replyAll,
 }
 
 /** The full chain for a scenario, opening beat first. */

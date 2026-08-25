@@ -13,7 +13,7 @@ export type SeedMessage = {
 }
 
 /** Palette for the life graph. Muted, translucent, no saturated primaries. */
-export type ScenarioAccent = "coral" | "blush" | "violet" | "teal" | "azure"
+export type ScenarioAccent = "coral" | "blush" | "violet" | "teal" | "azure" | "ochre" | "plum"
 
 export const ACCENT_COLOR: Record<ScenarioAccent, string> = {
   coral: "rgb(232, 107, 92)",
@@ -21,11 +21,21 @@ export const ACCENT_COLOR: Record<ScenarioAccent, string> = {
   violet: "rgb(133, 120, 204)",
   teal: "rgb(89, 168, 153)",
   azure: "rgb(107, 148, 217)",
+  ochre: "rgb(209, 153, 82)",
+  plum: "rgb(153, 102, 140)",
 }
+
+/**
+ * Which surface the story is played on. The life graph spans more than one
+ * inbox — a thread that lives in mail reads nothing like one that lives in
+ * iMessage, and the story mode renders each in its own chrome.
+ */
+export type StorySurface = "messages" | "email"
 
 /** A playable situation. */
 export type Scenario = {
   id: string
+  surface: StorySurface
   /** What the user picks from the graph. */
   title: string
   /** Who the model plays. */
@@ -54,6 +64,7 @@ export type Scenario = {
 }
 
 const unsentApology: Scenario = {
+  surface: "messages",
   id: "unsent-apology",
   title: "The Unsent Apology",
   personaName: "Maya",
@@ -87,6 +98,7 @@ const unsentApology: Scenario = {
 }
 
 const threeDaysOfMaybe: Scenario = {
+  surface: "messages",
   id: "three-days-of-maybe",
   title: "Three Days of Maybe",
   personaName: "Jordan",
@@ -117,6 +129,7 @@ const threeDaysOfMaybe: Scenario = {
 }
 
 const operationBirthday: Scenario = {
+  surface: "messages",
   id: "operation-birthday",
   title: "Operation Birthday",
   personaName: "Dani",
@@ -150,6 +163,7 @@ const operationBirthday: Scenario = {
 }
 
 const theAsk: Scenario = {
+  surface: "messages",
   id: "the-ask",
   title: "The Ask",
   personaName: "Marcus",
@@ -181,6 +195,7 @@ const theAsk: Scenario = {
 }
 
 const slowFade: Scenario = {
+  surface: "messages",
   id: "slow-fade",
   title: "The Slow Fade",
   personaName: "Theo",
@@ -211,6 +226,77 @@ const slowFade: Scenario = {
   ],
 }
 
+
+// MARK: - Estrangement (email)
+
+const theLongEmail: Scenario = {
+  surface: "email",
+  id: "the-long-email",
+  title: "The Long Email",
+  personaName: "Ray",
+  nodeCaption: "your father",
+  relationship:
+    "Your father. You have not spoken since your mother's funeral, four years ago. He writes; he does not call.",
+  genre: "Estrangement",
+  stakes: "Nine paragraphs arrived at 2am and nothing has arrived since.",
+  unresolved: "Whether four years of silence gets an answer, and which of you has to go first.",
+  silenceDuration: "4 years of silence",
+  voiceNotes:
+    "Writes email like a letter — greeting, paragraphs, sign-off. Drops contractions when he is being serious. Apologises in the passive voice, as though the thing happened to both of you, and cannot say it plainly until he is made to.",
+  hubLabel: "family",
+  accent: "plum",
+  leaves: ["the funeral", "four years", "never calls", "nine paragraphs"],
+  portrait: "/portraits/ray.png",
+  history: [
+    {
+      isFromMe: false,
+      text: "I have your new address from your aunt. I hope that is all right.",
+      timestamp: "4 years ago",
+    },
+  ],
+}
+
+// MARK: - Professional ambush (email)
+
+const replyAll: Scenario = {
+  surface: "email",
+  id: "reply-all",
+  title: "Reply All",
+  personaName: "Priya",
+  nodeCaption: "the colleague",
+  relationship:
+    "A peer on your team. Ambitious, polished, and very good at making a criticism sound like a process improvement.",
+  genre: "Professional ambush",
+  stakes:
+    "She put the delay on your name in front of eleven people, one of whom is your skip-level, at 4:58 on a Friday.",
+  unresolved:
+    "Whether you correct the record where everyone can see it, or take it to a DM and let the thread stand.",
+  silenceDuration: "2 hours in your inbox",
+  voiceNotes:
+    "Impeccably polite and never writes anything indefensible. Uses \"just to close the loop\" and \"for visibility\" as instruments. Switches register completely the moment it is one to one, and means both versions.",
+  hubLabel: "work",
+  accent: "ochre",
+  leaves: ["the Q3 thread", "cc: your skip-level", "4:58pm friday", "for visibility"],
+  portrait: "/portraits/priya.png",
+  history: [
+    {
+      isFromMe: false,
+      text: "Kicking off the Q3 launch thread — putting everyone on here for visibility.",
+      timestamp: "Mon 10:02 AM",
+    },
+    {
+      isFromMe: true,
+      text: "Copy handoff is the long pole. Flagging now so it doesn't surprise anyone later.",
+      timestamp: "Wed 2:41 PM",
+    },
+    {
+      isFromMe: true,
+      text: "Second flag on the copy handoff — still no draft from Priya's side.",
+      timestamp: "Thu 9:15 AM",
+    },
+  ],
+}
+
 /** Order matters — the graph pairs each scenario with a hand-placed anchor by index. */
 export const SCENARIOS: Scenario[] = [
   unsentApology,
@@ -218,6 +304,8 @@ export const SCENARIOS: Scenario[] = [
   operationBirthday,
   theAsk,
   slowFade,
+  theLongEmail,
+  replyAll,
 ]
 
 export const MAIN_CHARACTER = { name: "Blossom", portrait: "/portraits/blossom.png" }
