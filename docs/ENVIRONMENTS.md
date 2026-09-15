@@ -108,8 +108,17 @@ Migrations are forward-only — to undo one, write a new one.
 
 ## Branch protection
 
-Set on GitHub for `staging` and `main`:
+`staging` and `main` are protected on GitHub. `dev` is not — push to it freely.
 
-- Require a pull request before merging
-- Require status checks: Lint, Type Check, Unit Tests, Build, Migrations, API Tests
-- Disallow force pushes
+- Pull request required before merging (**0 approvals**, since a solo maintainer
+  cannot approve their own PR; raise it when someone else joins)
+- Required checks: Lint, Type Check, Unit Tests, Build, Migrations, API Tests,
+  E2E Tests
+- Branches must be up to date before merging
+- Force pushes and deletions blocked
+- Conversation resolution required
+
+Admins are **not** forced to comply (`enforce_admins: false`), so you keep an
+escape hatch for emergencies. Flip it on if you want the rule to be absolute.
+
+The default branch is `dev`, so new pull requests target it automatically.
