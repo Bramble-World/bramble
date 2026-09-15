@@ -128,7 +128,11 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
+    # Runs on staging/main themselves, and on PRs targeting them — so it can
+    # gate a promotion before the merge rather than reporting after it.
+    if: >-
+      github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main' ||
+      github.base_ref == 'staging' || github.base_ref == 'main'
     needs: [build]
     steps:
       - uses: actions/checkout@v4
