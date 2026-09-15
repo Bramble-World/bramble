@@ -14,10 +14,9 @@ export default defineConfig({
     baseURL,
     trace: 'on-first-retry',
   },
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-safari', use: { ...devices['iPhone 14'] } },
-  ],
+  // One engine is enough: the browser suite only smoke-tests the two public
+  // pages. API coverage belongs in a browserless project, not a second engine.
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   // Reuses a dev server you already have running; starts one otherwise.
   webServer: {
     // Locally, Doppler injects secrets. CI has no Doppler and needs none —
