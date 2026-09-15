@@ -107,7 +107,24 @@ jobs:
       # Doppler, which CI doesn't need for a throwaway database.
       - run: pnpm exec drizzle-kit migrate
 
-  # ── End-to-end: staging and production only ───────────────────────────────
+  # ── API tests: every branch. No browser, so they stay fast ────────────────
+  api:
+    name: API Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      # No `playwright install` — the api project uses only the request
+      # fixture and never launches a browser.
+      - run: pnpm test:api
+
+  # ── Browser smoke tests: staging and production only ──────────────────────
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest

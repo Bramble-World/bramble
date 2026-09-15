@@ -44,7 +44,8 @@ share history and the diffs stay small and readable.
 | Lint, Type Check, Unit Tests | every branch and PR       | fast feedback                                                                           |
 | Build                        | after those pass          | catches what tests can't                                                                |
 | Migrations                   | every branch and PR       | applies migrations to a throwaway Postgres, so a broken migration never reaches staging |
-| E2E                          | `staging` and `main` only | slow; runs where it matters                                                             |
+| API                          | every branch and PR       | route handlers over real HTTP; browserless, so it stays fast                            |
+| E2E (browser)                | `staging` and `main` only | chromium smoke test of the public pages; slow, runs where it matters                    |
 | Release                      | `main` pushes only        | semantic-release tags and writes notes                                                  |
 
 No deploy step yet — that's deliberate, pending a hosting decision. When it's
@@ -78,6 +79,18 @@ CI does **not** use Doppler. Every quality gate runs with
 `SKIP_ENV_VALIDATION=true` against a throwaway database, so no production
 secret is ever exposed to a workflow run.
 
+## Test layers
+
+| Layer       | Command                 | Covers                                       |
+| ----------- | ----------------------- | -------------------------------------------- |
+| Unit        | `pnpm test:run`         | pure logic — errors, utils, mappers          |
+| Integration | `pnpm test:integration` | services and readers against a real database |
+| API         | `pnpm test:api`         | route handlers over HTTP; no browser         |
+| Browser     | `pnpm test:e2e`         | the public pages render                      |
+
+The API project uses Playwright's `request` fixture only, so it never launches
+a browser and needs no `playwright install` in CI.
+
 ## Migrations
 
 Generate on `dev`, and let them promote with the code:
@@ -98,5 +111,5 @@ Migrations are forward-only — to undo one, write a new one.
 Set on GitHub for `staging` and `main`:
 
 - Require a pull request before merging
-- Require status checks: Lint, Type Check, Unit Tests, Build, Migrations
+- Require status checks: Lint, Type Check, Unit Tests, Build, Migrations, API Tests
 - Disallow force pushes
