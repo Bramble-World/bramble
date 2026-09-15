@@ -108,17 +108,29 @@ Migrations are forward-only — to undo one, write a new one.
 
 ## Branch protection
 
-`staging` and `main` are protected on GitHub. `dev` is not — push to it freely.
+`staging` and `main` are protected. `dev` is not — push to it freely.
 
-- Pull request required before merging (**0 approvals**, since a solo maintainer
-  cannot approve their own PR; raise it when someone else joins)
-- Required checks: Lint, Type Check, Unit Tests, Build, Migrations, API Tests,
-  E2E Tests
-- Branches must be up to date before merging
-- Force pushes and deletions blocked
-- Conversation resolution required
+- **Required status checks**: Lint, Type Check, Unit Tests, Build, Migrations,
+  API Tests. A commit cannot land on a protected branch unless those passed
+  **for that exact commit SHA**.
+- **Force pushes and deletions blocked.**
+- **No pull request required.** Promotion is a plain fast-forward push.
+- **Admins are not forced to comply**, so you always have an escape hatch.
 
-Admins are **not** forced to comply (`enforce_admins: false`), so you keep an
-escape hatch for emergencies. Flip it on if you want the rule to be absolute.
+Because checks are tied to the commit SHA, the fast-forward flow works without
+ceremony: `dev` earns green checks, and promoting that same commit to `staging`
+or `main` already satisfies them.
+
+```bash
+git switch staging && git merge dev --ff-only && git push origin staging
+git switch main && git merge staging --ff-only && git push origin main
+```
+
+`E2E Tests` is deliberately **not** a required check. It is skipped on `dev`, so
+requiring it would block every promotion of a commit that was verified there.
+It still runs on `staging` and `main`, and on PRs targeting them.
+
+Add `required_pull_request_reviews` and set `enforce_admins: true` when someone
+else joins the repo.
 
 The default branch is `dev`, so new pull requests target it automatically.
