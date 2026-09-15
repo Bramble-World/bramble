@@ -20,7 +20,9 @@ export default defineConfig({
   ],
   // Reuses a dev server you already have running; starts one otherwise.
   webServer: {
-    command: 'doppler run pnpm dev',
+    // Locally, Doppler injects secrets. CI has no Doppler and needs none —
+    // every integration in src/env.ts is optional, so the app boots without.
+    command: process.env.CI ? 'pnpm dev' : 'doppler run -- pnpm dev',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
