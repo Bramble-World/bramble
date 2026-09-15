@@ -1,0 +1,4 @@
+[ -n "$CI" ] && exit 0
+# Pin NODE_ENV so this hook builds the way CI and Vercel do, regardless of
+# whatever the local shell happens to export.
+NODE_ENV=production pnpm build
