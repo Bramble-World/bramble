@@ -8,9 +8,11 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:doppler": "doppler run -- next dev",
     "dev:trigger": "concurrently --kill-others --names \"next,trigger\" --prefix-colors \"yellow,blue\" \"next dev\" \"pnpm trigger:dev\"",
     "trigger:dev": "npx trigger.dev@4.4.2 dev",
     "build": "next build",
+    "build:doppler": "doppler run --preserve-env=NODE_ENV -- next build",
     "build:migrate": "drizzle-kit migrate && next build",
     "start": "next start",
     "lint": "eslint",
@@ -28,10 +30,12 @@
     "test:e2e:ui": "playwright test --ui",
     "prepare": "husky",
     "release": "semantic-release",
-    "db:push": "drizzle-kit push",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:push": "doppler run -- drizzle-kit push",
+    "db:generate": "doppler run -- drizzle-kit generate",
+    "db:migrate": "doppler run -- drizzle-kit migrate",
+    "db:studio": "doppler run -- drizzle-kit studio"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [

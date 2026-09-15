@@ -1,0 +1,3 @@
+setup:
+  project: bramble
+  config: dev
