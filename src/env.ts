@@ -15,6 +15,12 @@ export const env = createEnv({
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     DATABASE_URL: z.string().optional(),
+    // Clerk. Optional so a bare checkout still builds; the auth service turns
+    // "absent" into a 401 rather than letting Clerk throw a raw 500.
+    CLERK_SECRET_KEY: z.string().startsWith('sk_').optional(),
+    // PEM public key from the Clerk dashboard. When set, session JWTs are
+    // verified in-process instead of fetching JWKS over the network per request.
+    CLERK_JWT_KEY: z.string().optional(),
   },
 
   /**
@@ -23,6 +29,7 @@ export const env = createEnv({
    */
   client: {
     NEXT_PUBLIC_APP_URL: z.url().default('http://localhost:3000'),
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().startsWith('pk_').optional(),
   },
 
   /**
@@ -32,7 +39,10 @@ export const env = createEnv({
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
     DATABASE_URL: process.env.DATABASE_URL,
+    CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
+    CLERK_JWT_KEY: process.env.CLERK_JWT_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },
 
   /**

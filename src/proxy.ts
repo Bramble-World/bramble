@@ -1,33 +1,30 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
+import { clerkEnabled } from '@/lib/services/auth/auth.config';
 
-// Next 16 renamed `middleware` to `proxy`. The runtime is always `nodejs` here
-// and cannot be configured.
-
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/settings(.*)', '/profile(.*)']);
-
-const clerkEnabled = Boolean(
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
-);
-
-const withClerk = clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
-    await auth.protect();
-  }
-});
+// Next 16 renamed `middleware` to `proxy`. The runtime is always nodejs here and
+// cannot be configured.
+//
+// The API is deliberately NOT proxied — see the matcher. Every route handler
+// authenticates itself through src/lib/services/auth/auth.service.ts, which is
+// what Next's own proxy docs ask for: "Always verify authentication and
+// authorization inside each Server Function rather than relying on Proxy alone."
+// It also guarantees a bearer client can never be handed a redirect or a Clerk
+// handshake where it expects a 401.
+//
+// clerkMiddleware still runs for page routes so Clerk's server context exists
+// once a ClerkProvider and signed-in pages appear. Page protection belongs in
+// the callback below; there is nothing to protect yet.
+const withClerk = clerkMiddleware(async () => {});
 
 export function proxy(req: NextRequest, event: NextFetchEvent) {
-  // Until Clerk keys are set, every request passes straight through, so the
-  // landing page and the venture demo run on a bare checkout.
   if (!clerkEnabled) return;
   return withClerk(req, event);
 }
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
+    // Page routes only: skip Next internals, static files, and the API.
+    '/((?!api|trpc|_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
   ],
 };
