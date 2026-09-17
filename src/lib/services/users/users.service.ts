@@ -33,7 +33,7 @@ export async function getOrCreateFromClerk(
 
   const inserted = await writer.insertUserIfAbsent({
     clerkId,
-    email: identity.email.toLowerCase(),
+    email: identity.email,
     // Clerk exposes the outcome, not the moment, so now() is the honest
     // approximation of "first observed as verified".
     emailVerifiedAt: identity.emailVerified ? new Date() : null,
