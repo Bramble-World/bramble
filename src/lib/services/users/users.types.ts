@@ -6,15 +6,20 @@ export type User = {
   deletedAt: Date | null;
 };
 
+/**
+ * Writer inputs carry `verified`, not a timestamp: the writer derives
+ * email_verified_at itself, because the correct value depends on whether the
+ * address changed. See users.writer.ts.
+ */
 export type NewUser = {
   clerkId: string;
   email: string;
-  emailVerifiedAt?: Date | null;
+  verified: boolean;
 };
 
 export type UserPatch = {
   email?: string;
-  emailVerifiedAt?: Date | null;
+  verified?: boolean;
 };
 
 /** What every reader projects. clerkId is an internal join key, never returned to a client. */

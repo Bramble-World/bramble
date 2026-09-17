@@ -12,7 +12,7 @@ const writer = vi.mocked(await import('./users.writer'));
 const { getOrCreateFromClerk } = await import('./users.service');
 
 const row = { id: 'uuid-1', clerkId: 'user_123', email: 'a@b.com' };
-const identity = async () => ({ email: 'A@B.com', emailVerified: true });
+const identity = async () => ({ email: 'A@B.com', verified: true });
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -38,16 +38,16 @@ describe('getOrCreateFromClerk', () => {
     );
   });
 
-  it('records emailVerifiedAt only when Clerk reports the address verified', async () => {
+  it('passes the verified flag through; the writer derives the timestamp', async () => {
     reader.getUserByClerkId.mockResolvedValue(null);
     writer.insertUserIfAbsent.mockResolvedValue(row);
 
     await getOrCreateFromClerk('user_123', async () => ({
       email: 'a@b.com',
-      emailVerified: false,
+      verified: false,
     }));
     expect(writer.insertUserIfAbsent).toHaveBeenCalledWith(
-      expect.objectContaining({ emailVerifiedAt: null })
+      expect.objectContaining({ verified: false })
     );
   });
 

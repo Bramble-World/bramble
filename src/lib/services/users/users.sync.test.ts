@@ -55,7 +55,7 @@ describe('user.created', () => {
     expect(writer.insertUserIfAbsent).not.toHaveBeenCalled();
   });
 
-  it('records the address as unverified when Clerk says so', async () => {
+  it('passes the unverified flag through to the writer', async () => {
     writer.insertUserIfAbsent.mockResolvedValue(row);
     await applyClerkUserEvent(
       userEvent('user.created', {
@@ -65,7 +65,7 @@ describe('user.created', () => {
       })
     );
     expect(writer.insertUserIfAbsent).toHaveBeenCalledWith(
-      expect.objectContaining({ emailVerifiedAt: null })
+      expect.objectContaining({ verified: false })
     );
   });
 

@@ -1,6 +1,6 @@
 import type { WebhookEvent } from '@clerk/nextjs/webhooks';
-import * as reader from './users.reader';
 import * as writer from './users.writer';
+import { identityFromWebhookData } from './users.identity';
 
 /** What happened, so the route can log it without re-deriving anything. */
 export type SyncOutcome =
@@ -20,7 +20,7 @@ export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutc
   switch (event.type) {
     case 'user.created':
     case 'user.updated': {
-      const identity = primaryEmail(event.data);
+      const identity = identityFromWebhookData(event.data);
       if (!identity) {
         // A Clerk account with no email cannot satisfy users.email NOT NULL.
         // Skip rather than fail: retrying will not conjure an address.
@@ -31,18 +31,17 @@ export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutc
         const inserted = await writer.insertUserIfAbsent({
           clerkId: event.data.id,
           email: identity.email,
-          emailVerifiedAt: identity.verified ? new Date() : null,
+          verified: identity.verified,
         });
         // Already present means lazy provisioning or a redelivery beat us here.
         return { handled: true, event: event.type, action: inserted ? 'created' : 'noop' };
       }
 
-      // Only stamp verification the first time we observe it, so the timestamp
-      // records when the address was first verified rather than last touched.
-      const existing = await reader.getUserByClerkIdIncludingDeleted(event.data.id);
+      // The writer derives email_verified_at from these two fields, because the
+      // answer depends on whether the address itself changed. No read needed.
       const updated = await writer.updateUserByClerkId(event.data.id, {
         email: identity.email,
-        emailVerifiedAt: identity.verified && !existing ? new Date() : undefined,
+        verified: identity.verified,
       });
       return { handled: true, event: event.type, action: updated ? 'updated' : 'noop' };
     }
@@ -56,21 +55,4 @@ export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutc
     default:
       return { handled: false, event: event.type };
   }
-}
-
-function primaryEmail(data: {
-  email_addresses?: {
-    id: string;
-    email_address: string;
-    verification?: { status?: string } | null;
-  }[];
-  primary_email_address_id?: string | null;
-}): { email: string; verified: boolean } | null {
-  const addresses = data.email_addresses ?? [];
-  const primary = addresses.find((a) => a.id === data.primary_email_address_id) ?? addresses[0];
-  if (!primary) return null;
-  return {
-    email: primary.email_address,
-    verified: primary.verification?.status === 'verified',
-  };
 }
