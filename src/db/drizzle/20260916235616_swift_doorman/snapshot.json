@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "398d8ff5-3904-4573-a385-ae46096d339a",
+  "id": "98038ce3-480d-40c9-b045-6301a469d0e1",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -135,7 +135,7 @@
           "opclass": null
         }
       ],
-      "isUnique": false,
+      "isUnique": true,
       "where": "\"deleted_at\" IS NULL",
       "with": "",
       "method": "btree",
@@ -162,17 +162,6 @@
       ],
       "nullsNotDistinct": false,
       "name": "users_clerk_id_key",
-      "schema": "public",
-      "table": "users",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "email"
-      ],
-      "nullsNotDistinct": false,
-      "name": "users_email_key",
       "schema": "public",
       "table": "users",
       "entityType": "uniques"

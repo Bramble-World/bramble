@@ -1,12 +1,6 @@
 import { db } from '@/index';
 import { users } from '@/db/schema/tables';
-import { PublicUser } from './users.types';
-
-export type NewUser = {
-  clerkId: string;
-  email: string;
-  emailVerifiedAt?: Date | null;
-};
+import { PublicUser, NewUser } from './users.types';
 
 /**
  * Inserts a user, or does nothing if one already exists.
