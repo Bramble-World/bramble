@@ -15,6 +15,9 @@ export type SyncOutcome =
  * create is insert-if-absent, update targets a live row, delete is guarded on
  * deletedAt IS NULL. An event for a user we have never seen is a no-op, not an
  * error — there is nothing to repair.
+ *
+ * Caveat: 'noop' is currently broader than that. It also covers two cases where an
+ * event really was dropped and a user is left with no row. See issue #18.
  */
 export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutcome> {
   switch (event.type) {
@@ -33,7 +36,11 @@ export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutc
           email: identity.email,
           verified: identity.verified,
         });
-        // Already present means lazy provisioning or a redelivery beat us here.
+        // A null insert is ambiguous: the row may already exist (lazy provisioning
+        // or a redelivery, both benign), but it can equally mean the email belongs
+        // to a different clerk_id or the row is soft-deleted — in which case this
+        // event is silently dropped and the user has no row. getOrCreateFromClerk
+        // distinguishes all three; this path does not yet. See issue #18.
         return { handled: true, event: event.type, action: inserted ? 'created' : 'noop' };
       }
 
@@ -43,6 +50,8 @@ export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutc
         email: identity.email,
         verified: identity.verified,
       });
+      // 'noop' here cannot distinguish a soft-deleted user from one we have never
+      // seen, because updateUserByClerkId only matches live rows. See issue #18.
       return { handled: true, event: event.type, action: updated ? 'updated' : 'noop' };
     }
 
