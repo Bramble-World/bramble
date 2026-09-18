@@ -21,6 +21,9 @@ export const env = createEnv({
     // PEM public key from the Clerk dashboard. When set, session JWTs are
     // verified in-process instead of fetching JWKS over the network per request.
     CLERK_JWT_KEY: z.string().optional(),
+    // Svix signing secret for the Clerk webhook. Optional: without it the
+    // webhook route rejects everything, which is the correct closed default.
+    CLERK_WEBHOOK_SIGNING_SECRET: z.string().startsWith('whsec_').optional(),
   },
 
   /**
@@ -41,6 +44,7 @@ export const env = createEnv({
     DATABASE_URL: process.env.DATABASE_URL,
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
     CLERK_JWT_KEY: process.env.CLERK_JWT_KEY,
+    CLERK_WEBHOOK_SIGNING_SECRET: process.env.CLERK_WEBHOOK_SIGNING_SECRET,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },

@@ -1,6 +1,7 @@
 import { UnauthorizedError } from '@/lib/utils/errors';
 import { getOrCreateFromClerk } from '@/lib/services/users/users.service';
 import { PublicUser } from '@/lib/services/users/users.types';
+import { identityFromClerkUser } from '@/lib/services/users/users.identity';
 import { clerkBackend } from './auth.client';
 import { clerkEnabled } from './auth.config';
 
@@ -56,18 +57,10 @@ export async function requireCurrentUser(request: Request): Promise<PublicUser> 
   const clerkId = await requireClerkUserId(request);
 
   return getOrCreateFromClerk(clerkId, async () => {
-    const clerkUser = await clerkBackend.users.getUser(clerkId);
-    const primary =
-      clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId) ??
-      clerkUser.emailAddresses[0];
-
-    if (!primary) {
+    const identity = identityFromClerkUser(await clerkBackend.users.getUser(clerkId));
+    if (!identity) {
       throw new UnauthorizedError('Clerk account has no email address');
     }
-
-    return {
-      email: primary.emailAddress,
-      emailVerified: primary.verification?.status === 'verified',
-    };
+    return identity;
   });
 }

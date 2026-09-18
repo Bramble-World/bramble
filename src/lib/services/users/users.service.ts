@@ -2,6 +2,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from '@/lib/utils/errors
 import * as reader from './users.reader';
 import * as writer from './users.writer';
 import { PublicUser } from './users.types';
+import { ClerkIdentity } from './users.identity';
 
 export async function getUserByClerkId(clerkId: string): Promise<PublicUser> {
   const user = await reader.getUserByClerkId(clerkId);
@@ -22,7 +23,7 @@ export async function getUserByClerkId(clerkId: string): Promise<PublicUser> {
  */
 export async function getOrCreateFromClerk(
   clerkId: string,
-  fetchIdentity: () => Promise<{ email: string; emailVerified: boolean }>
+  fetchIdentity: () => Promise<ClerkIdentity>
 ): Promise<PublicUser> {
   const existing = await reader.getUserByClerkId(clerkId);
   if (existing) return existing;
@@ -33,10 +34,8 @@ export async function getOrCreateFromClerk(
 
   const inserted = await writer.insertUserIfAbsent({
     clerkId,
-    email: identity.email.toLowerCase(),
-    // Clerk exposes the outcome, not the moment, so now() is the honest
-    // approximation of "first observed as verified".
-    emailVerifiedAt: identity.emailVerified ? new Date() : null,
+    email: identity.email,
+    verified: identity.verified,
   });
   if (inserted) return inserted;
 
