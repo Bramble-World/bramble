@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.46",
-    "@clerk/nextjs": "^6.37.5",
+    "@clerk/nextjs": "^7.9.2",
     "@hookform/resolvers": "^5.2.2",
     "@neondatabase/serverless": "^1.0.2",
     "@react-email/components": "^1.0.10",
