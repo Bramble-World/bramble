@@ -28,6 +28,13 @@ export const env = createEnv({
     // checkout builds, but hashing throws without it rather than silently
     // falling back to an unkeyed digest — see persons.contact.ts.
     CONTACT_HASH_SECRET: z.string().min(32).optional(),
+    // OpenAI. Optional like the rest, so a bare checkout builds and CI runs with
+    // no key at all — the generator falls back to a deterministic fake rather
+    // than failing, which is what keeps the pipeline testable without spend.
+    OPENAI_API_KEY: z.string().startsWith('sk-').optional(),
+    // Forces the fake even when a key is present. For playing the loop end to
+    // end without paying for it.
+    BRAMBLE_AI_MODE: z.enum(['live', 'fake']).optional(),
   },
 
   /**
@@ -50,6 +57,8 @@ export const env = createEnv({
     CLERK_JWT_KEY: process.env.CLERK_JWT_KEY,
     CLERK_WEBHOOK_SIGNING_SECRET: process.env.CLERK_WEBHOOK_SIGNING_SECRET,
     CONTACT_HASH_SECRET: process.env.CONTACT_HASH_SECRET,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    BRAMBLE_AI_MODE: process.env.BRAMBLE_AI_MODE,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },
