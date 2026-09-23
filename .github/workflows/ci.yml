@@ -96,6 +96,12 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bramble_ci
+      # Not a secret, and deliberately not one. persons.source_contact_ref is an
+      # HMAC, so the integration tests need *a* key to hash under; they assert
+      # that the same handle produces the same ref and that the raw handle never
+      # reaches the column, neither of which depends on the key's value. The real
+      # key lives in Doppler and never enters CI.
+      CONTACT_HASH_SECRET: ci-not-a-secret-contact-hash-key-32-chars
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
