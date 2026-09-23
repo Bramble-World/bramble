@@ -1,6 +1,8 @@
 import { FakeGenerator } from './generator.fake';
 import { turnPrompt } from './prompts/turn.prompt';
 import { consequencePrompt } from './prompts/consequence.prompt';
+import { extractionPrompt } from './prompts/extraction.prompt';
+import { arcPrompt } from './prompts/arc.prompt';
 
 /**
  * Canned output for every prompt, so the loop runs with no key and no spend.
@@ -90,4 +92,78 @@ export function registerFixtures(fake: FakeGenerator): void {
         : [],
     };
   });
+
+  fake.register(extractionPrompt, ({ vars }) => {
+    // Names and handles are read off the transcript rather than invented, so the
+    // person-resolution path — hash the handle, reuse the row next time — is the
+    // real one. A fixture with made-up handles would exercise none of it.
+    const others = [...new Set(vars.messages.filter((m) => !m.isFromMe).map((m) => m.handle))];
+    const selfName = vars.user.self?.name ?? 'Blossom';
+    const otherName = 'Maya';
+
+    return {
+      title: 'The Unsent Apology',
+      tone: 'wistful and a little raw',
+      setting: null,
+      arcSummary: 'Started with something said badly, ended with it still unsaid.',
+      cast: [
+        {
+          name: selfName,
+          existingPersonId: vars.user.self?.id ?? null,
+          sourceHandle: null,
+          role: 'protagonist' as const,
+          description: null,
+          voiceTone: 'direct, then apologetic',
+        },
+        {
+          name: otherName,
+          existingPersonId: vars.user.persons.find((p) => p.name === otherName)?.id ?? null,
+          sourceHandle: others[0] ?? null,
+          role: 'supporting' as const,
+          description: 'Deflects when cornered.',
+          voiceTone: 'clipped, changes the subject',
+        },
+      ],
+      relationships: [
+        {
+          betweenNames: [selfName, otherName],
+          relationshipType: 'siblings',
+          closeness: 'were inseparable',
+          tension: 'unspoken',
+          powerBalance: null,
+        },
+      ],
+      beats: [
+        {
+          title: 'Where things stood',
+          description: 'Something said in front of other people had not been taken back.',
+          stakes: 'Whether it gets named at all.',
+          participantNames: [selfName, otherName],
+        },
+        {
+          title: 'The apology that landed wrong',
+          description: 'An apology was offered and waved away before it finished.',
+          stakes: null,
+          participantNames: [selfName, otherName],
+        },
+      ],
+      background: [
+        {
+          content: 'This is not the first time one of them has changed the subject.',
+          aboutName: null,
+        },
+      ],
+      motifs: [
+        {
+          label: 'the lasagna',
+          description: 'Invoked whenever a conversation needs to end.',
+          participantNames: [selfName, otherName],
+        },
+      ],
+    };
+  });
+
+  fake.register(arcPrompt, ({ vars }) => ({
+    arcSummary: `Across ${vars.storyline.timeline.length} beats, what began unsaid is now partly said, and neither of them has decided what that means.`,
+  }));
 }
