@@ -76,7 +76,7 @@ How a relationship's dynamic **evolves** over the course of a storyline. Each ro
 
 The actual beats of the story — an append-only canonical timeline.
 
-- `narrativeOrder` — the order beats are _presented_ in. Deliberately separate from `occurredAt` (when it really happened, if known), since a good story doesn't have to unfold in strict chronological order — it can compress, reorder, or flash back. **Convention: seed initial events at 10, 20, 30...** so a later mid-story insert can take an unused gap value (e.g., 15) without renumbering everything after it.
+- `narrativeOrder` — the order beats are _presented_ in. Deliberately separate from `occurredAt` (when it really happened, if known), since a good story doesn't have to unfold in strict chronological order — it can compress, reorder, or flash back. **Convention: seed initial events at 1000, 2000, 3000...** so a later mid-story insert can take an unused gap value (e.g., 1500) without renumbering everything after it. `(storylineId, narrativeOrder)` is unique, so a collision fails loudly rather than leaving two beats to order arbitrarily.
 - `title` — a short label, for scanning/display (a timeline view, a heading) — not the narrative prose itself.
 - `description` — the actual story content, shown to the user and fed to the LLM as narrative context.
 - `stakes` — what's at risk, why this beat matters. Mostly a generation-steering signal fed back into the LLM (to guide escalation/resolution of tension), not necessarily shown to the user as its own field.
@@ -108,7 +108,7 @@ One **decision point**. Created when the LLM presents a beat and its options; up
 
 - `turnOrder` — sequencing within a session.
 - `narrativeContent` — what the LLM presented at this decision point.
-- `selectedChoiceId` — nullable; filled once the user picks. `null` means the turn is still awaiting a response.
+- `selectedChoiceId` — nullable; filled once the user picks. `null` means the turn is still awaiting a response. A partial unique index on `(sessionId) WHERE selected_choice_id IS NULL` allows **at most one open turn per session**, which makes "present the next beat" a get-or-create rather than a convention: a retried or duplicated request returns the turn already awaiting an answer instead of opening a second one.
 - `respondedAt` — when the user answered.
 
 Note: `storyTurns.selectedChoiceId` and `turnChoices.turnId` reference each other. In practice this means a two-step write: insert the turn (with `selectedChoiceId: null`), insert its `turnChoices`, then `UPDATE` the turn once the user picks — not a single atomic row.
@@ -155,7 +155,7 @@ Everything below was raised during the schema walkthrough. Resolved items are al
 - **`tone` stays `text`** — LLM-generated and LLM-consumed, no user-facing picker.
 - **`failureReason`** added to `storylines` for debugging failed generation.
 - **`arcSummary` recomputation is session-based** — triggered when a session goes idle, checked against `conversation_generated` events since the last `arcSummaryGeneratedAt`.
-- **Gap-based `narrativeOrder` numbering adopted** (10, 20, 30...) — an insert-logic convention, not a schema constraint.
+- **Gap-based `narrativeOrder` numbering adopted** (1000, 2000, 3000...) — an insert-logic convention. Uniqueness on `(storylineId, narrativeOrder)` _is_ a schema constraint; the gap size is not.
 - **No raw message persistence.** Raw/selected messages are passed to the LLM transiently during generation and never stored. `sourceRefs` was renamed to `generationRationale` (the model's own reasoning) as a result.
 - **`sourceContactRef` format** — a one-way hash of phone/email, never the raw value.
 - **`contextEntries.source` gained `conversation_generated`**, and `triggeredByTurnId` was added for lineage — mirroring `events`.

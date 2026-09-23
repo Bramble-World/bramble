@@ -119,10 +119,15 @@ provisioned.
 
 ## 6. Conventions with no enforcement
 
-- **`narrativeOrder` uses gaps of 10** (10, 20, 30…) so a mid-story insert can
-  take 15 without renumbering. There is also **no uniqueness** on
-  `(storylineId, narrativeOrder)`, so two beats can collide and order
-  arbitrarily.
+- **`narrativeOrder` uses gaps of 1000** (1000, 2000, 3000…) so a mid-story
+  insert can take 1500 without renumbering. Gaps of 10 were the original
+  convention and were too tight: after 10/15/20, a second insert in that slot has
+  only 12–14 left, and a handful of steered decisions in one region of a story
+  exhaust the integers entirely.
+  `(storylineId, narrativeOrder)` **is now unique**, so a collision fails loudly
+  instead of leaving two beats to order arbitrarily. Allocate the value inside
+  the write transaction — reading the timeline and then inserting outside one is
+  a race that the unique index will now reject rather than silently absorb.
 - **`storylineLinks` has no ordering CHECK**, deliberately — `sequel` is
   directional. The consequence is that `parallel` and `crossover`, where
   direction is meaningless, _can_ be stored twice reversed. Decide a convention

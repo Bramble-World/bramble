@@ -1,8 +1,9 @@
-import { index, pgTable, text, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { index, pgTable, text, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { storylineSessions } from '../storylineSessions';
 import { turnChoices } from './turnChoices';
 import { timestamps } from '../../../util/timestamps';
 import { integer, timestamp } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm/sql/sql';
 
 export const storyTurns = pgTable(
   'story_turns',
@@ -34,5 +35,12 @@ export const storyTurns = pgTable(
     index('idx_story_turns_session').on(table.sessionId),
     index('idx_story_turns_session_order').on(table.sessionId, table.turnOrder),
     index('idx_story_turns_selected_choice').on(table.selectedChoiceId),
+    // A session has at most one turn awaiting an answer. This makes "open the
+    // next turn" a get-or-create against the database rather than a convention,
+    // so a lost response cannot leave a session with two unanswered turns and no
+    // way to tell which one the user is looking at.
+    uniqueIndex('idx_story_turns_one_open_per_session')
+      .on(table.sessionId)
+      .where(sql`${table.selectedChoiceId} IS NULL`),
   ]
 );

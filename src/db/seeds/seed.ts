@@ -159,8 +159,8 @@ async function seed() {
         })
         .returning({ id: characterRelationships.id });
 
-      // Canonical beats. narrativeOrder uses gaps of 10 so a later insert can
-      // take 15 without renumbering.
+      // Canonical beats. narrativeOrder uses gaps of 1000 so later inserts can
+      // take gap values without renumbering.
       const beats = [
         {
           title: 'Where things stood',
@@ -184,7 +184,7 @@ async function seed() {
           .insert(events)
           .values({
             storylineId: storyline.id,
-            narrativeOrder: (i + 1) * 10,
+            narrativeOrder: (i + 1) * 1000,
             title: beat.title,
             description: beat.description,
             origin: 'extracted',
@@ -293,15 +293,15 @@ async function seed() {
       // conversation-steering traceable: origin marks them as generated rather
       // than extracted, and triggeredByTurnId names the exact decision.
       //
-      // narrativeOrder deliberately uses a gap value — 15 sits between the
-      // seeded 10 and 20 — which is the whole point of numbering in tens.
+      // narrativeOrder deliberately uses a gap value — 1500 sits between the
+      // seeded 1000 and 2000 — which is the whole point of the gap numbering.
       const [firstDecision] = answeredTurnIds;
       if (firstDecision) {
         const [generated] = await tx
           .insert(events)
           .values({
             storylineId: storyline.id,
-            narrativeOrder: 15,
+            narrativeOrder: 1500,
             title: 'A different answer',
             description: `You said something you did not say the first time, and ${scenario.personaName} heard it.`,
             origin: 'conversation_generated',
@@ -428,7 +428,7 @@ async function seed() {
           .insert(events)
           .values({
             storylineId: storyline.id,
-            narrativeOrder: (i + 1) * 10,
+            narrativeOrder: (i + 1) * 1000,
             title: beat.title,
             description: beat.description,
             origin: 'extracted',
