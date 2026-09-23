@@ -80,6 +80,27 @@ export async function findIdleSessions(idleSince: Date): Promise<PublicSession[]
     .orderBy(asc(storylineSessions.lastActiveAt));
 }
 
+/**
+ * Idle sessions with their owner, for the arc sweep.
+ *
+ * Separate from `findIdleSessions` because `PublicSession` deliberately omits
+ * `userId` — it is an ownership key, not something a caller in a request should
+ * be handed. The sweep is not a request: it runs for everyone, and it needs the
+ * owner precisely so the summarise call it makes is still ownership-scoped
+ * rather than bypassing the check.
+ */
+export async function findIdleSessionOwners(
+  idleSince: Date
+): Promise<Array<{ storylineId: string; userId: string }>> {
+  return db
+    .selectDistinct({
+      storylineId: storylineSessions.storylineId,
+      userId: storylineSessions.userId,
+    })
+    .from(storylineSessions)
+    .where(lt(storylineSessions.lastActiveAt, idleSince));
+}
+
 /** Whether a choice was one of the options offered on that turn. */
 export async function choiceBelongsToTurn(
   tx: Executor,

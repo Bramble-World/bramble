@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/index';
 import { characterRelationships, characters, storylineLinks, storylines } from '@/db/schema/tables';
 import {
@@ -73,6 +73,61 @@ export async function setStorylineStatus(
     .where(and(eq(storylines.userId, userId), eq(storylines.id, storylineId)))
     .returning(returnedStoryline);
   return storyline ?? null;
+}
+
+/**
+ * Sets the narrative framing a storyline is given once it has been extracted.
+ *
+ * Separate from the status path, which owns `failureReason` and nothing else.
+ * A storyline is created before the model runs — so there is something to show
+ * and something to mark failed — which means its title starts as a placeholder
+ * and has to be replaced once the model has actually read the conversation.
+ */
+export async function setStorylineNarrative(
+  userId: string,
+  storylineId: string,
+  input: { title: string; tone?: string; setting?: string }
+): Promise<PublicStoryline | null> {
+  const [storyline] = await db
+    .update(storylines)
+    .set({ title: input.title, tone: input.tone, setting: input.setting })
+    .where(and(eq(storylines.userId, userId), eq(storylines.id, storylineId)))
+    .returning(returnedStoryline);
+  return storyline ?? null;
+}
+
+/**
+ * Writes an arc summary, but only if nobody else has written one since.
+ *
+ * `expected` is the `arcSummaryGeneratedAt` observed before the model was
+ * called, and the update is conditional on it still being that. A sweep that
+ * took eight seconds must not overwrite a fresher summary produced while it was
+ * thinking — and since the recompute is triggered by idleness rather than by a
+ * lock, two sweeps overlapping is ordinary rather than exceptional.
+ *
+ * `IS NOT DISTINCT FROM` rather than `=`, because the expected value is null the
+ * first time and `null = null` is not true.
+ *
+ * Returns whether it won.
+ */
+export async function setArcSummaryIfUnchanged(input: {
+  storylineId: string;
+  summary: string;
+  watermark: Date;
+  expected: Date | null;
+}): Promise<boolean> {
+  const rows = await db
+    .update(storylines)
+    .set({ arcSummary: input.summary, arcSummaryGeneratedAt: input.watermark })
+    .where(
+      and(
+        eq(storylines.id, input.storylineId),
+        sql`${storylines.arcSummaryGeneratedAt} IS NOT DISTINCT FROM ${input.expected}`
+      )
+    )
+    .returning({ id: storylines.id });
+
+  return rows.length > 0;
 }
 
 export async function insertCharacterIfAbsent(input: {

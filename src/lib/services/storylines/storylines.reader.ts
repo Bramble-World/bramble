@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, max } from 'drizzle-orm';
 import { db } from '@/index';
-import { characters, storylines } from '@/db/schema/tables';
+import { characters, events, storylines } from '@/db/schema/tables';
 import { PublicCharacter, PublicStoryline } from './storylines.types';
 
 const storylineColumns = {
@@ -61,6 +61,24 @@ export async function ownedStorylineIds(
     .from(storylines)
     .where(and(eq(storylines.userId, userId), inArray(storylines.id, storylineIds)));
   return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * The newest event's createdAt — the watermark an arc summary is stamped with.
+ *
+ * Read *before* the model call and written after it, unchanged. Stamping with
+ * `now()` instead would silently swallow anything written during the call: an
+ * event created while the model was thinking would end up older than the summary
+ * that does not include it, so the staleness check would conclude there is
+ * nothing to recompute and keep concluding that forever. Nothing errors; the
+ * summary is simply wrong from then on.
+ */
+export async function newestEventCreatedAt(storylineId: string): Promise<Date | null> {
+  const [row] = await db
+    .select({ newest: max(events.createdAt) })
+    .from(events)
+    .where(eq(events.storylineId, storylineId));
+  return row?.newest ?? null;
 }
 
 export async function listCharacters(storylineId: string): Promise<PublicCharacter[]> {
