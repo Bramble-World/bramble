@@ -24,6 +24,10 @@ export const env = createEnv({
     // Svix signing secret for the Clerk webhook. Optional: without it the
     // webhook route rejects everything, which is the correct closed default.
     CLERK_WEBHOOK_SIGNING_SECRET: z.string().startsWith('whsec_').optional(),
+    // HMAC key for persons.source_contact_ref. Optional like the rest so a bare
+    // checkout builds, but hashing throws without it rather than silently
+    // falling back to an unkeyed digest — see persons.contact.ts.
+    CONTACT_HASH_SECRET: z.string().min(32).optional(),
   },
 
   /**
@@ -45,6 +49,7 @@ export const env = createEnv({
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
     CLERK_JWT_KEY: process.env.CLERK_JWT_KEY,
     CLERK_WEBHOOK_SIGNING_SECRET: process.env.CLERK_WEBHOOK_SIGNING_SECRET,
+    CONTACT_HASH_SECRET: process.env.CONTACT_HASH_SECRET,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },
