@@ -1,7 +1,6 @@
 import { index, integer, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 import { storyTurns } from './storyTurns';
 import { timestamps } from '../../../util/timestamps';
-import { relations } from 'drizzle-orm/_relations';
 
 export const turnChoices = pgTable(
   'turn_choices',
@@ -19,11 +18,3 @@ export const turnChoices = pgTable(
   },
   (table) => [index('idx_turn_choices_turn').on(table.turnId)]
 );
-
-export const turnChoicesRelations = relations(turnChoices, ({ one }) => ({
-  turn: one(storyTurns, {
-    fields: [turnChoices.turnId],
-    references: [storyTurns.id],
-    relationName: 'turnChoicesForTurn',
-  }),
-}));

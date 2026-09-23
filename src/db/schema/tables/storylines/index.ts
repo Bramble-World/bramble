@@ -1,14 +1,6 @@
 import { pgTable, uuid, text, timestamp, index, pgEnum } from 'drizzle-orm/pg-core';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
-import { characters } from '../characters';
-import { characterRelationships } from '../characters/characterRelationships';
-import { events } from '../events';
-import { contextEntries } from '../contextEntries';
-import { motifOccurrences } from '../motifs/motifOccurrences';
-import { storylineSessions } from '../storylineSessions';
-import { storylineLinks } from './storylineLinks';
-import { relations } from 'drizzle-orm/_relations';
 
 export const storylineStatusEnum = pgEnum('storyline_status', [
   'pending',
@@ -43,18 +35,3 @@ export const storylines = pgTable(
   },
   (table) => [index('idx_storylines_user').on(table.userId)]
 );
-
-export const storylinesRelations = relations(storylines, ({ one, many }) => ({
-  user: one(users, {
-    fields: [storylines.userId],
-    references: [users.id],
-  }),
-  characters: many(characters),
-  relationships: many(characterRelationships),
-  events: many(events),
-  contextEntries: many(contextEntries),
-  motifOccurrences: many(motifOccurrences),
-  sessions: many(storylineSessions),
-  linksFrom: many(storylineLinks, { relationName: 'storylineA' }),
-  linksTo: many(storylineLinks, { relationName: 'storylineB' }),
-}));

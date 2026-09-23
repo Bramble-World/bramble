@@ -1,9 +1,7 @@
 import { index, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { storyTurns } from './storyTurns';
 import { storylines } from '../storylines';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
-import { relations } from 'drizzle-orm/_relations';
 
 export const storylineSessions = pgTable(
   'storyline_sessions',
@@ -26,15 +24,3 @@ export const storylineSessions = pgTable(
     index('idx_storyline_sessions_last_active').on(table.lastActiveAt),
   ]
 );
-
-export const storylineSessionsRelations = relations(storylineSessions, ({ one, many }) => ({
-  storyline: one(storylines, {
-    fields: [storylineSessions.storylineId],
-    references: [storylines.id],
-  }),
-  user: one(users, {
-    fields: [storylineSessions.userId],
-    references: [users.id],
-  }),
-  turns: many(storyTurns),
-}));

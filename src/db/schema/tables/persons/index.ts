@@ -2,10 +2,6 @@ import { pgTable, uuid, index, uniqueIndex, jsonb, text, boolean } from 'drizzle
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
 import { sql } from 'drizzle-orm/sql/sql';
-import { relations } from 'drizzle-orm/_relations';
-import { characters } from '../characters';
-import { motifParticipants } from '../motifs/motifParticipants';
-import { personRelationships } from './personRelationships';
 
 export const persons = pgTable(
   'persons',
@@ -41,14 +37,3 @@ export const persons = pgTable(
       .where(sql`${table.isSelf} = true`),
   ]
 );
-
-export const personsRelations = relations(persons, ({ one, many }) => ({
-  user: one(users, {
-    fields: [persons.userId],
-    references: [users.id],
-  }),
-  characters: many(characters),
-  motifParticipation: many(motifParticipants),
-  relationshipsAsA: many(personRelationships, { relationName: 'personA' }),
-  relationshipsAsB: many(personRelationships, { relationName: 'personB' }),
-}));

@@ -2,8 +2,6 @@ import { pgTable, uuid, jsonb, index, uniqueIndex, check } from 'drizzle-orm/pg-
 import { timestamps } from '../../../util/timestamps';
 import { storylines } from '../storylines';
 import { characters } from './index';
-import { relations } from 'drizzle-orm/_relations';
-import { relationshipStates } from '../relationshipStates';
 import { sql } from 'drizzle-orm/sql/sql';
 
 export const characterRelationships = pgTable(
@@ -46,25 +44,4 @@ export const characterRelationships = pgTable(
     ),
     check('chk_character_relationships_order', sql`${table.characterAId} < ${table.characterBId}`),
   ]
-);
-
-export const characterRelationshipsRelations = relations(
-  characterRelationships,
-  ({ one, many }) => ({
-    storyline: one(storylines, {
-      fields: [characterRelationships.storylineId],
-      references: [storylines.id],
-    }),
-    characterA: one(characters, {
-      fields: [characterRelationships.characterAId],
-      references: [characters.id],
-      relationName: 'characterA',
-    }),
-    characterB: one(characters, {
-      fields: [characterRelationships.characterBId],
-      references: [characters.id],
-      relationName: 'characterB',
-    }),
-    states: many(relationshipStates),
-  })
 );

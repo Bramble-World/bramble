@@ -1,10 +1,7 @@
-import { relations } from 'drizzle-orm/_relations';
 import { pgTable, uuid, index, text, timestamp, integer, pgEnum } from 'drizzle-orm/pg-core';
 import { timestamps } from '../../../util/timestamps';
 import { storylines } from '../storylines';
 import { storyTurns } from '../storylineSessions/storyTurns';
-import { eventParticipants } from './eventParticipants';
-import { relationshipStates } from '../relationshipStates';
 
 export const eventOriginEnum = pgEnum('event_origin', [
   'extracted', // came from the original message-data extraction pipeline
@@ -44,16 +41,3 @@ export const events = pgTable(
     index('idx_events_triggered_by').on(table.triggeredByTurnId),
   ]
 );
-
-export const eventsRelations = relations(events, ({ one, many }) => ({
-  storyline: one(storylines, {
-    fields: [events.storylineId],
-    references: [storylines.id],
-  }),
-  triggeredByTurn: one(storyTurns, {
-    fields: [events.triggeredByTurnId],
-    references: [storyTurns.id],
-  }),
-  participants: many(eventParticipants),
-  relationshipStates: many(relationshipStates),
-}));

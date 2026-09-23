@@ -2,10 +2,6 @@ import { pgTable, uuid, index, jsonb, text, pgEnum, uniqueIndex } from 'drizzle-
 import { timestamps } from '../../../util/timestamps';
 import { storylines } from '../storylines';
 import { persons } from '../persons';
-import { characterRelationships } from './characterRelationships';
-import { eventParticipants } from '../events/eventParticipants';
-import { contextEntries } from '../contextEntries';
-import { relations } from 'drizzle-orm/_relations';
 
 export const characterRoleEnum = pgEnum('character_role', [
   'protagonist',
@@ -42,21 +38,3 @@ export const characters = pgTable(
     uniqueIndex('idx_characters_storyline_person').on(table.storylineId, table.personId),
   ]
 );
-
-export const charactersRelations = relations(characters, ({ one, many }) => ({
-  storyline: one(storylines, {
-    fields: [characters.storylineId],
-    references: [storylines.id],
-  }),
-  person: one(persons, {
-    fields: [characters.personId],
-    references: [persons.id],
-  }),
-  // Split by side so each end of a pair is reachable, matching the
-  // relationNames declared on characterRelationships — the same pattern
-  // personsRelations uses for personRelationships.
-  relationshipsAsA: many(characterRelationships, { relationName: 'characterA' }),
-  relationshipsAsB: many(characterRelationships, { relationName: 'characterB' }),
-  eventParticipations: many(eventParticipants),
-  contextEntries: many(contextEntries),
-}));

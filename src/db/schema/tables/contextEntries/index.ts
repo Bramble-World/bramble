@@ -3,7 +3,6 @@ import { storylines } from '../storylines';
 import { characters } from '../characters';
 import { storyTurns } from '../storylineSessions/storyTurns';
 import { timestamps } from '../../../util/timestamps';
-import { relations } from 'drizzle-orm/_relations';
 
 export const contextSourceEnum = pgEnum('context_source', [
   'inferred', // extracted/inferred by the pipeline during initial extraction
@@ -39,18 +38,3 @@ export const contextEntries = pgTable(
     index('idx_context_entries_triggered_by').on(table.triggeredByTurnId),
   ]
 );
-
-export const contextEntriesRelations = relations(contextEntries, ({ one }) => ({
-  storyline: one(storylines, {
-    fields: [contextEntries.storylineId],
-    references: [storylines.id],
-  }),
-  character: one(characters, {
-    fields: [contextEntries.characterId],
-    references: [characters.id],
-  }),
-  triggeredByTurn: one(storyTurns, {
-    fields: [contextEntries.triggeredByTurnId],
-    references: [storyTurns.id],
-  }),
-}));

@@ -2,7 +2,6 @@ import { index, pgTable, uuid } from 'drizzle-orm/pg-core';
 import { timestamps } from '../../../util/timestamps';
 import { events } from '../events';
 import { storylines } from '../storylines';
-import { relations } from 'drizzle-orm/_relations';
 import { motifs } from './index';
 
 export const motifOccurrences = pgTable(
@@ -26,18 +25,3 @@ export const motifOccurrences = pgTable(
     index('idx_motif_occurrences_storyline').on(table.storylineId),
   ]
 );
-
-export const motifOccurrencesRelations = relations(motifOccurrences, ({ one }) => ({
-  motif: one(motifs, {
-    fields: [motifOccurrences.motifId],
-    references: [motifs.id],
-  }),
-  storyline: one(storylines, {
-    fields: [motifOccurrences.storylineId],
-    references: [storylines.id],
-  }),
-  event: one(events, {
-    fields: [motifOccurrences.eventId],
-    references: [events.id],
-  }),
-}));

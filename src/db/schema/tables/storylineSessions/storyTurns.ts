@@ -1,10 +1,7 @@
 import { index, pgTable, text, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { storylineSessions } from '../storylineSessions';
 import { turnChoices } from './turnChoices';
-import { events } from '../events';
-import { contextEntries } from '../contextEntries';
 import { timestamps } from '../../../util/timestamps';
-import { relations } from 'drizzle-orm/_relations';
 import { integer, timestamp } from 'drizzle-orm/pg-core';
 
 export const storyTurns = pgTable(
@@ -39,18 +36,3 @@ export const storyTurns = pgTable(
     index('idx_story_turns_selected_choice').on(table.selectedChoiceId),
   ]
 );
-
-export const storyTurnsRelations = relations(storyTurns, ({ one, many }) => ({
-  session: one(storylineSessions, {
-    fields: [storyTurns.sessionId],
-    references: [storylineSessions.id],
-  }),
-  choices: many(turnChoices, { relationName: 'turnChoicesForTurn' }),
-  selectedChoice: one(turnChoices, {
-    fields: [storyTurns.selectedChoiceId],
-    references: [turnChoices.id],
-    relationName: 'selectedChoiceOfTurn',
-  }),
-  triggeredEvents: many(events), // events this turn caused to be added to canon
-  triggeredContextEntries: many(contextEntries),
-}));
