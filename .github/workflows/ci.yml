@@ -76,9 +76,10 @@ jobs:
           # NODE_ENV can't break the build the way a local shell can.
           NODE_ENV: production
 
-  # ── Migrations must apply cleanly before anything is promoted ─────────────
+  # ── The database gate: the schema must apply, accept writes, and be readable
+  #    through its relations before anything is promoted ──────────────────────
   migrations:
-    name: Migrations
+    name: Database
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -116,6 +117,13 @@ jobs:
       # localhost, so the guard passes here and still protects a real database.
       - name: Seed (proves the schema accepts real writes)
         run: pnpm exec tsx src/db/seeds/seed.ts
+      # Relations are resolved when a query runs, not when it compiles. A wrong
+      # alias or a swapped through() column passes typecheck and lint and then
+      # breaks every nested read — so without this step the whole read layer can
+      # rot while CI stays green. Runs here because it needs the seeded database
+      # the two steps above just built.
+      - name: Relational query tests
+        run: pnpm test:integration
 
   # ── API tests: every branch. No browser, so they stay fast ────────────────
   api:
