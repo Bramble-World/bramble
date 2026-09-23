@@ -1,0 +1,59 @@
+import { relations } from 'drizzle-orm/_relations';
+import { pgTable, uuid, index, text, timestamp, integer, pgEnum } from 'drizzle-orm/pg-core';
+import { timestamps } from '../../../util/timestamps';
+import { storylines } from '../storylines';
+import { storyTurns } from '../storylineSessions/storyTurns';
+import { eventParticipants } from './eventParticipants';
+import { relationshipStates } from '../relationshipStates';
+
+export const eventOriginEnum = pgEnum('event_origin', [
+  'extracted', // came from the original message-data extraction pipeline
+  'conversation_generated', // canon added because the user steered the story via a decision
+]);
+
+export const events = pgTable(
+  'events',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    storylineId: uuid('storyline_id')
+      .notNull()
+      .references(() => storylines.id, { onDelete: 'cascade' }),
+
+    narrativeOrder: integer('narrative_order').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }), // real-world timestamp, if known
+
+    title: text().notNull(),
+    description: text().notNull(),
+    stakes: text(),
+
+    origin: eventOriginEnum().notNull().default('extracted'),
+    triggeredByTurnId: uuid('triggered_by_turn_id').references(() => storyTurns.id, {
+      onDelete: 'set null',
+    }),
+
+    // Short LLM-generated explanation of why this beat was created — reasoning,
+    // not a pointer to raw source content (raw messages are never persisted;
+    // they're only passed to the LLM transiently during generation).
+    generationRationale: text('generation_rationale'),
+
+    ...timestamps,
+  },
+  (table) => [
+    index('idx_events_storyline').on(table.storylineId),
+    index('idx_events_storyline_order').on(table.storylineId, table.narrativeOrder),
+    index('idx_events_triggered_by').on(table.triggeredByTurnId),
+  ]
+);
+
+export const eventsRelations = relations(events, ({ one, many }) => ({
+  storyline: one(storylines, {
+    fields: [events.storylineId],
+    references: [storylines.id],
+  }),
+  triggeredByTurn: one(storyTurns, {
+    fields: [events.triggeredByTurnId],
+    references: [storyTurns.id],
+  }),
+  participants: many(eventParticipants),
+  relationshipStates: many(relationshipStates),
+}));
