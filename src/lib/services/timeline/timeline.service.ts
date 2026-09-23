@@ -77,6 +77,48 @@ export async function insertEventAfter(
   });
 }
 
+/**
+ * Writes several beats after an existing one, inside the caller's transaction.
+ *
+ * Exists because consequences are all-or-nothing: the beats, the background they
+ * revealed and the relationship states they moved commit together or not at all,
+ * so they cannot each open their own transaction. Ownership is the caller's to
+ * establish — it already has, before spending a model call.
+ *
+ * Orders are allocated one at a time so two beats following the same moment land
+ * in the order given rather than colliding.
+ */
+export async function insertEventsAfterIn(
+  tx: Executor,
+  storylineId: string,
+  afterNarrativeOrder: number,
+  inputs: NewEvent[]
+): Promise<PublicEvent[]> {
+  if (inputs.length === 0) return [];
+
+  await reader.lockStorylineForOrdering(tx, storylineId);
+
+  const written: PublicEvent[] = [];
+  let after = afterNarrativeOrder;
+
+  for (const input of inputs) {
+    await assertParticipantsBelong(tx, storylineId, input.participantCharacterIds);
+
+    const narrativeOrder = await reader.gapOrderAfter(tx, storylineId, after);
+    if (narrativeOrder === null) {
+      throw new ConflictError(
+        `No narrative order is free after ${after}; the timeline needs renumbering`
+      );
+    }
+
+    written.push(await writer.insertEvent(tx, storylineId, narrativeOrder, input));
+    // The next beat follows the one just written, not the original anchor.
+    after = narrativeOrder;
+  }
+
+  return written;
+}
+
 export async function addContextEntry(
   userId: string,
   storylineId: string,

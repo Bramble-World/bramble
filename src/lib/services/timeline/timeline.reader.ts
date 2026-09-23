@@ -81,6 +81,24 @@ export async function gapOrderAfter(
   return midpoint > afterOrder && midpoint < row.next ? midpoint : null;
 }
 
+/**
+ * Whether a turn has already produced canon.
+ *
+ * `events.triggeredByTurnId` doubles as the idempotency key for consequence
+ * generation: a turn's consequences are written once, so a retry after a lost
+ * response finds them here instead of paying for a second model call and
+ * appending a second copy of the same beat. No separate ledger is needed because
+ * the lineage column already records exactly this.
+ */
+export async function turnHasConsequences(tx: Executor, turnId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: events.id })
+    .from(events)
+    .where(eq(events.triggeredByTurnId, turnId))
+    .limit(1);
+  return row !== undefined;
+}
+
 /** Which of these character ids belong to the storyline. Guards eventParticipants. */
 export async function charactersInStoryline(
   tx: Executor,
