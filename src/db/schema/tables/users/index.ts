@@ -1,6 +1,9 @@
 import { softDelete, timestamps } from '../../../util/timestamps';
 import { pgTable, timestamp, uuid, text, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm/sql/sql';
+import { storylines } from '../storylines';
+import { persons } from '../persons';
+import { relations } from 'drizzle-orm/_relations';
 
 export const users = pgTable(
   'users',
@@ -19,3 +22,8 @@ export const users = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
   ]
 );
+
+export const usersRelations = relations(users, ({ many }) => ({
+  storylines: many(storylines),
+  persons: many(persons),
+}));
