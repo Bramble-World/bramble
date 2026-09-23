@@ -11,6 +11,9 @@ importers:
       '@ai-sdk/anthropic':
         specifier: ^3.0.46
         version: 3.0.117(zod@4.4.3)
+      '@ai-sdk/openai':
+        specifier: ^3.0.117
+        version: 3.0.117(zod@4.4.3)
       '@clerk/nextjs':
         specifier: ^6.37.5
         version: 6.39.6(next@16.3.5(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.63.0)(@types/node@20.19.43)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -225,14 +228,30 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/openai@3.0.117':
+    resolution: {integrity: sha512-OzEvHjUEQCmn09bkISsgCGpY2BdexcksHh3Lbk7fI5AmbkXnNuuFS/oFDbnI1LM4FXINweRXbxs9UxSndsJVQQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider-utils@4.0.51':
     resolution: {integrity: sha512-ukLTs9x1Xm6lxSIwbJIxYQxbZHmVeIczNntARZrBcOa6pjdBhqeZnATNnJMHa7M9dZ8Ji5NJbpKpvz7o5XyBtg==}
     engines: {node: '>=18.17'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@4.0.54':
+    resolution: {integrity: sha512-piCQO5dnTqW7QSUbMsKg8oNI+u5VtgLnVFkgG6LfckrOyHcHFrIssBVJDg3/CXOdWXIFhVjIr540rzZAdom2TA==}
+    engines: {node: '>=18.17'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@3.0.16':
     resolution: {integrity: sha512-9Av6kg0t/IN/dcYAAmEJ4B9OPhcEJqwSR+GfHEA8olRkindXpUHadc3p3cyvgFUQFTVm1G5thtsmgZ9yVb2w3A==}
+    engines: {node: '>=18'}
+
+  '@ai-sdk/provider@3.0.17':
+    resolution: {integrity: sha512-ijb+g+XxIAmv46hpt73ty83LhQHwwsqA1IwVX6p1MAREyX0zGM9eIrz1m3KlFxTHr8E4k/ao01w6Dlx3UBOihQ==}
     engines: {node: '>=18'}
 
   '@alloc/quick-lru@5.2.0':
@@ -7533,6 +7552,12 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
+  '@ai-sdk/openai@3.0.117(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.17
+      '@ai-sdk/provider-utils': 4.0.54(zod@4.4.3)
+      zod: 4.4.3
+
   '@ai-sdk/provider-utils@4.0.51(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.16
@@ -7541,7 +7566,19 @@ snapshots:
       undici: 6.28.1
       zod: 4.4.3
 
+  '@ai-sdk/provider-utils@4.0.54(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.17
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.1.1
+      undici: 6.28.1
+      zod: 4.4.3
+
   '@ai-sdk/provider@3.0.16':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@3.0.17':
     dependencies:
       json-schema: 0.4.0
 

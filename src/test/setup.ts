@@ -13,5 +13,8 @@ vi.mock('@/env', () => ({
     // Present so the common hashing path works; the test that covers the
     // missing-secret branch overrides this module locally.
     CONTACT_HASH_SECRET: 'test-contact-hash-secret-at-least-32-chars',
+    // No key in unit tests, so getGenerator() resolves to the fake.
+    OPENAI_API_KEY: undefined,
+    BRAMBLE_AI_MODE: undefined,
   },
 }));
