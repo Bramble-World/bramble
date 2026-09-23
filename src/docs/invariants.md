@@ -135,9 +135,21 @@ provisioned.
 
 ## 7. Drizzle traps specific to this repo
 
-- `relations` imports from **`drizzle-orm/_relations`**, not `drizzle-orm`.
-  Drizzle 1.0 moved the old API there; the root exports only the
-  differently-shaped `defineRelations`. "Fixing" the import breaks the build.
+- **Drizzle 1.0 has two relational APIs and they are not interchangeable.**
+  Passing `schema` to `drizzle()` populates `db._query.*` from the older
+  `relations()` helper at `drizzle-orm/_relations`; passing `relations`
+  populates `db.query.*` from `defineRelations`. This repo uses the second and
+  keeps its whole graph in `src/db/relations.ts`. Table files define tables
+  only. Adding a `relations()` block back to one does nothing — it is never
+  read, because `schema` is not passed.
+- **A broken relation typechecks.** Relations resolve when a query runs, so a
+  wrong `alias`, a swapped `through()` column or a missing inverse passes
+  `typecheck` and `lint` and then fails at runtime — or worse, silently returns
+  empty arrays. `src/db/relations.integration.test.ts` is the only thing that
+  catches this; it needs the seeded database and runs in CI's Database job.
+- **`one` is nullable by default**, so every `notNull` foreign key needs
+  `optional: false` in `relations.ts`. Nothing cross-checks this against the
+  column definition — get it wrong and the type lies about nullability.
 - **Every `pgTable` _and_ every `pgEnum` must be exported from
   `src/db/schema/tables/index.ts`** — that barrel is what `drizzle.config.ts`
   reads. An unexported enum is still used as a column type, producing SQL that
