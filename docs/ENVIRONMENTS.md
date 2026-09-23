@@ -39,14 +39,14 @@ share history and the diffs stay small and readable.
 
 ## What CI runs
 
-| Job                          | Runs on                   | Purpose                                                                                 |
-| ---------------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
-| Lint, Type Check, Unit Tests | every branch and PR       | fast feedback                                                                           |
-| Build                        | after those pass          | catches what tests can't                                                                |
-| Migrations                   | every branch and PR       | applies migrations to a throwaway Postgres, so a broken migration never reaches staging |
-| API                          | every branch and PR       | route handlers over real HTTP; browserless, so it stays fast                            |
-| E2E (browser)                | `staging` and `main` only | chromium smoke test of the public pages; slow, runs where it matters                    |
-| Release                      | `main` pushes only        | semantic-release tags and writes notes                                                  |
+| Job                          | Runs on                   | Purpose                                                                                                                                  |
+| ---------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Lint, Type Check, Unit Tests | every branch and PR       | fast feedback                                                                                                                            |
+| Build                        | after those pass          | catches what tests can't                                                                                                                 |
+| Migrations                   | every branch and PR       | applies migrations to a throwaway Postgres, then seeds it — so a broken migration, or a schema the writes violate, never reaches staging |
+| API                          | every branch and PR       | route handlers over real HTTP; browserless, so it stays fast                                                                             |
+| E2E (browser)                | `staging` and `main` only | chromium smoke test of the public pages; slow, runs where it matters                                                                     |
+| Release                      | `main` pushes only        | semantic-release tags and writes notes                                                                                                   |
 
 No deploy step yet — that's deliberate, pending a hosting decision. When it's
 added, it hangs off the `build` job per branch.
@@ -98,7 +98,12 @@ Generate on `dev`, and let them promote with the code:
 ```bash
 pnpm db:generate     # writes SQL to src/db/drizzle/
 pnpm db:migrate      # applies to your local database
+pnpm db:seed         # rebuilds the demo fixture (local hosts only)
 ```
+
+`db:seed` refuses any non-local database and deletes its own seed user before
+rebuilding, so it is safe to re-run. CI runs it after every migration, which is
+what stops it rotting as the schema changes.
 
 Commit the generated SQL. CI proves every migration applies cleanly from
 scratch on each branch, so a migration that only works against your laptop

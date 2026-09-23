@@ -103,9 +103,19 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      # Called directly, not via pnpm db:migrate — that wrapper shells out to
-      # Doppler, which CI doesn't need for a throwaway database.
-      - run: pnpm exec drizzle-kit migrate
+      # Called directly, not via pnpm db:migrate / db:seed — those wrappers
+      # shell out to Doppler, which CI doesn't need for a throwaway database.
+      - name: Apply migrations
+        run: pnpm exec drizzle-kit migrate
+      # The seed is the only thing that exercises the schema through real
+      # inserts, so it catches what a migration cannot: a constraint the writes
+      # violate, a column the seed forgot, a relation that drifted. It also stops
+      # the seed rotting silently as the schema changes.
+      #
+      # The script refuses any non-local host, and this DATABASE_URL is
+      # localhost, so the guard passes here and still protects a real database.
+      - name: Seed (proves the schema accepts real writes)
+        run: pnpm exec tsx src/db/seeds/seed.ts
 
   # ── API tests: every branch. No browser, so they stay fast ────────────────
   api:
