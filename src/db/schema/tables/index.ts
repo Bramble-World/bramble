@@ -8,3 +8,6 @@ export { characterRelationships } from './characters/characterRelationships';
 export { events, eventOriginEnum } from './events';
 export { eventParticipants } from './events/eventParticipants';
 export { relationshipStates } from './relationshipStates';
+export { storylineSessions } from './storylineSessions';
+export { storyTurns } from './storylineSessions/storyTurns';
+export { turnChoices } from './storylineSessions/turnChoices';
