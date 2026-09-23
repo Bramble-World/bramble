@@ -79,6 +79,28 @@ CI does **not** use Doppler. Every quality gate runs with
 `SKIP_ENV_VALIDATION=true` against a throwaway database, so no production
 secret is ever exposed to a workflow run.
 
+### `CONTACT_HASH_SECRET`
+
+`persons.sourceContactRef` is an HMAC of a phone number or email, not a plain
+digest — a plain digest of a phone number is not meaningfully one-way, since the
+North American keyspace is about 10^10 and a database dump alone would be enough
+to recover every contact. Keeping the key outside the database is what makes the
+hash worth anything, so it lives in Doppler like any other secret.
+
+Two consequences worth knowing:
+
+- **Hashing throws when it is unset** rather than falling back to an unkeyed
+  digest. A weaker hash would still populate the column and still look correct,
+  which is the silent failure the key exists to prevent.
+- **Rotating it orphans every existing `sourceContactRef`.** The same contact
+  would hash to a new value, so re-syncing would create a second `persons` row
+  for everyone and cross-storyline continuity would break for all of them.
+  Rotation therefore means re-hashing the column, not just changing the key.
+
+CI sets a fixed, deliberately non-secret value: the integration tests assert that
+one handle always produces one ref and that the raw handle never reaches the
+column, and neither depends on the key's value.
+
 ## Test layers
 
 | Layer       | Command                 | Covers                                       |
