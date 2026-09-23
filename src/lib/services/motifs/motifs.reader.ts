@@ -25,7 +25,7 @@ export async function getMotif(userId: string, motifId: string): Promise<PublicM
 /**
  * Whether an event belongs to a storyline.
  *
- * Reaches into `events`, which otherwise belongs to the canon service, because
+ * Reaches into `events`, which otherwise belongs to the timeline service, because
  * the rule being checked is `motifOccurrences.eventId` must belong to its
  * `storylineId` (invariants.md §3) — and the write it guards lives here. A
  * callback pointing at the wrong story's beat is accepted by every foreign key
