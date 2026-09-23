@@ -5,3 +5,6 @@ export { storylines, storylineStatusEnum } from './storylines';
 export { storylineLinks, storylineLinkTypeEnum } from './storylines/storylineLinks';
 export { characters, characterRoleEnum } from './characters';
 export { characterRelationships } from './characters/characterRelationships';
+export { events, eventOriginEnum } from './events';
+export { eventParticipants } from './events/eventParticipants';
+export { relationshipStates } from './relationshipStates';
