@@ -1,7 +1,6 @@
 import { pgTable, uuid, index, pgEnum, uniqueIndex } from 'drizzle-orm/pg-core';
 import { timestamps } from '../../../util/timestamps';
 import { storylines } from './index';
-import { relations } from 'drizzle-orm/_relations';
 
 export const storylineLinkTypeEnum = pgEnum('storyline_link_type', [
   'sequel',
@@ -33,16 +32,3 @@ export const storylineLinks = pgTable(
     ),
   ]
 );
-
-export const storylineLinksRelations = relations(storylineLinks, ({ one }) => ({
-  storylineA: one(storylines, {
-    fields: [storylineLinks.storylineAId],
-    references: [storylines.id],
-    relationName: 'storylineA',
-  }),
-  storylineB: one(storylines, {
-    fields: [storylineLinks.storylineBId],
-    references: [storylines.id],
-    relationName: 'storylineB',
-  }),
-}));
