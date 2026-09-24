@@ -4,8 +4,9 @@ import { requireLabUser } from '@/lib/services/auth/dev-user';
 import * as storylines from '@/lib/services/storylines/storylines.service';
 import { db } from '@/index';
 import { ActionButton } from '@/components/lab/action-button';
-import { UploadTranscript } from '@/components/lab/upload-transcript';
-import { extractAction, extractFromUploadAction, sweepAction } from './actions';
+import { ImportExport } from '@/components/lab/import-export';
+import { extractAction, extractThreadAction, sweepAction } from './actions';
+import { MAX_TRANSCRIPT_CHARS, MIN_THREAD_MESSAGES } from '@/lib/services/generation/limits';
 
 export const metadata: Metadata = {
   title: 'Bramble — lab',
@@ -59,9 +60,14 @@ export default async function LabPage() {
       <section className="border-border mb-6 rounded-lg border p-4">
         <h2 className="mb-1 text-sm font-medium">Extract from your own messages</h2>
         <p className="text-muted-foreground mb-3 text-xs">
-          The whole export goes in as one conversation.
+          Every conversation in the file becomes its own storyline. People are matched across them,
+          so the same person is the same person everywhere.
         </p>
-        <UploadTranscript action={extractFromUploadAction} />
+        <ImportExport
+          action={extractThreadAction}
+          minMessages={MIN_THREAD_MESSAGES}
+          maxChars={MAX_TRANSCRIPT_CHARS}
+        />
       </section>
 
       <section className="border-border mb-8 rounded-lg border p-4">

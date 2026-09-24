@@ -13,7 +13,7 @@ import {
 import { extractStoryline } from '@/lib/services/generation/extraction.service';
 import { sweepIdleSessions } from '@/lib/services/generation/arc.service';
 import { threeWeeksLater, unsentApology } from '@/lib/services/generation/__fixtures__/transcripts';
-import { parseCsvTranscript } from '@/lib/services/generation/csv-transcript';
+import { MAX_TRANSCRIPT_CHARS } from '@/lib/services/generation/limits';
 
 /**
  * Server actions for the harness.
@@ -121,63 +121,57 @@ export async function sweepAction(): Promise<ActionResult> {
   });
 }
 
-/**
- * How much transcript one extraction call will carry.
- *
- * Checked before sending rather than after failing. A whole message history can
- * run to millions of characters, which no context window takes — and the way
- * that surfaces otherwise is a provider error several seconds into a paid call,
- * saying nothing useful about what to do next. Roughly four characters per
- * token, so this is around 100k tokens of transcript.
- */
-const MAX_TRANSCRIPT_CHARS = 400_000;
+const threadSchema = z.object({
+  handle: z.string().min(1).max(300),
+  messages: z
+    .array(
+      z.object({
+        isFromMe: z.boolean(),
+        handle: z.string().max(300),
+        text: z.string().min(1),
+        sentAt: z.string().max(100),
+      })
+    )
+    .min(1)
+    .max(50_000),
+});
 
-/** Bigger than this and the body limit in next.config would reject it anyway. */
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-
 /**
- * Extracts a storyline from an uploaded message export.
+ * Extracts one conversation into a storyline.
  *
- * The file is read into memory, parsed, and discarded when the request ends — it
- * is never written to disk, and nothing of it is written to the database either.
- * Extraction persists the model's retelling, and the extraction tests assert no
- * message appears verbatim in any column.
+ * One thread per call, rather than a whole export per call, for two reasons.
+ * An export does not fit in any context window, and a single story spanning
+ * years and everyone in it would be incoherent even if it did. And 39 sequential
+ * generations at high reasoning effort is many minutes of work — far past what
+ * one request should hold open, and with no way to show progress or to keep what
+ * succeeded when something fails half way.
  *
- * It does reach a model, so with a key configured the text leaves this machine.
- * invariants.md §1 permits that — messages may travel, they may not be stored —
- * but it is worth knowing when the input is a real history rather than a fixture.
+ * The parsing and splitting happen in the browser, so the export itself is never
+ * uploaded; only the thread being extracted is sent. It does reach the model —
+ * invariants.md §1 permits transit and forbids storage — and nothing of it is
+ * written: extraction persists the model's retelling.
  */
-export async function extractFromUploadAction(formData: FormData): Promise<ActionResult> {
+export async function extractThreadAction(input: unknown): Promise<ActionResult> {
   return run(async () => {
     const user = await requireLabUser();
 
-    const file = formData.get('csv');
-    if (!(file instanceof File) || file.size === 0) {
-      throw new ValidationError('Choose a CSV first.');
-    }
-    if (file.size > MAX_UPLOAD_BYTES) {
+    const parsed = threadSchema.safeParse(input);
+    if (!parsed.success) throw new ValidationError('That thread is not in the expected shape.');
+    const thread = parsed.data;
+
+    const chars = thread.messages.reduce((total, message) => total + message.text.length, 0);
+    if (chars > MAX_TRANSCRIPT_CHARS) {
       throw new ValidationError(
-        `${file.name} is ${Math.round(file.size / 1_048_576)}MB, past the ${MAX_UPLOAD_BYTES / 1_048_576}MB upload limit.`
+        `That thread is ${Math.round(chars / 1000)}k characters, past the ~${MAX_TRANSCRIPT_CHARS / 1000}k a single call carries.`
       );
     }
 
-    const { transcript, mapping, totalRows, skipped } = parseCsvTranscript(await file.text());
+    const storyline = await extractStoryline(user.id, {
+      surface: 'imessage',
+      messages: thread.messages,
+    });
 
-    const size = transcript.messages.reduce((total, message) => total + message.text.length, 0);
-    if (size > MAX_TRANSCRIPT_CHARS) {
-      throw new ValidationError(
-        `That export is ${transcript.messages.length} messages / ${Math.round(size / 1000)}k characters, past what one call can carry (~${MAX_TRANSCRIPT_CHARS / 1000}k). Narrow the file and try again.`
-      );
-    }
-
-    const storyline = await extractStoryline(user.id, transcript);
     revalidatePath('/lab');
-
-    // The column mapping is reported because a misdetection is otherwise silent:
-    // the extraction would simply be wrong about who said what, and read fine.
-    const columns = Object.entries(mapping)
-      .map(([field, header]) => `${field}=${header ?? '—'}`)
-      .join(' ');
-    return `Extracted "${storyline.title}" from ${transcript.messages.length} of ${totalRows} rows (${skipped} skipped). Columns: ${columns}`;
+    return `"${storyline.title}" — ${thread.messages.length} messages`;
   });
 }

@@ -79,40 +79,54 @@ test.describe('the lab', () => {
     expect(await page.locator('ol > li').count()).toBeGreaterThanOrEqual(beatsBefore);
   });
 
-  // The file picker is the only path that carries real data in, so it is worth
-  // driving rather than trusting. Uploaded from a buffer so nothing touches disk.
-  test('extracts a storyline from an uploaded CSV', async ({ page }) => {
+  // The import is the only path that carries real data in, so it is driven
+  // rather than trusted. Built from a buffer, so no file touches disk and none
+  // of anyone's real messages are involved.
+  test('imports an export and extracts a conversation from it', async ({ page }) => {
     await page.goto('/lab');
 
-    const csv = [
-      'date,is_from_me,text,handle',
-      '2026-03-02 19:04,0,"you said it in front of everyone",+15550104477',
-      '2026-03-02 19:41,1,"I know. I was tired and I took it out on you.",+15550104477',
-      '2026-03-02 19:42,0,"it is fine",+15550104477',
-    ].join('\n');
+    // Two threads: one long enough to be a story, one that is delivery noise.
+    // Both go in, so the floor is what decides — not the fixture.
+    const rows = ['date,chat,sender,direction,message'];
+    for (let i = 0; i < 60; i += 1) {
+      const mine = i % 2 === 0;
+      rows.push(
+        `2026-03-${String((i % 28) + 1).padStart(2, '0')},Maya,${mine ? 'me' : 'Maya'},${mine ? 'sent' : 'received'},"line ${i} of something unresolved"`
+      );
+    }
+    rows.push('2026-03-02,Parcel,Parcel,received,"your package has shipped"');
 
     await page.locator('input[type="file"]').setInputFiles({
-      name: 'messages.csv',
+      name: 'export.csv',
       mimeType: 'text/csv',
-      buffer: Buffer.from(csv, 'utf8'),
+      buffer: Buffer.from(rows.join('\n'), 'utf8'),
     });
 
-    await page.getByRole('button', { name: 'Extract from this file' }).click();
+    // Parsed and split in the page: one conversation qualifies, the parcel
+    // thread does not.
+    const extract = page.getByRole('button', { name: /Extract 1 conversation/ });
+    await expect(extract).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/1 conversations of at least 50 messages/)).toBeVisible();
 
-    // The report names the columns it detected, because a misdetected direction
-    // column is otherwise invisible — every message would look like one person.
-    const report = page.getByText(/Extracted ".*" from 3 of 3 rows/);
-    await expect(report).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(/direction=is_from_me/)).toBeVisible();
+    await extract.click();
+
+    await expect(page.getByText('done', { exact: true })).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByText(/60 msgs/)).toBeVisible();
   });
 
   test('marks beats the reader caused', async ({ page }) => {
     await page.goto('/lab');
-    await page.locator('a[href^="/lab/"]').first().click();
 
-    // The seed ships one generated beat sitting in a gap between two extracted
-    // ones, which is the convention the whole timeline depends on.
-    const caused = page.getByText('you caused this').first();
-    await expect(caused).toBeVisible();
+    // Picked by content rather than position. The list is newest first, and the
+    // other tests keep adding freshly extracted storylines to the top of it —
+    // those have no generated beats yet, so "the first link" is the wrong one
+    // whenever this runs after them.
+    const withGenerated = page.locator('a[href^="/lab/"]').filter({ hasText: /generated/ });
+    await expect(withGenerated.first()).toBeVisible({ timeout: 30_000 });
+    await withGenerated.first().click();
+
+    // The seed ships a generated beat sitting in a gap between two extracted
+    // ones, which is the numbering convention the whole timeline depends on.
+    await expect(page.getByText('you caused this').first()).toBeVisible();
   });
 });
