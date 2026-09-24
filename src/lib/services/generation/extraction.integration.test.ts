@@ -152,6 +152,62 @@ describe('extractStoryline', () => {
     }
   });
 
+  // occurredAt is when a beat happened; narrativeOrder is the order it is told
+  // in. They are deliberately different columns, and with every beat dateless a
+  // timeline cannot tell three weeks of silence from ten minutes.
+  it('dates each beat from the messages it covers', async () => {
+    const storyline = await extractStoryline(userId, unsentApology, { generator: fake });
+
+    const events = await db.query.events.findMany({
+      where: { storylineId: storyline.id },
+      orderBy: { narrativeOrder: 'asc' },
+    });
+
+    const dated = events.filter((e) => e.occurredAt !== null);
+    expect(dated.length).toBeGreaterThan(0);
+    for (const event of dated) expect(event.occurredAt).toBeInstanceOf(Date);
+  });
+
+  // A model can return anything in a string field. An unparseable date must not
+  // reach the column as an Invalid Date, which Postgres rejects — that would
+  // lose a whole extraction over one bad value.
+  it('drops an unparseable date rather than failing the extraction', async () => {
+    fake.register(extractionPrompt, ({ vars }) => ({
+      title: 'Bad Dates',
+      tone: 'confused',
+      setting: null,
+      arcSummary: 'Something happened at some point.',
+      cast: [
+        {
+          name: vars.user.self?.name ?? 'Blossom',
+          existingPersonId: vars.user.self?.id ?? null,
+          sourceHandle: null,
+          role: 'protagonist' as const,
+          description: null,
+          voiceTone: null,
+        },
+      ],
+      relationships: [],
+      beats: [
+        {
+          title: 'Whenever this was',
+          description: 'x',
+          stakes: null,
+          occurredAt: 'the third of never',
+          participantNames: [],
+        },
+      ],
+      background: [],
+      motifs: [],
+    }));
+
+    const storyline = await extractStoryline(userId, unsentApology, { generator: fake });
+
+    const [event] = await db.query.events.findMany({ where: { storylineId: storyline.id } });
+    expect(event.occurredAt).toBeNull();
+    expect(storyline.status).toBe('ready');
+  });
+
   it('records relationships both structurally and for the story', async () => {
     const storyline = await extractStoryline(userId, unsentApology, { generator: fake });
 

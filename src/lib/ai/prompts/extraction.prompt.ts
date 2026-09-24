@@ -83,6 +83,12 @@ export const extractionOutputSchema = z.object({
         title: z.string().min(1),
         description: z.string().min(1).describe('What happened, retold. Not a quotation.'),
         stakes: z.string().nullable(),
+        occurredAt: z
+          .string()
+          .nullable()
+          .describe(
+            'When this beat happened, ISO 8601, taken from the timestamps on the messages it covers. Use the moment it turns on. Null if it spans no particular one.'
+          ),
         participantNames: z.array(z.string()).describe('Names from the cast above.'),
       })
     )
@@ -147,6 +153,8 @@ export const extractionPrompt: PromptSpec<ExtractionVars, ExtractionOutput> = {
       '  into a description would be the only copy left.',
       '- Beats are what changed, not every exchange. A long conversation that went',
       '  nowhere is one beat.',
+      '- Date each beat from the messages it covers. The gap between two beats is',
+      '  part of the story — three weeks of silence reads nothing like ten minutes.',
       '- Background is what the exchange implies but never says outright.',
       '- Motifs are running references between these people — not themes of the story.',
       '- If someone here is already in "People you already know", give their id.',
