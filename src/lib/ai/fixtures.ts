@@ -97,7 +97,10 @@ export function registerFixtures(fake: FakeGenerator): void {
     // Names and handles are read off the transcript rather than invented, so the
     // person-resolution path — hash the handle, reuse the row next time — is the
     // real one. A fixture with made-up handles would exercise none of it.
-    const others = [...new Set(vars.messages.filter((m) => !m.isFromMe).map((m) => m.handle))];
+    // By sender, not by thread: in a group chat every message shares one handle,
+    // so deriving from it would give every participant the same contact hash and
+    // resolve them all to one persons row.
+    const others = [...new Set(vars.messages.filter((m) => !m.isFromMe).map((m) => m.sender))];
     const selfName = vars.user.self?.name ?? 'Blossom';
     const otherName = 'Maya';
 

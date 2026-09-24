@@ -5,8 +5,19 @@ import { UserContext } from '@/lib/services/generation/generation.types';
 /** One message as it reaches the pipeline. Never written to any column. */
 export type TranscriptMessage = {
   isFromMe: boolean;
-  /** Who sent it, as the surface reports them. Used only for grouping. */
+  /**
+   * The conversation this belongs to. Used for grouping only — in a group chat
+   * every message shares one, which is exactly why it cannot also serve as the
+   * speaker.
+   */
   handle: string;
+  /**
+   * Who wrote it. Distinct from `handle`, and the distinction matters: reading
+   * the speaker off the thread made everyone in a group chat indistinguishable,
+   * so the model could not name them, could not cast them, and would have given
+   * two different people the same contact hash.
+   */
+  sender: string;
   text: string;
   sentAt: string;
 };
@@ -40,7 +51,7 @@ export const extractionOutputSchema = z.object({
           .string()
           .nullable()
           .describe(
-            'The exact handle this person sent messages under, copied from the transcript. Null if they are only mentioned and never wrote.'
+            'The exact name this person sent messages under, copied from the transcript. Null if they are only mentioned and never wrote.'
           ),
         role: z.enum(['protagonist', 'antagonist', 'supporting']),
         description: z.string().nullable().describe('Who they are in this particular story.'),
@@ -157,8 +168,22 @@ export const extractionPrompt: PromptSpec<ExtractionVars, ExtractionOutput> = {
             '',
           ]
         : []),
+      // Named before the transcript, because a long group chat makes it easy to
+      // lose a quieter participant, and a dropped speaker is a person who never
+      // gets a persons row and cannot be referred to again.
+      ...(() => {
+        const speakers = [...new Set(messages.filter((m) => !m.isFromMe).map((m) => m.sender))];
+        return speakers.length > 1
+          ? [
+              '## Who is in this conversation',
+              ...speakers.map((name) => `- ${name}`),
+              'Everyone above who took part belongs in the cast.',
+              '',
+            ]
+          : [];
+      })(),
       '## The conversation',
-      ...messages.map((m) => `[${m.sentAt}] ${m.isFromMe ? 'me' : m.handle}: ${m.text}`),
+      ...messages.map((m) => `[${m.sentAt}] ${m.isFromMe ? 'me' : m.sender}: ${m.text}`),
       '',
       'Produce the storyline.',
     ]

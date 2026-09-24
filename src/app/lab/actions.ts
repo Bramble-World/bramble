@@ -129,6 +129,7 @@ const threadSchema = z.object({
       z.object({
         isFromMe: z.boolean(),
         handle: z.string().max(300),
+        sender: z.string().max(300),
         text: z.string().min(1),
         sentAt: z.string().max(100),
       })

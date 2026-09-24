@@ -38,6 +38,7 @@ import type { Transcript } from './extraction.service';
 const COLUMNS = {
   text: ['message', 'text', 'body', 'messagetext', 'content'],
   direction: ['direction', 'isfromme', 'fromme', 'ismine', 'issent', 'type', 'sender'],
+  sender: ['sender', 'from', 'author', 'who', 'sendername', 'contactname'],
   sentAt: ['date', 'timestamp', 'datetime', 'sentat', 'readabledate', 'messagedate', 'time'],
   handle: [
     'chat',
@@ -87,6 +88,7 @@ export function parseCsvTranscript(raw: string, surface = 'imessage'): CsvTransc
     direction: indexOf(COLUMNS.direction),
     sentAt: indexOf(COLUMNS.sentAt),
     handle: indexOf(COLUMNS.handle),
+    sender: indexOf(COLUMNS.sender),
   };
 
   if (columns.text === null) {
@@ -112,6 +114,13 @@ export function parseCsvTranscript(raw: string, surface = 'imessage'): CsvTransc
       // Normalised the same way as the headers, so "From Me" and "fromme" agree.
       isFromMe: FROM_ME.has(normalise(directionValue)),
       handle: (columns.handle === null ? '' : (row[columns.handle] ?? '')).trim() || 'them',
+      // Falls back to the thread when an export has no sender column at all —
+      // wrong in a group chat, but the alternative is an empty speaker, and the
+      // reported mapping shows no sender column was found.
+      sender:
+        (columns.sender === null ? '' : (row[columns.sender] ?? '')).trim() ||
+        (columns.handle === null ? '' : (row[columns.handle] ?? '')).trim() ||
+        'them',
       text,
       sentAt: (columns.sentAt === null ? '' : (row[columns.sentAt] ?? '')).trim(),
     });
@@ -128,6 +137,7 @@ export function parseCsvTranscript(raw: string, surface = 'imessage'): CsvTransc
       direction: columns.direction === null ? null : rows[0][columns.direction],
       sentAt: columns.sentAt === null ? null : rows[0][columns.sentAt],
       handle: columns.handle === null ? null : rows[0][columns.handle],
+      sender: columns.sender === null ? null : rows[0][columns.sender],
     },
     totalRows: rows.length - 1,
     skipped,
