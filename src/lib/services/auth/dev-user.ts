@@ -1,5 +1,5 @@
 import { env } from '@/env';
-import { ForbiddenError, NotFoundError } from '@/lib/utils/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '@/lib/utils/errors';
 import * as userReader from '@/lib/services/users/users.reader';
 import { PublicUser } from '@/lib/services/users/users.types';
 
@@ -27,6 +27,18 @@ export const SEED_CLERK_ID = 'user_seed_demo';
 export async function requireLabUser(): Promise<PublicUser> {
   if (env.NODE_ENV !== 'development') {
     throw new ForbiddenError('The lab is available in development only');
+  }
+
+  // Checked before querying, because the failure otherwise is unreadable. With
+  // no DATABASE_URL the db falls back to a placeholder host so that importing it
+  // cannot crash a route, and the first query then fails with drizzle's generic
+  // "Failed query" wrapper — which reports the SQL and hides the cause. The
+  // actual mistake is almost always starting the server without Doppler, so say
+  // that instead.
+  if (!env.DATABASE_URL) {
+    throw new ValidationError(
+      'DATABASE_URL is not set. Start the server with `pnpm dev:doppler` rather than `pnpm dev`.'
+    );
   }
 
   const user = await userReader.getUserByClerkId(SEED_CLERK_ID);
