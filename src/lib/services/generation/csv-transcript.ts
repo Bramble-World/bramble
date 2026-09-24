@@ -17,20 +17,37 @@ import type { Transcript } from './extraction.service';
  * gone when the request ends.
  */
 
-/** Aliases seen across the common exporters, lowercased and punctuation-stripped. */
+/**
+ * Aliases per field, **in order of preference**, lowercased and
+ * punctuation-stripped.
+ *
+ * The order is the whole point. These are matched alias-first — the earliest
+ * alias that appears anywhere in the header wins — rather than header-first,
+ * which takes whichever plausible column happens to sit leftmost.
+ *
+ * That distinction is not academic. A real export headed
+ * `date,chat,sender,direction,message` carries both `sender` and `direction`,
+ * and header-first order picks `sender`: a person's name, matching nothing in
+ * FROM_ME, so every message in the file reads as incoming. The extraction then
+ * describes a conversation the account holder never spoke in, and looks entirely
+ * plausible while being wrong about every line.
+ *
+ * `sender` stays last, for exports that really do use it to mean direction, but
+ * anything explicit beats it.
+ */
 const COLUMNS = {
-  text: ['text', 'body', 'message', 'messagetext', 'content'],
-  direction: ['isfromme', 'fromme', 'sender', 'direction', 'type', 'ismine', 'sent'],
-  sentAt: ['date', 'timestamp', 'datetime', 'time', 'sentat', 'readabledate', 'messagedate'],
+  text: ['message', 'text', 'body', 'messagetext', 'content'],
+  direction: ['direction', 'isfromme', 'fromme', 'ismine', 'issent', 'type', 'sender'],
+  sentAt: ['date', 'timestamp', 'datetime', 'sentat', 'readabledate', 'messagedate', 'time'],
   handle: [
+    'chat',
+    'chatname',
     'handle',
     'handleid',
     'contact',
-    'phone',
     'phonenumber',
+    'phone',
     'address',
-    'chat',
-    'chatname',
     'with',
   ],
 } as const;
@@ -38,7 +55,7 @@ const COLUMNS = {
 const normalise = (header: string) => header.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /** Values that mean "I sent this", across the exporters that use text rather than 0/1. */
-const FROM_ME = new Set(['1', 'true', 'yes', 'me', 'sent', 'outgoing', 'from me', 'self']);
+const FROM_ME = new Set(['1', 'true', 'yes', 'me', 'sent', 'outgoing', 'fromme', 'self', 'mine']);
 
 export type CsvTranscriptResult = {
   transcript: Transcript;
@@ -55,9 +72,14 @@ export function parseCsvTranscript(raw: string, surface = 'imessage'): CsvTransc
   }
 
   const header = rows[0].map(normalise);
+  // Alias-first, not header-first: the most specific name wins wherever a file
+  // offers several plausible columns. See COLUMNS above.
   const indexOf = (aliases: readonly string[]) => {
-    const found = header.findIndex((column) => aliases.includes(column));
-    return found === -1 ? null : found;
+    for (const alias of aliases) {
+      const found = header.indexOf(alias);
+      if (found !== -1) return found;
+    }
+    return null;
   };
 
   const columns = {
@@ -87,7 +109,8 @@ export function parseCsvTranscript(raw: string, surface = 'imessage'): CsvTransc
 
     const directionValue = columns.direction === null ? '' : (row[columns.direction] ?? '');
     messages.push({
-      isFromMe: FROM_ME.has(directionValue.trim().toLowerCase()),
+      // Normalised the same way as the headers, so "From Me" and "fromme" agree.
+      isFromMe: FROM_ME.has(normalise(directionValue)),
       handle: (columns.handle === null ? '' : (row[columns.handle] ?? '')).trim() || 'them',
       text,
       sentAt: (columns.sentAt === null ? '' : (row[columns.sentAt] ?? '')).trim(),
@@ -165,4 +188,78 @@ function parseCsv(input: string): string[][] {
   }
 
   return rows.filter((r) => r.some((cell) => cell.trim() !== ''));
+}
+
+/** A conversation pulled out of an export, ready to become one storyline. */
+export type Thread = {
+  /** The chat identifier the export used. Shown to the user, never stored raw. */
+  handle: string;
+  messages: TranscriptMessage[];
+  /** Total characters of message text, which is what the per-call cap measures. */
+  chars: number;
+  /** True when older messages were dropped to fit. Worth surfacing. */
+  truncated: boolean;
+};
+
+export type SplitOptions = {
+  /** Threads shorter than this are dropped: an export is mostly automated noise. */
+  minMessages: number;
+  /** Per-thread character ceiling; the newest messages are kept. */
+  maxChars: number;
+};
+
+/**
+ * Splits an export into the conversations worth telling a story about.
+ *
+ * A storyline comes from a conversation, so the thread is the natural unit —
+ * one call over an entire export would produce a single incoherent story
+ * spanning years and everyone in it, quite apart from exceeding any context
+ * window.
+ *
+ * Two filters, both earning their place on real data. A 45,000-message export
+ * held 440 threads with a median length of two: overwhelmingly delivery
+ * notifications and verification codes, which cost money and produce nothing.
+ * And its largest single thread ran to 654k characters, past what one call
+ * carries on its own.
+ *
+ * Oversized threads keep their **most recent** messages rather than their first.
+ * A recent slice of a long-running conversation is a coherent story; the opening
+ * of one is where the least has happened yet.
+ */
+export function splitIntoThreads(
+  transcript: Transcript,
+  { minMessages, maxChars }: SplitOptions
+): Thread[] {
+  const byHandle = new Map<string, TranscriptMessage[]>();
+  for (const message of transcript.messages) {
+    const existing = byHandle.get(message.handle);
+    if (existing) existing.push(message);
+    else byHandle.set(message.handle, [message]);
+  }
+
+  const threads: Thread[] = [];
+
+  for (const [handle, all] of byHandle) {
+    if (all.length < minMessages) continue;
+
+    // Walk backwards so the newest messages are the ones that survive the cap.
+    const kept: TranscriptMessage[] = [];
+    let chars = 0;
+    for (let i = all.length - 1; i >= 0; i -= 1) {
+      const length = all[i].text.length;
+      if (chars + length > maxChars) break;
+      kept.push(all[i]);
+      chars += length;
+    }
+    kept.reverse();
+
+    // Everything dropped can happen when a single message exceeds the cap.
+    if (kept.length === 0) continue;
+
+    threads.push({ handle, messages: kept, chars, truncated: kept.length < all.length });
+  }
+
+  // Busiest first: the most substantial conversations are the ones worth having
+  // extracted if a run is stopped part way.
+  return threads.sort((a, b) => b.messages.length - a.messages.length);
 }

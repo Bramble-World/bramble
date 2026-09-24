@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/lib/utils/errors';
-import { parseCsvTranscript } from './csv-transcript';
+import { parseCsvTranscript, splitIntoThreads } from './csv-transcript';
 
 /**
  * There is no standard shape for a message export, so the parser is tolerant and
@@ -24,6 +24,46 @@ describe('parseCsvTranscript', () => {
     expect(transcript.messages[0].isFromMe).toBe(false);
     expect(transcript.messages[1].isFromMe).toBe(true);
     expect(mapping.direction).toBe('is_from_me');
+  });
+
+  /**
+   * A real export's header, which contains BOTH `sender` and `direction`.
+   *
+   * Matching headers in file order picks `sender` — a person's name — which
+   * matches nothing in the from-me set, so every message in the file reads as
+   * incoming and the extraction describes a conversation the user never spoke
+   * in. It looks entirely plausible while being wrong about every line, which is
+   * why this is pinned rather than left to the alias list staying lucky.
+   */
+  it('prefers an explicit direction column over an ambiguous sender column', () => {
+    const { transcript, mapping } = parseCsvTranscript(
+      [
+        'date,chat,sender,direction,message,attachment,attachment_type,message_id',
+        '2026-03-02 19:04,Maya,Maya,received,"you said it in front of everyone",,,1',
+        '2026-03-02 19:41,Maya,Great,sent,"I know. I was tired.",,,2',
+      ].join('\n')
+    );
+
+    expect(mapping.direction).toBe('direction');
+    expect(mapping.text).toBe('message');
+    expect(mapping.handle).toBe('chat');
+    expect(transcript.messages[0].isFromMe).toBe(false);
+    expect(transcript.messages[1].isFromMe).toBe(true);
+  });
+
+  it('reads sent/received as a direction', () => {
+    const { transcript } = parseCsvTranscript(
+      ['direction,message', 'sent,hello', 'received,hi back'].join('\n')
+    );
+    expect(transcript.messages.map((m) => m.isFromMe)).toStrictEqual([true, false]);
+  });
+
+  // A BOM is normal in exports written on macOS and would otherwise make the
+  // first column name unmatchable.
+  it('ignores a byte order mark on the first header', () => {
+    const { mapping } = parseCsvTranscript('\ufeffdate,direction,message\n2026,sent,hello');
+    expect(mapping.sentAt).toBe('\ufeffdate');
+    expect(mapping.text).toBe('message');
   });
 
   // Quoted fields containing commas, quotes and newlines are exactly what
@@ -107,5 +147,85 @@ describe('parseCsvTranscript', () => {
     const { transcript } = parseCsvTranscript('text,is_from_me\r\nhello,1\r\ngoodbye,0\r\n');
     expect(transcript.messages).toHaveLength(2);
     expect(transcript.messages[0].text).toBe('hello');
+  });
+});
+
+describe('splitIntoThreads', () => {
+  const build = (spec: Array<[handle: string, count: number, size?: number]>) => ({
+    surface: 'imessage',
+    messages: spec.flatMap(([handle, count, size = 10]) =>
+      Array.from({ length: count }, (_, i) => ({
+        isFromMe: i % 2 === 0,
+        handle,
+        text: `${i}`.padEnd(size, 'x'),
+        sentAt: `2026-01-${String((i % 28) + 1).padStart(2, '0')}`,
+      }))
+    ),
+  });
+
+  it('keeps conversations long enough to be a story and drops the rest', () => {
+    const threads = splitIntoThreads(
+      build([
+        ['maya', 60],
+        ['delivery', 2],
+        ['bank', 1],
+      ]),
+      {
+        minMessages: 50,
+        maxChars: 400_000,
+      }
+    );
+
+    expect(threads.map((t) => t.handle)).toStrictEqual(['maya']);
+  });
+
+  it('orders by size, so a stopped run has done the biggest first', () => {
+    const threads = splitIntoThreads(
+      build([
+        ['small', 51],
+        ['big', 200],
+        ['mid', 80],
+      ]),
+      {
+        minMessages: 50,
+        maxChars: 400_000,
+      }
+    );
+
+    expect(threads.map((t) => t.handle)).toStrictEqual(['big', 'mid', 'small']);
+  });
+
+  // The opening of a long conversation is where the least has happened. A recent
+  // slice is a story; the first 400k characters of a three-year thread is not.
+  it('keeps the newest messages when a thread is too large', () => {
+    const [thread] = splitIntoThreads(build([['maya', 100, 100]]), {
+      minMessages: 10,
+      maxChars: 1_000,
+    });
+
+    expect(thread.truncated).toBe(true);
+    expect(thread.chars).toBeLessThanOrEqual(1_000);
+    // The last message of the original survives; the first does not.
+    expect(thread.messages.at(-1)!.text).toBe('99'.padEnd(100, 'x'));
+    expect(thread.messages.some((m) => m.text === '0'.padEnd(100, 'x'))).toBe(false);
+  });
+
+  it('marks a thread untruncated when it fits whole', () => {
+    const [thread] = splitIntoThreads(build([['maya', 60]]), {
+      minMessages: 50,
+      maxChars: 400_000,
+    });
+
+    expect(thread.truncated).toBe(false);
+    expect(thread.messages).toHaveLength(60);
+  });
+
+  it('drops a thread whose every message is larger than the cap', () => {
+    const threads = splitIntoThreads(build([['maya', 60, 500]]), {
+      minMessages: 50,
+      maxChars: 100,
+    });
+
+    expect(threads).toStrictEqual([]);
   });
 });
