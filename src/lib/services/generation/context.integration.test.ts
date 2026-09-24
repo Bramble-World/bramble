@@ -29,12 +29,23 @@ beforeAll(async () => {
   if (!seed) throw new Error('The seed user is missing. Run `pnpm db:seed` first.');
   seedUserId = seed.id;
 
-  const storyline = await db.query.storylines.findFirst({
+  // Chosen for what it contains, not by whichever row comes back first. The
+  // database is a working development one: it holds storylines from imports and
+  // from interrupted extractions, some with no cast and no sessions at all.
+  // `findFirst` has no ordering, so taking whatever it returns makes these tests
+  // fail depending on what someone did in the browser five minutes ago.
+  const candidates = await db.query.storylines.findMany({
     where: { userId: seedUserId },
-    with: { sessions: true },
+    with: { sessions: true, characters: true, events: true },
   });
-  storylineId = storyline!.id;
-  sessionId = storyline!.sessions[0]!.id;
+  const usable = candidates.find(
+    (s) => s.sessions.length > 0 && s.characters.length > 0 && s.events.length > 0
+  );
+  if (!usable) {
+    throw new Error('No seeded storyline with a cast, events and a session. Run `pnpm db:seed`.');
+  }
+  storylineId = usable.id;
+  sessionId = usable.sessions[0].id;
 });
 
 describe('assembleStorylineContext', () => {

@@ -22,7 +22,13 @@ test.describe('the lab', () => {
 
   test('plays a turn and grows canon', async ({ page }) => {
     await page.goto('/lab');
-    await page.locator('a[href^="/lab/"]').first().click();
+
+    // Chosen by status, not position. The list is newest first and anything
+    // mid-extraction sits at the top — a storyline that is still `generating`
+    // cannot be played, and rightly refuses.
+    const playable = page.locator('a[href^="/lab/"]').filter({ hasText: 'ready' });
+    await expect(playable.first()).toBeVisible({ timeout: 30_000 });
+    await playable.first().click();
 
     await expect(page.getByRole('heading', { name: 'Canon' })).toBeVisible();
 
@@ -104,11 +110,17 @@ test.describe('the lab', () => {
 
     // Parsed and split in the page: one conversation qualifies, the parcel
     // thread does not.
-    const extract = page.getByRole('button', { name: /Extract 1 conversation/ });
-    await expect(extract).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(/1 conversations of at least 50 messages/)).toBeVisible();
+    await expect(page.getByText(/1 conversations of at least 50 messages/)).toBeVisible({
+      timeout: 30_000,
+    });
 
-    await extract.click();
+    // Nothing is selected to begin with, because every extraction is a paid call
+    // on real messages — so the button starts disabled and says so.
+    const extract = page.getByRole('button', { name: /Select conversations to extract/ });
+    await expect(extract).toBeDisabled();
+
+    await page.getByRole('button', { name: /Select all/ }).click();
+    await page.getByRole('button', { name: /Extract 1 selected/ }).click();
 
     await expect(page.getByText('done', { exact: true })).toBeVisible({ timeout: 90_000 });
     await expect(page.getByText(/60 msgs/)).toBeVisible();
