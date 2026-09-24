@@ -16,9 +16,13 @@ export type ConsequenceVars = {
 /**
  * What a decision changed about the story.
  *
- * Everything is allowed to be empty. Most decisions move a scene without
- * altering canon, and a model that must always produce an event will invent one
- * — which is how a timeline fills with beats nobody chose to create.
+ * Everything is still allowed to be empty, because a model forced to produce an
+ * event every time will invent one. But the earlier wording — that returning
+ * nothing was "the common case and the correct one" — suppressed almost
+ * everything: across nineteen real decisions it produced two events, no
+ * background and no relationship movement at all. Offers made, budgets proposed
+ * and things said out loud all recorded nothing, so steering the story left no
+ * trace, which is the one thing the feature exists to do.
  *
  * `dynamic` is flattened into three nullable strings rather than a nested
  * object, because nested optional structures are where structured-output modes
@@ -50,7 +54,9 @@ export const consequenceOutputSchema = z.object({
       })
     )
     .max(2)
-    .describe('Zero, one, or at most two new beats. Empty is correct when nothing changed.'),
+    .describe(
+      'At most two new beats. Usually one: the thing the reader just did. Empty only when the choice changed nothing at all.'
+    ),
 
   contextEntries: z
     .array(
@@ -91,8 +97,25 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       'You are not writing prose for the reader. You are updating a canonical record.',
       '',
       'Rules:',
-      '- Most choices change nothing permanent. Returning no events is the common case',
-      '  and the correct one. Only add a beat when the story is genuinely different now.',
+      '- The reader chose this deliberately. Ask what is true now that was not true',
+      '  before, and record it. Something usually is.',
+      '- Saying a thing out loud is itself a thing that happened. An offer made, a plan',
+      '  proposed, a feeling admitted — all of these change the story even when nobody',
+      '  has answered yet. Write the act, not the outcome.',
+      '- Do not invent what the choice did not establish. Nobody agreed, nothing was',
+      '  settled and no one replied unless the choice says so. Record the smaller true',
+      '  thing rather than the larger invented one.',
+      '- Choose the kind of mark that fits:',
+      '    a beat, when something happened the story must account for;',
+      '    background, when the choice revealed something already true;',
+      '    a relationship state, when it changed how two people stand.',
+      '- A relationship state must accompany a beat. It records what that beat changed,',
+      '  so one returned without any event cannot be stored and will be dropped.',
+      '- Asking for information is not itself a beat. A question changes the story',
+      '  only when the answer does, and the answer is not yours to invent — so record',
+      '  nothing unless the asking itself commits the reader to something.',
+      '- Returning nothing at all is still right when the choice genuinely only',
+      '  continued what was already happening.',
       '- Place what you add after the beat it follows, using a narrativeOrder from the',
       '  timeline. Consequences belong where the story is, not at the end of it.',
       '- generationRationale is your own reasoning about why the beat follows. Never',
