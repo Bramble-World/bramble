@@ -1,5 +1,6 @@
 import { env } from '@/env';
 import { createFakeGenerator, FakeGenerator } from './generator.fake';
+import { registerFixtures } from './fixtures';
 import { createOpenAIGenerator } from './generator.openai';
 import { Generator } from './prompt';
 
@@ -28,7 +29,13 @@ let fake: FakeGenerator | null = null;
  */
 export function getGenerator(): Generator {
   if (env.BRAMBLE_AI_MODE === 'fake' || !env.OPENAI_API_KEY) {
-    return (fake ??= createFakeGenerator());
+    // Fixtures are registered here rather than by each caller, because a fake
+    // with none is not a working generator — it throws on the first prompt it
+    // sees. Every route to the fake inside the app goes through this function,
+    // so registering anywhere else means some path gets a generator that cannot
+    // generate. Tests build their own fake explicitly and register what they
+    // need, so this does not reach them.
+    return (fake ??= withFixtures(createFakeGenerator()));
   }
   return (live ??= createOpenAIGenerator(env.OPENAI_API_KEY));
 }
@@ -47,6 +54,11 @@ export function getFakeGenerator(): FakeGenerator {
     );
   }
   return generator as FakeGenerator;
+}
+
+function withFixtures(generator: FakeGenerator): FakeGenerator {
+  registerFixtures(generator);
+  return generator;
 }
 
 /** Test seam: drops both memoised instances so env changes take effect. */
