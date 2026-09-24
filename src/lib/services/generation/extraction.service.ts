@@ -154,6 +154,7 @@ async function persist(
         title: beat.title,
         description: beat.description,
         stakes: beat.stakes ?? undefined,
+        occurredAt: parseOccurredAt(beat.occurredAt),
         participantCharacterIds: beat.participantNames
           .map((name) => characterIdByName.get(name))
           .filter((id): id is string => id !== undefined),
@@ -198,6 +199,25 @@ async function persist(
   await storylines.markStatus(userId, storylineId, 'ready');
 
   return storylines.getStoryline(userId, storylineId);
+}
+
+/**
+ * Turns the model's date for a beat into one the column will take.
+ *
+ * `occurredAt` is when the beat happened in the world, which `narrativeOrder`
+ * deliberately is not — the two differ whenever a story compresses or reorders,
+ * and without a date a timeline cannot tell three weeks of silence from ten
+ * minutes. The transcript carries real timestamps, so this is knowable; it was
+ * simply never asked for.
+ *
+ * A model can return anything here, so an unparseable date becomes null rather
+ * than an Invalid Date, which Postgres would reject and which would take the
+ * whole extraction down over one bad string.
+ */
+function parseOccurredAt(value: string | null): Date | undefined {
+  if (!value) return undefined;
+  const when = new Date(value);
+  return Number.isNaN(when.getTime()) ? undefined : when;
 }
 
 /**
