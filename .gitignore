@@ -45,3 +45,8 @@ next-env.d.ts
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Message exports for the lab. Real personal data: never commit these, wherever
+# they are dropped. LAB_TRANSCRIPT_CSV should point outside the repo entirely.
+*.imessages.csv
+/transcripts/

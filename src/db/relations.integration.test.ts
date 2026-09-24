@@ -185,7 +185,7 @@ describe('relational graph', () => {
   });
 
   it('nests to the depth a reader needs', async () => {
-    const storyline = await db.query.storylines.findFirst({
+    const all = await db.query.storylines.findMany({
       with: {
         user: true,
         characters: { with: { person: true } },
@@ -193,6 +193,13 @@ describe('relational graph', () => {
         sessions: { with: { turns: { with: { choices: true } } } },
       },
     });
+
+    // Picked for having a cast rather than taken from an unordered findFirst. A
+    // development database holds storylines from interrupted extractions with no
+    // characters at all, and this asserts on nesting, not on whether some
+    // arbitrary row happens to be populated.
+    const storyline = all.find((s) => s.characters.length > 0);
+    expect(storyline, 'no storyline has a cast; run `pnpm db:seed`').toBeDefined();
 
     expect(storyline!.user.id).toBe(storyline!.userId);
     expect(storyline!.characters.length).toBeGreaterThan(0);

@@ -47,14 +47,25 @@ export async function getOrCreateSelfPerson(userId: string, name: string): Promi
 export async function getOrCreatePersonByHandle(
   userId: string,
   handle: string,
-  name: string
+  name: string,
+  voiceProfile?: VoiceProfile
 ): Promise<PublicPerson> {
   const ref = hashContactHandle(handle);
 
   const existing = await reader.getPersonByContactRef(userId, ref);
   if (existing) return existing;
 
-  const inserted = await writer.insertPersonIfAbsent({ userId, name, sourceContactRef: ref });
+  // The voice belongs on the row whichever way the person was found. Taking it
+  // only on the name-only path meant everyone who had actually sent a message —
+  // which is every real contact — was created without one, and the turn prompt
+  // renders voice notes, so their storylines reached the model with nothing
+  // saying how anybody speaks.
+  const inserted = await writer.insertPersonIfAbsent({
+    userId,
+    name,
+    sourceContactRef: ref,
+    voiceProfile,
+  });
   if (inserted) return inserted;
 
   const raced = await reader.getPersonByContactRef(userId, ref);

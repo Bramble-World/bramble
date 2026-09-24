@@ -223,7 +223,12 @@ async function resolvePerson(
   }
 
   if (member.sourceHandle) {
-    return persons.getOrCreatePersonByHandle(userId, member.sourceHandle, member.name);
+    return persons.getOrCreatePersonByHandle(
+      userId,
+      member.sourceHandle,
+      member.name,
+      member.voiceTone ? { tone: member.voiceTone } : undefined
+    );
   }
 
   return persons.createPerson(userId, {
