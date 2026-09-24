@@ -13,6 +13,7 @@ const storylineColumns = {
   failureReason: storylines.failureReason,
   arcSummary: storylines.arcSummary,
   arcSummaryGeneratedAt: storylines.arcSummaryGeneratedAt,
+  createdAt: storylines.createdAt,
 };
 
 const characterColumns = {

@@ -41,6 +41,19 @@ export function getGenerator(): Generator {
 }
 
 /**
+ * Which generator this process will use, without building one.
+ *
+ * Exists so a surface can say so before spending anything. The mode is decided
+ * by environment rather than by anything visible on screen, which means the
+ * difference between a free run and a paid one is invisible at the moment it
+ * matters most — and the two produce output that looks alike, since the fake
+ * returns a plausible storyline rather than an obvious placeholder.
+ */
+export function generatorMode(): 'live' | 'fake' {
+  return env.BRAMBLE_AI_MODE === 'fake' || !env.OPENAI_API_KEY ? 'fake' : 'live';
+}
+
+/**
  * The fake, for registering fixtures against.
  *
  * Throws when the process is configured to use the real client, so a test that

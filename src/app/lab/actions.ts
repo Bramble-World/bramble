@@ -2,9 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { AppError, ValidationError } from '@/lib/utils/errors';
+import { AppError, NotFoundError, ValidationError } from '@/lib/utils/errors';
 import { requireLabUser } from '@/lib/services/auth/dev-user';
 import * as sessions from '@/lib/services/sessions/sessions.service';
+import * as storylineWriter from '@/lib/services/storylines/storylines.writer';
 import {
   commitChoice,
   generateConsequences,
@@ -173,5 +174,33 @@ export async function extractThreadAction(input: unknown): Promise<ActionResult>
 
     revalidatePath('/lab');
     return `"${storyline.title}" — ${thread.messages.length} messages`;
+  });
+}
+
+export async function deleteStorylineAction(storylineId: string): Promise<ActionResult> {
+  return run(async () => {
+    const user = await requireLabUser();
+    const id = uuid.parse(storylineId);
+    const gone = await storylineWriter.deleteStoryline(user.id, id);
+    if (!gone) throw new NotFoundError('Storyline', id);
+    revalidatePath('/lab');
+    return 'Deleted';
+  });
+}
+
+/**
+ * Clears everything the seed did not create.
+ *
+ * Needed because the lab and its tests both write into the same development
+ * database, and a fixture extraction produces a new storyline every time it
+ * runs — which is how a list of nine became a list of fifty-two, forty-three of
+ * them identically titled.
+ */
+export async function clearExtractedAction(): Promise<ActionResult> {
+  return run(async () => {
+    const user = await requireLabUser();
+    const removed = await storylineWriter.deleteStorylinesAfterSeed(user.id);
+    revalidatePath('/lab');
+    return `Removed ${removed} storyline${removed === 1 ? '' : 's'}; the seed is untouched`;
   });
 }

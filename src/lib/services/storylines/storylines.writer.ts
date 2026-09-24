@@ -20,6 +20,7 @@ const returnedStoryline = {
   failureReason: storylines.failureReason,
   arcSummary: storylines.arcSummary,
   arcSummaryGeneratedAt: storylines.arcSummaryGeneratedAt,
+  createdAt: storylines.createdAt,
 };
 
 export async function insertStoryline(
@@ -128,6 +129,46 @@ export async function setArcSummaryIfUnchanged(input: {
     .returning({ id: storylines.id });
 
   return rows.length > 0;
+}
+
+/**
+ * Deletes a storyline and everything hanging off it.
+ *
+ * Scoped to the owner, and relies on the cascades already in the schema —
+ * characters, relationships, events, context entries, sessions, turns and
+ * choices all go with it. Motifs do not: they belong to the user rather than to
+ * any one story, which is the whole reason they are user-scoped.
+ */
+export async function deleteStoryline(userId: string, storylineId: string): Promise<boolean> {
+  const rows = await db
+    .delete(storylines)
+    .where(and(eq(storylines.userId, userId), eq(storylines.id, storylineId)))
+    .returning({ id: storylines.id });
+  return rows.length > 0;
+}
+
+/**
+ * Deletes every storyline except the batch the seed wrote.
+ *
+ * The seed runs in one transaction, so all of its storylines share an identical
+ * `created_at`, and the earliest such instant identifies that batch. Everything
+ * later was extracted afterwards — by an import, a fixture button, or a test.
+ *
+ * That is a harness-grade heuristic rather than real provenance, which would
+ * need a column. It is honest about what it does, and it is only reachable from
+ * the lab.
+ */
+export async function deleteStorylinesAfterSeed(userId: string): Promise<number> {
+  const rows = await db
+    .delete(storylines)
+    .where(
+      and(
+        eq(storylines.userId, userId),
+        sql`${storylines.createdAt} > (SELECT min(created_at) FROM ${storylines})`
+      )
+    )
+    .returning({ id: storylines.id });
+  return rows.length;
 }
 
 export async function insertCharacterIfAbsent(input: {

@@ -21,6 +21,8 @@ export type PublicStoryline = {
   failureReason: string | null;
   arcSummary: string | null;
   arcSummaryGeneratedAt: Date | null;
+  /** Exposed so a caller can tell when a storyline came into existence. */
+  createdAt: Date;
 };
 
 export type NewStoryline = {
