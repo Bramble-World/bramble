@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import { cn } from '@/lib/utils';
 import {
   parseCsvTranscript,
@@ -13,31 +13,45 @@ type Props = {
   action: (thread: { handle: string; messages: Thread['messages'] }) => Promise<ActionResult>;
   minMessages: number;
   maxChars: number;
+  live: boolean;
 };
 
-type Row = { thread: Thread; state: 'pending' | 'running' | 'done' | 'failed'; note?: string };
+type State = 'pending' | 'running' | 'done' | 'failed' | 'skipped';
+type Row = { thread: Thread; state: State; note?: string };
 
 /**
- * Imports a message export and turns each real conversation into a storyline.
+ * Imports a message export and turns chosen conversations into storylines.
  *
  * The file is read, parsed and split **in the browser** — the parser is pure and
  * has no server dependency — so the export never leaves this page. Only the
- * thread currently being extracted is sent, one at a time.
+ * thread being extracted is sent, one at a time.
  *
- * One request per thread, rather than one for the file, because 39 generations
- * at high reasoning effort run to many minutes: too long to hold a request open,
- * with no way to show progress, and nothing kept if it fails half way. Here each
- * thread that succeeds is a storyline that stays, whatever happens after it.
+ * Nothing is selected to begin with. Every extraction is a paid model call on
+ * real messages, so the safe default is that clicking a button starts nothing
+ * until something has been picked deliberately. A run over everything is one
+ * more click away, and says how many that is.
+ *
+ * The run is sequential and interruptible. Thirty-nine generations at high
+ * reasoning effort take minutes, and discovering that halfway through with no
+ * way to stop is worse than slow. Each thread that finished is a storyline that
+ * stays.
  */
-export function ImportExport({ action, minMessages, maxChars }: Props) {
+export function ImportExport({ action, minMessages, maxChars, live }: Props) {
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [chosen, setChosen] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [running, startRun] = useTransition();
+  // A ref, not state: the loop reads it between calls and must see the latest
+  // value, which a captured state variable would not give it.
+  const stopped = useRef(false);
+
+  const selected = useMemo(() => [...chosen].sort((a, b) => a - b), [chosen]);
 
   async function inspect(file: File) {
     setError(null);
     setRows(null);
+    setChosen(new Set());
     setFilename(file.name);
     try {
       const { transcript } = parseCsvTranscript(await file.text());
@@ -52,23 +66,35 @@ export function ImportExport({ action, minMessages, maxChars }: Props) {
     }
   }
 
-  function extractAll() {
-    if (!rows) return;
+  function extractSelected() {
+    if (!rows || selected.length === 0) return;
+    stopped.current = false;
+
     startRun(async () => {
-      // Sequential on purpose. Next dispatches actions one at a time per client
-      // anyway, and each is a paid model call worth seeing the result of before
-      // the next begins.
-      for (let i = 0; i < rows.length; i += 1) {
+      for (const index of selected) {
+        if (stopped.current) {
+          setRows((current) =>
+            current!.map((row, i) =>
+              selected.includes(i) && row.state === 'pending'
+                ? { ...row, state: 'skipped', note: 'stopped' }
+                : row
+            )
+          );
+          return;
+        }
+
         setRows((current) =>
-          current!.map((row, index) => (index === i ? { ...row, state: 'running' } : row))
+          current!.map((row, i) => (i === index ? { ...row, state: 'running' } : row))
         );
+
         const result = await action({
-          handle: rows[i].thread.handle,
-          messages: rows[i].thread.messages,
+          handle: rows[index].thread.handle,
+          messages: rows[index].thread.messages,
         });
+
         setRows((current) =>
-          current!.map((row, index) =>
-            index === i
+          current!.map((row, i) =>
+            i === index
               ? { ...row, state: result.ok ? 'done' : 'failed', note: result.message }
               : row
           )
@@ -76,6 +102,14 @@ export function ImportExport({ action, minMessages, maxChars }: Props) {
       }
     });
   }
+
+  const toggle = (index: number) =>
+    setChosen((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
 
   const done = rows?.filter((r) => r.state === 'done').length ?? 0;
   const failed = rows?.filter((r) => r.state === 'failed').length ?? 0;
@@ -102,16 +136,46 @@ export function ImportExport({ action, minMessages, maxChars }: Props) {
           />
         </label>
 
-        {rows && (
+        {rows && !running && (
+          <>
+            <button
+              type="button"
+              onClick={extractSelected}
+              disabled={selected.length === 0}
+              className="bg-foreground text-background rounded-md px-3 py-1.5 text-sm hover:opacity-90 disabled:opacity-40"
+            >
+              {selected.length === 0
+                ? 'Select conversations to extract'
+                : `Extract ${selected.length} selected`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setChosen(new Set(rows.map((_, i) => i)))}
+              className="border-border hover:bg-muted rounded-md border px-3 py-1.5 text-sm"
+            >
+              Select all ({rows.length})
+            </button>
+            {selected.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setChosen(new Set())}
+                className="text-muted-foreground px-1 text-xs hover:underline"
+              >
+                clear
+              </button>
+            )}
+          </>
+        )}
+
+        {running && (
           <button
             type="button"
-            onClick={extractAll}
-            disabled={running}
-            className="bg-foreground text-background rounded-md px-3 py-1.5 text-sm hover:opacity-90 disabled:opacity-50"
+            onClick={() => {
+              stopped.current = true;
+            }}
+            className="border-destructive text-destructive rounded-md border px-3 py-1.5 text-sm"
           >
-            {running
-              ? `Extracting ${done + failed + 1} of ${rows.length}…`
-              : `Extract ${rows.length} conversations`}
+            Stop after this one
           </button>
         )}
 
@@ -123,29 +187,42 @@ export function ImportExport({ action, minMessages, maxChars }: Props) {
       {rows && (
         <>
           <p className="text-muted-foreground text-xs">
-            {rows.length} conversations of at least {minMessages} messages.{' '}
+            {rows.length} conversations of at least {minMessages} messages.
             {rows.filter((r) => r.thread.truncated).length > 0 &&
-              `${rows.filter((r) => r.thread.truncated).length} trimmed to their most recent messages. `}
-            Each is one model call.
+              ` ${rows.filter((r) => r.thread.truncated).length} trimmed to their most recent messages.`}{' '}
+            {running
+              ? `${done + failed} of ${selected.length} done.`
+              : live
+                ? 'Each one selected is a paid model call.'
+                : 'Fake mode: each produces the same canned storyline.'}
           </p>
 
-          <ol className="flex max-h-72 flex-col gap-1 overflow-y-auto text-xs">
+          <ul className="flex max-h-80 flex-col gap-1 overflow-y-auto text-xs">
             {rows.map((row, index) => (
-              <li key={index} className="flex items-baseline gap-2">
+              <li key={index} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={chosen.has(index)}
+                  disabled={running}
+                  onChange={() => toggle(index)}
+                  className="shrink-0"
+                  aria-label={`Extract ${row.thread.handle}`}
+                />
                 <span
                   className={cn(
-                    'w-14 shrink-0',
-                    row.state === 'done' && 'text-muted-foreground',
+                    'w-12 shrink-0',
                     row.state === 'failed' && 'text-destructive',
-                    row.state === 'running' && 'font-medium'
+                    row.state === 'running' && 'font-medium',
+                    (row.state === 'done' || row.state === 'skipped') && 'text-muted-foreground'
                   )}
                 >
-                  {row.state === 'pending' && '·'}
+                  {row.state === 'pending' && ''}
                   {row.state === 'running' && '…'}
                   {row.state === 'done' && 'done'}
                   {row.state === 'failed' && 'failed'}
+                  {row.state === 'skipped' && '—'}
                 </span>
-                <span className="truncate">{row.thread.handle}</span>
+                <span className="min-w-0 flex-1 truncate">{row.thread.handle}</span>
                 <span className="text-muted-foreground shrink-0">
                   {row.thread.messages.length} msgs
                   {row.thread.truncated && ' · trimmed'}
@@ -153,7 +230,7 @@ export function ImportExport({ action, minMessages, maxChars }: Props) {
                 {row.note && (
                   <span
                     className={cn(
-                      'truncate',
+                      'max-w-[45%] shrink-0 truncate',
                       row.state === 'failed' ? 'text-destructive' : 'text-muted-foreground/70'
                     )}
                   >
@@ -162,7 +239,7 @@ export function ImportExport({ action, minMessages, maxChars }: Props) {
                 )}
               </li>
             ))}
-          </ol>
+          </ul>
         </>
       )}
 

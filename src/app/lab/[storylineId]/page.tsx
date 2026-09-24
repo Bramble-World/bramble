@@ -121,7 +121,17 @@ export default async function PlayPage({
       <section className="border-border rounded-lg border p-4">
         <h2 className="mb-3 text-sm font-medium">Play</h2>
 
-        {!current && (
+        {storyline.status !== 'ready' && (
+          <p className="text-muted-foreground text-xs">
+            {storyline.status === 'generating'
+              ? 'Still extracting. If the request that started this was interrupted, it will stay here — nothing marks it failed, because nothing is still running to do so. Delete it from the list.'
+              : storyline.status === 'failed'
+                ? `Extraction failed: ${storyline.failureReason ?? 'no reason recorded'}`
+                : 'Not ready to play yet.'}
+          </p>
+        )}
+
+        {storyline.status === 'ready' && !current && (
           <ActionButton
             action={startSessionAction.bind(null, storylineId)}
             label="Start a session"
@@ -130,7 +140,7 @@ export default async function PlayPage({
           />
         )}
 
-        {sessionEnded && (
+        {storyline.status === 'ready' && sessionEnded && (
           <div className="flex flex-col gap-3">
             <p className="text-sm leading-relaxed">{openTurn!.narrativeContent}</p>
             <p className="text-muted-foreground text-xs">
@@ -146,7 +156,7 @@ export default async function PlayPage({
           </div>
         )}
 
-        {current && !openTurn && (
+        {storyline.status === 'ready' && current && !openTurn && (
           <div className="flex flex-col gap-2">
             <p className="text-muted-foreground text-xs">
               Session {current.id.slice(0, 8)} · no open turn
@@ -160,7 +170,7 @@ export default async function PlayPage({
           </div>
         )}
 
-        {current && openTurn && !sessionEnded && (
+        {storyline.status === 'ready' && current && openTurn && !sessionEnded && (
           <div className="flex flex-col gap-4">
             <p className="text-sm leading-relaxed">{openTurn.narrativeContent}</p>
             <ul className="flex flex-col gap-2">
