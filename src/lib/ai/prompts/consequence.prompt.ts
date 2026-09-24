@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { StorylineContext } from '@/lib/services/generation/generation.types';
+import { renderTimeline } from './timeline';
 
 export type ConsequenceVars = {
   storyline: StorylineContext;
@@ -138,7 +139,7 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       ),
       '',
       '## Timeline',
-      ...storyline.timeline.map((b) => `${b.narrativeOrder}. ${b.title} — ${b.description}`),
+      ...renderTimeline(storyline.timeline),
       '',
       '## The decision',
       decision.narrativeContent,

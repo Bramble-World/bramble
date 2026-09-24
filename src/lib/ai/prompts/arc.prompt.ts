@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { StorylineContext } from '@/lib/services/generation/generation.types';
+import { renderTimeline } from './timeline';
 
 export type ArcVars = { storyline: StorylineContext };
 
@@ -54,7 +55,7 @@ export const arcPrompt: PromptSpec<ArcVars, ArcOutput> = {
       }),
       '',
       '## The whole timeline',
-      ...storyline.timeline.map((b) => `${b.narrativeOrder}. ${b.title} — ${b.description}`),
+      ...renderTimeline(storyline.timeline),
       '',
       'Summarise the arc.',
     ].join('\n'),

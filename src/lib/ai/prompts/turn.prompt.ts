@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { SessionContext, StorylineContext } from '@/lib/services/generation/generation.types';
+import { renderTimeline } from './timeline';
 
 export type TurnVars = {
   storyline: StorylineContext;
@@ -57,6 +58,8 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
       '- Stay inside what the timeline and background establish. Do not invent new people.',
       '- Characters speak in their own voice. Use the voice notes where given.',
       '- Background is what you know, not what you state. Let it shape the beat.',
+      '- Mind the time between beats. A reply that took three weeks is a different',
+      '  reply from one that took an hour, and the silences are part of the story.',
       '- Offer choices that differ in kind, not in wording. At most one may ask for',
       '  information; at least one must risk something — saying the awkward thing,',
       '  committing to something, or letting a moment pass. A turn where every option',
@@ -94,9 +97,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
       }),
       '',
       '## What has happened',
-      ...storyline.timeline.map(
-        (beat) => `${beat.narrativeOrder}. ${beat.title} — ${beat.description}`
-      ),
+      ...renderTimeline(storyline.timeline),
       '',
       ...(storyline.background.storylineLevel.length
         ? [
