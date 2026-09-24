@@ -229,3 +229,66 @@ describe('splitIntoThreads', () => {
     expect(threads).toStrictEqual([]);
   });
 });
+
+/**
+ * Who said what, in a thread with more than two people.
+ *
+ * The thread and the speaker are different things, and conflating them is
+ * invisible in a two-party conversation: when every incoming message comes from
+ * one person, attributing by thread name looks right. In a group chat it makes
+ * everyone the same person — so the model cannot name them, cannot cast them,
+ * and would hand two different people the same contact hash.
+ */
+describe('speaker attribution', () => {
+  const groupChat = [
+    'date,chat,sender,direction,message',
+    '2026-07-14 09:02,Apartment 4B,Andi,received,keys on friday',
+    '2026-07-14 09:20,Apartment 4B,Nathaly,received,friday is bad for me',
+    '2026-07-14 09:31,Apartment 4B,Great,sent,saturday works',
+    '2026-07-14 09:33,Apartment 4B,Andi,received,look at us being adults',
+  ].join('\n');
+
+  it('keeps each speaker distinct while they share a thread', () => {
+    const { transcript, mapping } = parseCsvTranscript(groupChat);
+
+    expect(mapping.sender).toBe('sender');
+    expect(mapping.handle).toBe('chat');
+
+    // One thread…
+    expect(new Set(transcript.messages.map((m) => m.handle)).size).toBe(1);
+    // …three voices.
+    expect(new Set(transcript.messages.map((m) => m.sender))).toStrictEqual(
+      new Set(['Andi', 'Nathaly', 'Great'])
+    );
+  });
+
+  it('still groups a group chat into one thread', () => {
+    const { transcript } = parseCsvTranscript(groupChat);
+    const threads = splitIntoThreads(transcript, { minMessages: 1, maxChars: 400_000 });
+
+    expect(threads).toHaveLength(1);
+    expect(threads[0].messages).toHaveLength(4);
+  });
+
+  // An export with no sender column at all is wrong in a group chat, but the
+  // reported mapping says so rather than leaving the speaker blank.
+  it('falls back to the thread name when no sender column exists', () => {
+    const { transcript, mapping } = parseCsvTranscript(
+      ['chat,direction,message', 'Maya,received,hello'].join('\n')
+    );
+
+    expect(mapping.sender).toBeNull();
+    expect(transcript.messages[0].sender).toBe('Maya');
+  });
+
+  // `sender` appears last in the direction aliases as a fallback, so an export
+  // carrying both must not let one steal the other's column.
+  it('does not confuse the sender column with the direction column', () => {
+    const { mapping } = parseCsvTranscript(
+      ['date,chat,sender,direction,message', '2026,Chat,Andi,received,hi'].join('\n')
+    );
+
+    expect(mapping.direction).toBe('direction');
+    expect(mapping.sender).toBe('sender');
+  });
+});
