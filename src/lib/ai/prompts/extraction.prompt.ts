@@ -22,6 +22,35 @@ export type TranscriptMessage = {
   sentAt: string;
 };
 
+/** Hard ceiling on the beats a single extraction may return. */
+export const MAX_BEATS = 40;
+
+/**
+ * How many beats a conversation of this size deserves.
+ *
+ * A flat cap was wrong in both directions. Eight beats is generous for a
+ * forty-message thread and losing for a four-month one: a real founder
+ * conversation spanning May to September came back with eight, its timeline
+ * stopped two months before the story did, and the arc summary — which reads
+ * the whole transcript — described funding and paperwork that existed nowhere
+ * in the timeline. Half the story was not playable.
+ *
+ * Two inputs, because either alone misleads. Volume is the better guide to how
+ * much happened, but a sparse conversation carried over months still has shape,
+ * so elapsed time sets a floor: roughly a beat a fortnight. The result is
+ * clamped at both ends — below the floor there is not enough story to play, and
+ * above the ceiling structured output starts dropping array entries.
+ */
+export function beatTarget(messages: TranscriptMessage[]): number {
+  const byVolume = Math.round(messages.length / 25);
+
+  const times = messages.map((m) => new Date(m.sentAt).getTime()).filter((t) => !Number.isNaN(t));
+  const spanDays = times.length > 1 ? (Math.max(...times) - Math.min(...times)) / 86_400_000 : 0;
+  const bySpan = Math.round(spanDays / 14);
+
+  return Math.min(MAX_BEATS, Math.max(6, byVolume, bySpan));
+}
+
 export type ExtractionVars = {
   user: UserContext;
   surface: string;
@@ -59,7 +88,11 @@ export const extractionOutputSchema = z.object({
       })
     )
     .min(1)
-    .max(6),
+    // Raised from 6, which was provably binding: a real six-person conversation
+    // cast exactly six, so there is no way to know who was dropped. A group
+    // thread routinely has more, and a person who never gets cast never gets a
+    // persons row and cannot be referred to again.
+    .max(12),
 
   relationships: z
     .array(
@@ -74,7 +107,7 @@ export const extractionOutputSchema = z.object({
         powerBalance: z.string().nullable(),
       })
     )
-    .max(6)
+    .max(16)
     .describe('How the cast stand at the start of this story.'),
 
   beats: z
@@ -93,7 +126,9 @@ export const extractionOutputSchema = z.object({
       })
     )
     .min(1)
-    .max(8)
+    // A ceiling, not the instruction. The number actually asked for is computed
+    // per conversation and stated in the prompt; this only stops a runaway.
+    .max(MAX_BEATS)
     .describe('The beats of the story, in the order they should be presented.'),
 
   background: z
@@ -103,7 +138,7 @@ export const extractionOutputSchema = z.object({
         aboutName: z.string().nullable().describe('A cast name, or null for the whole story.'),
       })
     )
-    .max(6),
+    .max(12),
 
   motifs: z
     .array(
@@ -153,6 +188,9 @@ export const extractionPrompt: PromptSpec<ExtractionVars, ExtractionOutput> = {
       '  into a description would be the only copy left.',
       '- Beats are what changed, not every exchange. A long conversation that went',
       '  nowhere is one beat.',
+      '- Cover the whole conversation, end to end. Stopping early because the story',
+      '  feels complete leaves the rest of it unplayable — the later months of a long',
+      '  thread are usually where the most has changed.',
       '- Date each beat from the messages it covers. The gap between two beats is',
       '  part of the story — three weeks of silence reads nothing like ten minutes.',
       '- Background is what the exchange implies but never says outright.',
@@ -193,7 +231,7 @@ export const extractionPrompt: PromptSpec<ExtractionVars, ExtractionOutput> = {
       '## The conversation',
       ...messages.map((m) => `[${m.sentAt}] ${m.isFromMe ? 'me' : m.sender}: ${m.text}`),
       '',
-      'Produce the storyline.',
+      `Produce the storyline. This conversation is ${messages.length} messages long; aim for about ${beatTarget(messages)} beats, spread across the whole of it rather than concentrated at the start.`,
     ]
       .filter((line) => line !== null)
       .join('\n'),
