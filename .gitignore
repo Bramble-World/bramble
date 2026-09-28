@@ -50,3 +50,6 @@ next-env.d.ts
 # they are dropped. LAB_TRANSCRIPT_CSV should point outside the repo entirely.
 *.imessages.csv
 /transcripts/
+
+# Trigger.dev CLI local state (dev.lock, build tmp). Machine-specific.
+/.trigger/
