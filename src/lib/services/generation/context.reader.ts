@@ -64,9 +64,11 @@ export async function assembleStorylineContext(
       // "Current" means the state attached to the latest beat, by the order the
       // story is told in — not by when the row was written. Defining it in one
       // place is the point of this layer.
-      const latest = [...relationship.states].sort(
-        (a, b) => b.event.narrativeOrder - a.event.narrativeOrder
-      )[0];
+      // Ascending, so the last is the latest and a consumer can cut the tail
+      // off at a playhead without re-sorting.
+      const states = [...relationship.states]
+        .sort((a, b) => a.event.narrativeOrder - b.event.narrativeOrder)
+        .map((state) => ({ narrativeOrder: state.event.narrativeOrder, dynamic: state.dynamic }));
 
       return {
         id: relationship.id,
@@ -74,7 +76,8 @@ export async function assembleStorylineContext(
         characterBId: relationship.characterBId,
         relationshipType: null,
         baselineDynamic: relationship.baselineDynamic ?? null,
-        currentDynamic: latest?.dynamic ?? null,
+        currentDynamic: states.at(-1)?.dynamic ?? null,
+        states,
       };
     })
   );

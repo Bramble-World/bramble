@@ -144,7 +144,6 @@ describe('commitChoice then generateConsequences', () => {
 
     // Force the branch that changes canon, rather than depending on the seed.
     fake.register(consequencePrompt, ({ vars }) => ({
-      afterNarrativeOrder: vars.storyline.timeline[0].narrativeOrder,
       events: [
         {
           title: 'A different answer',
@@ -191,8 +190,7 @@ describe('commitChoice then generateConsequences', () => {
     const turn = await generateTurn(userId, session.id, { generator: fake });
     await commitChoice(userId, turn.id, turn.choices[0].id);
 
-    fake.register(consequencePrompt, ({ vars }) => ({
-      afterNarrativeOrder: vars.storyline.timeline[0].narrativeOrder,
+    fake.register(consequencePrompt, () => ({
       events: [
         {
           title: 'Once only',
@@ -222,8 +220,7 @@ describe('commitChoice then generateConsequences', () => {
     const turn = await generateTurn(userId, session.id, { generator: fake });
     await commitChoice(userId, turn.id, turn.choices[0].id);
 
-    fake.register(consequencePrompt, ({ vars }) => ({
-      afterNarrativeOrder: vars.storyline.timeline[0].narrativeOrder,
+    fake.register(consequencePrompt, () => ({
       events: [],
       contextEntries: [],
       relationshipStates: [],
@@ -261,7 +258,6 @@ describe('commitChoice then generateConsequences', () => {
     await commitChoice(userId, turn.id, turn.choices[0].id);
 
     fake.register(consequencePrompt, ({ vars }) => ({
-      afterNarrativeOrder: vars.storyline.timeline[0].narrativeOrder,
       events: [
         {
           title: 'Hallucinated cast',
@@ -288,18 +284,25 @@ describe('commitChoice then generateConsequences', () => {
     expect(written.participants).toHaveLength(1);
   });
 
-  // An anchor that is not in the timeline is snapped to a real one rather than
-  // trusted, since a bad order would otherwise collide or sort nonsensically.
-  it('snaps an invented narrative order onto a real beat', async () => {
+  /**
+   * The reader has to be able to see what their own decision caused.
+   *
+   * Consequences used to be placed wherever the model named, and it named
+   * badly — anchoring at 1500-3500 in a session whose narration had reached
+   * 6000. A beat filed above the playhead is invisible to the person who caused
+   * it; one filed far below it silently rewrites history they have already read.
+   */
+  it('lands a consequence at the playhead and moves the playhead to cover it', async () => {
     const session = await freshSession();
     const turn = await generateTurn(userId, session.id, { generator: fake });
     await commitChoice(userId, turn.id, turn.choices[0].id);
 
+    const before = await sessions.getSession(userId, session.id);
+
     fake.register(consequencePrompt, () => ({
-      afterNarrativeOrder: 999_999,
       events: [
         {
-          title: 'Misplaced',
+          title: 'Placed',
           description: 'x',
           stakes: null,
           participantCharacterIds: [],
@@ -312,10 +315,101 @@ describe('commitChoice then generateConsequences', () => {
 
     await generateConsequences(userId, turn.id, { generator: fake });
 
+    const [written] = await db.query.events.findMany({ where: { triggeredByTurnId: turn.id } });
+    // Directly above where the reader stood, not at the far end of a story they
+    // have not read yet.
+    expect(written.narrativeOrder).toBeGreaterThan(before.playheadOrder);
+
+    const after = await sessions.getSession(userId, session.id);
+    expect(after.playheadOrder).toBeGreaterThanOrEqual(written.narrativeOrder);
+
     const beats = await timeline.listTimeline(storylineId);
     const orders = beats.map((b) => b.narrativeOrder);
     expect(orders).toStrictEqual([...orders].sort((a, b) => a - b));
     expect(new Set(orders).size).toBe(orders.length);
+  });
+});
+
+/**
+ * What the reader is allowed to see.
+ *
+ * A storyline extracted from a real conversation carries the whole of it,
+ * including the parts the reader has not reached. Handed all of it and asked
+ * for "the next beat", the model narrates the next *real* one — measured on
+ * live data, seven turns mapped 1:1 onto extracted beats and quoted their
+ * dates, and a twenty-turn session ended by narrating the final beat verbatim.
+ *
+ * These pin the cut at the only place it can be observed: what the generator
+ * was actually handed.
+ */
+describe('the playhead', () => {
+  const orders = (call: { vars: unknown }) =>
+    (
+      call.vars as { storyline: { timeline: Array<{ narrativeOrder: number }> } }
+    ).storyline.timeline.map((b) => b.narrativeOrder);
+
+  it('starts a new session at the first beat, not at the end of the story', async () => {
+    const session = await freshSession();
+    expect(session.playheadOrder).toBe(1000);
+  });
+
+  it('shows the turn only what the reader has reached', async () => {
+    const session = await freshSession();
+
+    await generateTurn(userId, session.id, { generator: fake });
+    const call = fake.calls.at(-1)!;
+
+    expect(orders(call)).toStrictEqual([1000]);
+    // Both halves matter. Without the first, deleting renderTimeline entirely
+    // would pass; without the second, the leak this whole change exists to
+    // close would go unnoticed.
+    expect(call.prompt).toContain('Where things stood');
+    expect(call.prompt).not.toContain('The message');
+  });
+
+  // The complementary failure: a cut that is correct and never moves is a
+  // reader frozen at the opening beat for the rest of the story.
+  it('moves on when the reader answers, revealing the next beat', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    expect((await sessions.getSession(userId, session.id)).playheadOrder).toBe(2000);
+
+    await generateTurn(userId, session.id, { generator: fake });
+    expect(fake.calls.at(-1)!.prompt).toContain('The message');
+  });
+
+  it('tells the turn once the source conversation is spent', async () => {
+    const session = await freshSession();
+
+    const first = await generateTurn(userId, session.id, { generator: fake });
+    expect((fake.calls.at(-1)!.vars as { beyondScript: boolean }).beyondScript).toBe(false);
+
+    // Past the last extracted beat (2000).
+    await commitChoice(userId, first.id, first.choices[0].id);
+    const second = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, second.id, second.choices[0].id);
+    await generateTurn(userId, session.id, { generator: fake });
+
+    expect((fake.calls.at(-1)!.vars as { beyondScript: boolean }).beyondScript).toBe(true);
+  });
+
+  /**
+   * Consequences reason about what a decision changed, which needs the story
+   * entire — and the relationship states they write must be able to attach to
+   * any beat. Narrowing this is the tempting "consistency" fix that would
+   * silently break both, so it is pinned here rather than left to a comment.
+   */
+  it('still gives the consequence stage the whole timeline', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+
+    const call = fake.calls.filter((c) => c.promptName === 'consequence.commit').at(-1)!;
+    expect(orders(call)).toStrictEqual(expect.arrayContaining([1000, 2000]));
   });
 });
 

@@ -15,7 +15,18 @@ export async function startSession(userId: string, storylineId: string): Promise
     throw new ValidationError(`This storyline is not ready to play (status: ${storyline.status})`);
   }
 
-  return writer.insertSession(db, userId, storylineId);
+  // One transaction, because a session inserted at playhead 0 is a session that
+  // would render no history at all — the two writes are one fact.
+  return db.transaction(async (tx) => {
+    const session = await writer.insertSession(tx, userId, storylineId);
+    // Lands on the first beat: a new session has nothing above 0 but the
+    // timeline itself, so the ordinary step does the initialising and there is
+    // no separate first-run branch to keep in sync.
+    await writer.advancePlayhead(tx, session.id);
+    const started = await reader.getSessionIn(tx, userId, session.id);
+    if (!started) throw new NotFoundError('Session', session.id);
+    return started;
+  });
 }
 
 export async function getSession(userId: string, sessionId: string): Promise<PublicSession> {
@@ -95,6 +106,10 @@ export async function answerTurn(
     }
 
     await writer.touchSession(tx, answered.sessionId);
+    // Third write of the three that make up answering a turn (invariants.md §5).
+    // The beat the reader has just lived through becomes history for the next
+    // turn; skip it and the playthrough's view of its own story freezes.
+    await writer.advancePlayhead(tx, answered.sessionId);
 
     const turn = await reader.getTurn(tx, turnId);
     if (!turn) throw new NotFoundError('Turn', turnId);

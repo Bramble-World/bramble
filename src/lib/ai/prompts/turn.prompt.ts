@@ -6,6 +6,15 @@ import { renderTimeline } from './timeline';
 export type TurnVars = {
   storyline: StorylineContext;
   session: SessionContext;
+  /**
+   * True once no extracted beat remains ahead of the reader.
+   *
+   * Worth telling the model explicitly, because the two regimes fail in
+   * opposite directions. With script left it copies the next real beat; with
+   * none left it has been observed to stall instead of invent, writing three
+   * consecutive turns of nobody replying.
+   */
+  beyondScript: boolean;
 };
 
 /**
@@ -42,7 +51,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
   stage: 'turn',
   schema: turnOutputSchema,
 
-  render: ({ storyline, session }) => ({
+  render: ({ storyline, session, beyondScript }) => ({
     system: [
       'You write one beat of an interactive story drawn from a real conversation.',
       '',
@@ -65,13 +74,25 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
       '  committing to something, or letting a moment pass. A turn where every option',
       '  is a question is a turn where nothing can happen.',
       '- Do not resolve the story. A beat ends on a decision, not a conclusion.',
+      ...(beyondScript
+        ? [
+            '',
+            'The conversation this story came from has run out. There is no next',
+            'real event waiting to be told — whatever happens now is something',
+            'these people have not done before. Invent it from who they are, and',
+            'do not stall: silence and non-reply are not a beat.',
+          ]
+        : []),
     ].join('\n'),
 
     prompt: [
       `# ${storyline.storyline.title}`,
       storyline.storyline.tone ? `Tone: ${storyline.storyline.tone}` : null,
       storyline.storyline.setting ? `Setting: ${storyline.storyline.setting}` : null,
-      storyline.storyline.arcSummary ? `So far: ${storyline.storyline.arcSummary}` : null,
+      // `arcSummary` is deliberately NOT rendered. It is computed from the whole
+      // timeline, including beats the reader has not reached, so it was the one
+      // remaining channel leaking the ending into a turn. What has happened
+      // below is already this playthrough's history, and it is bounded.
       '',
       '## Cast',
       ...storyline.characters.map((character) =>
@@ -96,9 +117,9 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         return `- ${a} and ${b}${relationship.relationshipType ? ` (${relationship.relationshipType})` : ''}${described ? `: ${described}` : ''}`;
       }),
       '',
-      '## What has happened',
-      ...renderTimeline(storyline.timeline),
-      '',
+      ...(storyline.timeline.length
+        ? ['## What has happened', ...renderTimeline(storyline.timeline), '']
+        : ['## What has happened', 'Nothing yet. This is the very beginning.', '']),
       ...(storyline.background.storylineLevel.length
         ? [
             '## Background (known, not stated)',

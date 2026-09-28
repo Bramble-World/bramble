@@ -49,13 +49,11 @@ export function registerFixtures(fake: FakeGenerator): void {
     // Every third decision changes nothing permanent, which is the realistic
     // shape and the one most likely to be handled wrongly.
     const changesCanon = seed % 3 !== 0;
-    const anchor = vars.storyline.timeline.at(-1)?.narrativeOrder ?? 0;
     const cast = vars.storyline.characters;
     const relationship = vars.storyline.relationships[0];
 
     if (!changesCanon) {
       return {
-        afterNarrativeOrder: anchor,
         events: [],
         contextEntries: [],
         relationshipStates: [],
@@ -63,7 +61,6 @@ export function registerFixtures(fake: FakeGenerator): void {
     }
 
     return {
-      afterNarrativeOrder: anchor,
       events: [
         {
           title: 'A different answer',

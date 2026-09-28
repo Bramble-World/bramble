@@ -10,6 +10,7 @@ vi.mock('./sessions.reader', () => ({
   getSession: vi.fn(),
   listSessions: vi.fn(),
   getOpenTurn: vi.fn(),
+  getSessionIn: vi.fn(),
   getTurn: vi.fn(),
   nextTurnOrder: vi.fn(),
   findIdleSessions: vi.fn(),
@@ -21,6 +22,8 @@ vi.mock('./sessions.writer', () => ({
   insertTurnWithChoices: vi.fn(),
   answerTurnGuarded: vi.fn(),
   touchSession: vi.fn(),
+  advancePlayhead: vi.fn(),
+  raisePlayheadTo: vi.fn(),
 }));
 vi.mock('../storylines/storylines.reader', () => ({ getStoryline: vi.fn() }));
 
@@ -53,6 +56,29 @@ describe('answerTurn', () => {
     await service.answerTurn(USER, TURN, CHOICE);
 
     expect(writer.touchSession).toHaveBeenCalledWith(expect.anything(), 'session-1');
+  });
+
+  /**
+   * The third of the three writes that make up answering a turn
+   * (invariants.md §5). Without it a playthrough's view of its own story never
+   * moves: every later turn is generated against the same frozen history, and
+   * the reader is stuck at the opening beat forever.
+   */
+  it('advances the playhead after a successful answer', async () => {
+    writer.answerTurnGuarded.mockResolvedValue({ id: TURN, sessionId: 'session-1' });
+    reader.getTurn.mockResolvedValue(turn);
+
+    await service.answerTurn(USER, TURN, CHOICE);
+
+    expect(writer.advancePlayhead).toHaveBeenCalledWith(expect.anything(), 'session-1');
+  });
+
+  it('does not advance the playhead when the answer was rejected', async () => {
+    writer.answerTurnGuarded.mockResolvedValue(null);
+    reader.turnIsUnanswered.mockResolvedValue(false);
+
+    await expect(service.answerTurn(USER, TURN, CHOICE)).rejects.toBeInstanceOf(ConflictError);
+    expect(writer.advancePlayhead).not.toHaveBeenCalled();
   });
 
   // The guard covers four cases in one statement, so the reason is worked out

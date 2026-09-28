@@ -30,13 +30,6 @@ export type ConsequenceVars = {
  * are least reliable. It is reassembled on the way to the database.
  */
 export const consequenceOutputSchema = z.object({
-  afterNarrativeOrder: z
-    .number()
-    .int()
-    .describe(
-      'The narrativeOrder of the existing beat these consequences follow. Must be one listed in the timeline, or 0 to place them before everything.'
-    ),
-
   events: z
     .array(
       z.object({
@@ -56,7 +49,7 @@ export const consequenceOutputSchema = z.object({
     )
     .max(2)
     .describe(
-      'At most two new beats. Usually one: the thing the reader just did. Empty only when the choice changed nothing at all.'
+      'At most two new beats recording what happened, whoever caused it — the reader acting, or another character replying, refusing, or doing something of their own. Empty only when the choice changed nothing at all.'
     ),
 
   contextEntries: z
@@ -102,10 +95,13 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       '  before, and record it. Something usually is.',
       '- Saying a thing out loud is itself a thing that happened. An offer made, a plan',
       '  proposed, a feeling admitted — all of these change the story even when nobody',
-      '  has answered yet. Write the act, not the outcome.',
-      '- Do not invent what the choice did not establish. Nobody agreed, nothing was',
-      '  settled and no one replied unless the choice says so. Record the smaller true',
-      '  thing rather than the larger invented one.',
+      '  has answered yet. Write what was done, by whoever did it.',
+      '- What the narration below already shows is established, and recording it is not',
+      '  inventing it. If someone replied, refused, went quiet, or brought up something',
+      '  of their own, that happened — write it down.',
+      '- Do not invent what neither the choice nor the narration established. Nothing',
+      '  was agreed or settled beyond what they say. Record the smaller true thing',
+      '  rather than the larger invented one.',
       '- Choose the kind of mark that fits:',
       '    a beat, when something happened the story must account for;',
       '    background, when the choice revealed something already true;',
@@ -117,8 +113,10 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       '  nothing unless the asking itself commits the reader to something.',
       '- Returning nothing at all is still right when the choice genuinely only',
       '  continued what was already happening.',
-      '- Place what you add after the beat it follows, using a narrativeOrder from the',
-      '  timeline. Consequences belong where the story is, not at the end of it.',
+      '- Name the person who acted, and do not default to the reader. A record in',
+      '  which every beat is the reader doing something teaches every later turn that',
+      '  nobody else ever does anything, and the story stops moving. When the other',
+      '  person is the one who moved the scene, the beat is theirs.',
       '- generationRationale is your own reasoning about why the beat follows. Never',
       '  quote or paraphrase the narration back into it.',
       '- Only reference character and relationship ids that appear below.',

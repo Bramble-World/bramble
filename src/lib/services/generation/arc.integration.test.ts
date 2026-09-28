@@ -65,6 +65,33 @@ beforeEach(async () => {
 });
 
 describe('summarizeArc', () => {
+  /**
+   * The arc describes the shape of a whole story, so it is the one stage that
+   * must see past the reader.
+   *
+   * The turn stage now receives a timeline cut at the session's playhead, and
+   * the obvious "consistency" tidy-up is to move that cut up into
+   * `assembleStorylineContext` where every stage shares it. That would quietly
+   * reduce the arc summary to a description of the opening, and nothing else
+   * would notice — the summary would still be written, still be plausible, and
+   * still be wrong.
+   */
+  it('sees the whole story even when a playthrough has barely started', async () => {
+    await timeline.appendEvent(userId, storylineId, {
+      origin: 'extracted',
+      title: 'Much later, the part they have not reached',
+      description: 'The story goes somewhere.',
+    });
+    const session = await sessions.startSession(userId, storylineId);
+    expect(session.playheadOrder).toBe(1000);
+
+    await summarizeArc(userId, storylineId, { generator: fake });
+
+    expect(callsForOurStoryline().at(-1)!.prompt).toContain(
+      'Much later, the part they have not reached'
+    );
+  });
+
   it('writes a summary when there are events and none yet', async () => {
     await expect(summarizeArc(userId, storylineId, { generator: fake })).resolves.toBe('written');
 

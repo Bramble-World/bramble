@@ -90,17 +90,26 @@ export default async function PlayPage({
           {beats.map((beat) => (
             <li
               key={beat.id}
-              className={
+              className={[
                 beat.origin === 'conversation_generated'
                   ? 'border-foreground/30 border-l-2 pl-3'
-                  : 'border-border border-l-2 pl-3'
-              }
+                  : 'border-border border-l-2 pl-3',
+                // Beats above the playhead are not hidden here — this page is
+                // for looking at the machinery, and seeing what the model is
+                // being denied is the whole point of showing it.
+                current && beat.narrativeOrder > current.playheadOrder ? 'opacity-40' : '',
+              ].join(' ')}
             >
               <div className="flex items-baseline gap-2">
                 <span className="text-muted-foreground font-mono text-[11px]">
                   {beat.narrativeOrder}
                 </span>
                 <span className="text-sm font-medium">{beat.title}</span>
+                {current && beat.narrativeOrder > current.playheadOrder && (
+                  <span className="border-border text-muted-foreground rounded border px-1 text-[10px]">
+                    not reached
+                  </span>
+                )}
                 {beat.origin === 'conversation_generated' && (
                   <span className="border-border text-muted-foreground rounded border px-1 text-[10px]">
                     you caused this
@@ -119,7 +128,16 @@ export default async function PlayPage({
       </section>
 
       <section className="border-border rounded-lg border p-4">
-        <h2 className="mb-3 text-sm font-medium">Play</h2>
+        <div className="mb-3 flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-medium">Play</h2>
+          {current && (
+            <span className="text-muted-foreground/70 font-mono text-[11px]">
+              playhead {current.playheadOrder} ·{' '}
+              {beats.filter((b) => b.narrativeOrder <= current.playheadOrder).length}/{beats.length}{' '}
+              beats visible to the model
+            </span>
+          )}
+        </div>
 
         {storyline.status !== 'ready' && (
           <p className="text-muted-foreground text-xs">
