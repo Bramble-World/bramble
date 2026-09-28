@@ -140,3 +140,23 @@ export async function turnIsUnanswered(tx: Executor, turnId: string): Promise<bo
     .limit(1);
   return row !== undefined;
 }
+
+/**
+ * Whether this turn's consequences have already been worked out.
+ *
+ * Reads the stamp rather than looking for a beat that points at the turn. Those
+ * are not the same question: the consequence prompt may legitimately decide a
+ * choice changed nothing, and that outcome writes no beat — so "no beat" used
+ * to mean both "never ran" and "ran, and nothing happened". Every turn in the
+ * second state re-generated on each retry, and could produce a beat the second
+ * time that the first had not.
+ */
+export async function turnHasResolvedConsequences(tx: Executor, turnId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ at: storyTurns.consequencesGeneratedAt })
+    .from(storyTurns)
+    .where(eq(storyTurns.id, turnId))
+    .limit(1);
+
+  return row?.at != null;
+}

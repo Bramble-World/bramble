@@ -195,3 +195,28 @@ export async function raisePlayheadTo(
     .set({ playheadOrder: order })
     .where(and(eq(storylineSessions.id, sessionId), lt(storylineSessions.playheadOrder, order)));
 }
+
+/**
+ * Claims a turn's consequences, in one guarded statement.
+ *
+ * Returns true to exactly one caller. Everyone else — a retry, a second tab, a
+ * queue redelivery — gets false and must not write.
+ *
+ * The claim is a write rather than a read for the same reason `answerTurnGuarded`
+ * is: checking first and writing second lets two callers both pass the check,
+ * and the loser then appends a second set of beats for one decision. Affecting
+ * zero rows is the only signal, and it means somebody else already has it.
+ *
+ * Deliberately stamped whatever the consequences came to, including nothing at
+ * all — "computed and empty" is a real outcome and it has to leave a trace, or
+ * it is indistinguishable from never having run.
+ */
+export async function claimConsequences(tx: Executor, turnId: string): Promise<boolean> {
+  const [row] = await tx
+    .update(storyTurns)
+    .set({ consequencesGeneratedAt: new Date() })
+    .where(and(eq(storyTurns.id, turnId), isNull(storyTurns.consequencesGeneratedAt)))
+    .returning({ id: storyTurns.id });
+
+  return row !== undefined;
+}

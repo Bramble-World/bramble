@@ -154,6 +154,16 @@ provisioned.
   from the whole timeline, so rendering it would hand the model the ending
   however carefully the timeline itself is cut. It survives for the sweep and
   the UI.
+- **`storyTurns.consequencesGeneratedAt` is what makes a turn resolved**, and it
+  is stamped whatever the consequences came to — including nothing. Inferring it
+  from "a beat points at this turn" conflates _never computed_ with _computed and
+  legitimately empty_, and the consequence prompt is allowed to return empty, so
+  the second is common: 38 of 65 answered turns were in it. Each one re-generated
+  on every retry and could write a beat the second time that the first had not.
+  Null means "still owed", which is the queryable resumable state the two-call
+  answer/consequence split was built around. The claim is a guarded `UPDATE …
+WHERE consequences_generated_at IS NULL` inside the write transaction, so two
+  concurrent generations cannot both commit beats for one decision.
 - **`arcSummary` recompute dedup** is by comparing `arcSummaryGeneratedAt`
   against the newest event's `createdAt`. Nothing marks a session as already
   summarised, so a sweep that ignores this will recompute forever.
