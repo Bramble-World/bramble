@@ -11,6 +11,7 @@ vi.mock('./persons.reader', () => ({
 vi.mock('./persons.writer', () => ({
   insertPersonIfAbsent: vi.fn(),
   insertPersonRelationshipIfAbsent: vi.fn(),
+  setVoiceProfileIfAbsent: vi.fn(),
 }));
 
 const reader = vi.mocked(await import('./persons.reader'));
@@ -77,6 +78,81 @@ describe('getOrCreatePersonByHandle', () => {
 
     await expect(service.getOrCreatePersonByHandle(USER, '5550109999', 'Maya')).resolves.toBe(maya);
     expect(writer.insertPersonIfAbsent).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A person is shared across every storyline they appear in, which is the point
+ * — it is what makes someone recognisable in a sequel. It also meant a row
+ * written before voices were captured kept a null voice forever: each new
+ * extraction worked one out and the lookup returned the existing row before
+ * anything could use it.
+ *
+ * Measured on real data: of two people in the same group chat, the one created
+ * hours earlier had no voice and the one created after the change did, and
+ * neither row had been updated since the day it was written.
+ */
+describe('filling in a missing voice', () => {
+  const voiceless = { id: 'p-andi', name: 'Andi', isSelf: false, voiceProfile: null };
+  const voiced = {
+    id: 'p-nathaly',
+    name: 'Nathaly',
+    isSelf: false,
+    voiceProfile: { tone: 'warm, mostly lowercase' },
+  };
+
+  it('gives an existing person the voice this extraction worked out', async () => {
+    reader.getPersonByContactRef.mockResolvedValue(voiceless);
+    const repaired = { ...voiceless, voiceProfile: { tone: 'dry and organised' } };
+    writer.setVoiceProfileIfAbsent.mockResolvedValue(repaired);
+
+    const result = await service.getOrCreatePersonByHandle(USER, '5550101111', 'Andi', {
+      tone: 'dry and organised',
+    });
+
+    expect(result).toBe(repaired);
+    expect(writer.setVoiceProfileIfAbsent).toHaveBeenCalledWith('p-andi', USER, {
+      tone: 'dry and organised',
+    });
+  });
+
+  /**
+   * The guard that keeps this a repair rather than churn.
+   *
+   * Extraction produces a fresh reading every time it sees someone, so letting
+   * the newest win would hand a person's voice to whichever conversation was
+   * imported last — including a thin one where they barely spoke.
+   */
+  it('never overwrites a voice the person already has', async () => {
+    reader.getPersonByContactRef.mockResolvedValue(voiced);
+
+    const result = await service.getOrCreatePersonByHandle(USER, '5550102222', 'Nathaly', {
+      tone: 'completely different',
+    });
+
+    expect(result).toBe(voiced);
+    expect(writer.setVoiceProfileIfAbsent).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when this extraction did not work out a voice', async () => {
+    reader.getPersonByContactRef.mockResolvedValue(voiceless);
+
+    await service.getOrCreatePersonByHandle(USER, '5550101111', 'Andi');
+
+    expect(writer.setVoiceProfileIfAbsent).not.toHaveBeenCalled();
+  });
+
+  // The update is guarded on the column still being null, so a concurrent
+  // extraction can legitimately win it. Losing that race is not a failure.
+  it('returns the person unchanged when another writer got there first', async () => {
+    reader.getPersonByContactRef.mockResolvedValue(voiceless);
+    writer.setVoiceProfileIfAbsent.mockResolvedValue(null);
+
+    const result = await service.getOrCreatePersonByHandle(USER, '5550101111', 'Andi', {
+      tone: 'dry and organised',
+    });
+
+    expect(result).toBe(voiceless);
   });
 });
 
