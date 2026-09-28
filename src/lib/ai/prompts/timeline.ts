@@ -15,11 +15,21 @@ import type { BeatContext } from '@/lib/services/generation/generation.types';
  *
  * Silence carries meaning in these stories — a reply that took a month is a
  * different reply — so the elapsed time is part of the beat, not metadata.
+ *
+ * What is at risk rides along on the recent beats. `stakes` is extracted for
+ * most beats, reads well, and until now was shown to nothing at all — so the
+ * model was told what happened and never why it mattered, which is most of why
+ * the beats it wrote back were flat. It is windowed rather than rendered
+ * throughout because stakes run ~90 characters and a timeline may now hold 40
+ * beats; the older ones are context, and only the recent ones are pressure.
  */
+const STAKES_WINDOW = 5;
+
 export function renderTimeline(beats: BeatContext[]): string[] {
   let previous: Date | null = null;
+  const stakesFrom = Math.max(0, beats.length - STAKES_WINDOW);
 
-  return beats.map((beat) => {
+  return beats.map((beat, index) => {
     const when = beat.occurredAt ? new Date(beat.occurredAt) : null;
     const dated = when && !Number.isNaN(when.getTime()) ? when : null;
 
@@ -38,7 +48,13 @@ export function renderTimeline(beats: BeatContext[]): string[] {
     }
 
     const prefix = marks.length ? `[${marks.join(', ')}] ` : '';
-    return `${beat.narrativeOrder}. ${prefix}${beat.title} — ${beat.description}`;
+    const line = `${beat.narrativeOrder}. ${prefix}${beat.title} — ${beat.description}`;
+
+    // Guarded on trim rather than null: the consequence schema permits an empty
+    // string, and a bare "At stake:" with nothing behind it is worse than
+    // saying nothing.
+    const stakes = index >= stakesFrom ? beat.stakes?.trim() : undefined;
+    return stakes ? `${line}\n  At stake: ${stakes}` : line;
   });
 }
 

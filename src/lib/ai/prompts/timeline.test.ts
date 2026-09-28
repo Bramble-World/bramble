@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { BeatContext } from '@/lib/services/generation/generation.types';
 import { renderTimeline } from './timeline';
 
+const withStakes = (b: BeatContext, stakes: string | null): BeatContext => ({ ...b, stakes });
+
 const beat = (n: number, occurredAt: string | null, title = `Beat ${n}`): BeatContext => ({
   id: String(n),
   narrativeOrder: n,
@@ -71,5 +73,47 @@ describe('renderTimeline', () => {
       '1000. Beat 1000 — what happened',
       '2000. Beat 2000 — what happened',
     ]);
+  });
+});
+
+/**
+ * What is at risk.
+ *
+ * `stakes` was extracted for most beats, read well, and was shown to nothing —
+ * so the model was told what happened and never why it mattered. That is most
+ * of why the beats it wrote back were flat.
+ */
+describe('stakes', () => {
+  it('puts what is at risk under the beat it belongs to', () => {
+    const [line] = renderTimeline([
+      withStakes(beat(1000, null, 'Where things stood'), 'Whether it gets named at all.'),
+    ]);
+
+    // The whole element, so this pins the format and not merely the presence of
+    // the words — `toContain('At stake')` would pass on a label with nothing
+    // behind it.
+    expect(line).toBe(
+      '1000. Where things stood — what happened\n  At stake: Whether it gets named at all.'
+    );
+  });
+
+  it('says nothing when the stakes are blank rather than absent', () => {
+    const [line] = renderTimeline([withStakes(beat(1000, null), '   ')]);
+    expect(line).toBe('1000. Beat 1000 — what happened');
+  });
+
+  // Stakes run ~90 characters and a timeline may hold 40 beats. The old ones are
+  // context; only the recent ones are pressure.
+  it('carries stakes on the recent beats and not the whole history', () => {
+    const beats = Array.from({ length: 8 }, (_, i) =>
+      withStakes(beat((i + 1) * 1000, null), `risk ${i + 1}`)
+    );
+
+    const lines = renderTimeline(beats);
+
+    expect(lines[0]).not.toContain('At stake');
+    expect(lines[2]).not.toContain('At stake');
+    expect(lines[3]).toContain('At stake: risk 4');
+    expect(lines[7]).toContain('At stake: risk 8');
   });
 });

@@ -60,11 +60,18 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
       'Rules:',
       '- Do not open by restating what the reader chose. They know what they did.',
       '  Start from what it caused: the reply, the silence, the thing it set off.',
-      '- Someone else acts. They answer, deflect, change the subject, agree too',
-      '  quickly, or say nothing at all — but the beat moves because of them, not',
-      '  only because of the reader. A scene where the other person merely responds',
-      '  is not a beat.',
-      '- Stay inside what the timeline and background establish. Do not invent new people.',
+      '- Someone other than the reader starts something in most beats — not merely',
+      '  answers. Adding to what the reader raised is responding; bringing their own',
+      '  concern into it is acting. A character who only ever responds is furniture.',
+      '- Choose whoever it is most interesting to hear from, which is often not the',
+      '  person who spoke last. Usually it is whoever has most to gain or lose from',
+      '  what just happened. Over several beats this should not be the same person',
+      '  every time — but rotate for a reason, never to be fair.',
+      '- Invent what happens next. The timeline and background are what is already',
+      '  true, not a limit on what may happen: new events, new complications and new',
+      '  information are yours to make, so long as they follow from these people and',
+      '  the world they live in. The one thing you may not invent is a person — the',
+      '  cast you are given is everyone.',
       '- Characters speak in their own voice. Use the voice notes where given.',
       '- Background is what you know, not what you state. Let it shape the beat.',
       '- Mind the time between beats. A reply that took three weeks is a different',
@@ -87,7 +94,14 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
 
     prompt: [
       `# ${storyline.storyline.title}`,
-      storyline.storyline.tone ? `Tone: ${storyline.storyline.tone}` : null,
+      // Directive, not descriptive. Extraction already reads the register well
+      // — "ambitious, funny, increasingly strained" — and it was rendered as a
+      // label the model could note and ignore. What a story optimises for is the
+      // one thing that genuinely differs between a romance, a grudge and a
+      // fundraise, and it is the model's own reading of this conversation.
+      storyline.storyline.tone
+        ? `Play this for its register: ${storyline.storyline.tone}. That is what this story is good at — lean on it rather than writing around it.`
+        : null,
       storyline.storyline.setting ? `Setting: ${storyline.storyline.setting}` : null,
       // `arcSummary` is deliberately NOT rendered. It is computed from the whole
       // timeline, including beats the reader has not reached, so it was the one
@@ -120,13 +134,26 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
       ...(storyline.timeline.length
         ? ['## What has happened', ...renderTimeline(storyline.timeline), '']
         : ['## What has happened', 'Nothing yet. This is the very beginning.', '']),
-      ...(storyline.background.storylineLevel.length
-        ? [
-            '## Background (known, not stated)',
-            ...storyline.background.storylineLevel.map((b) => `- ${b}`),
-            '',
-          ]
-        : []),
+      // Per-character background was assembled and then dropped on the floor.
+      // Rendered under the same heading rather than a new one, because the rule
+      // that governs this material — "Background is what you know, not what you
+      // state" — keys on the word Background, and material the model has no
+      // instruction about is material it is most likely to blurt.
+      //
+      // Iterated by cast, not by Object.entries: the order is then stable, and
+      // an entry about somebody no longer cast disappears instead of rendering
+      // as "someone".
+      ...(() => {
+        const lines = [
+          ...storyline.background.storylineLevel.map((b) => `- ${b}`),
+          ...storyline.characters.flatMap((character) =>
+            (storyline.background.byCharacterId[character.id] ?? []).map(
+              (entry) => `- ${character.name}: ${entry}`
+            )
+          ),
+        ];
+        return lines.length ? ['## Background (known, not stated)', ...lines, ''] : [];
+      })(),
       ...(storyline.motifs.length
         ? [
             '## Recurring',
