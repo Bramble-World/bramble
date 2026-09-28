@@ -94,6 +94,7 @@ of them actually drifts.
 ```
 UPDATE story_turns  SET selected_choice_id = …, responded_at = now()
 UPDATE storyline_sessions SET last_active_at = now()
+UPDATE storyline_sessions SET playhead_order = <next beat above it>
 ```
 
 `lastActiveAt` is denormalised — it equals `MAX(storyTurns.respondedAt)` for the
@@ -101,6 +102,11 @@ session — and exists so the idle sweep is one indexed scan instead of a join a
 aggregate over every session's turns. **Forget to touch it and a session looks
 idle while someone is actively playing**, so the arc summary recomputes
 underneath them.
+
+**Forget the third and the playthrough's view of its own story freezes.** Every
+later turn is then generated against the same history, the reader never advances
+past the opening beat, and nothing errors — the story simply stops moving while
+continuing to produce plausible turns.
 
 **Creating a turn is two steps, because `storyTurns` and `turnChoices` reference
 each other:**
@@ -132,6 +138,22 @@ provisioned.
   directional. The consequence is that `parallel` and `crossover`, where
   direction is meaningless, _can_ be stored twice reversed. Decide a convention
   if those get used.
+- **`storylineSessions.playheadOrder` is how far a playthrough has got**, held
+  as an `events.narrativeOrder`. `0` means "before everything", matching what
+  `gapOrderAfter` already assumes for an empty timeline. It is **per-session**
+  (two readers of one storyline stand in different places), **monotonic** (both
+  writers only ever raise it, so a retry cannot walk it backwards), and running
+  past the last beat is **not an error** — the step becomes a no-op and the
+  reader simply sees everything, which by then is everything they have been
+  through.
+  The turn stage is shown only beats at or below it; the **arc and consequence
+  stages are deliberately shown all of them** and narrowing either breaks
+  something quiet (a summary describing only the opening; a relationship state
+  with no legal beat to attach to).
+- **`arcSummary` is deliberately absent from the turn prompt.** It is computed
+  from the whole timeline, so rendering it would hand the model the ending
+  however carefully the timeline itself is cut. It survives for the sweep and
+  the UI.
 - **`arcSummary` recompute dedup** is by comparing `arcSummaryGeneratedAt`
   against the newest event's `createdAt`. Nothing marks a session as already
   summarised, so a sweep that ignores this will recompute forever.

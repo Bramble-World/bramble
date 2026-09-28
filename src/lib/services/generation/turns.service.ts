@@ -11,6 +11,9 @@ import * as timelineWriter from '../timeline/timeline.writer';
 import { TurnWithChoices } from '../sessions/sessions.types';
 import { NewEvent } from '../timeline/timeline.types';
 import { assembleSessionContext, assembleStorylineContext } from './context.reader';
+import { contextAsOf, scriptExhausted } from './playhead';
+import * as sessionWriter from '../sessions/sessions.writer';
+import { ConflictError } from '@/lib/utils/errors';
 
 /** Injected so a test can supply the fake without touching process env. */
 export type GenerationDeps = { generator?: Generator };
@@ -43,7 +46,15 @@ export async function generateTurn(
   ]);
 
   const generator = deps.generator ?? getGenerator();
-  const { value } = await generator.run(turnPrompt, { storyline, session: sessionContext });
+  // The cut happens here rather than inside the prompt's render, so that what
+  // the generator is recorded as having been given and what it was actually
+  // shown are the same thing. A render that quietly dropped beats would leave
+  // the anti-leak test asserting against a context the model never saw.
+  const { value } = await generator.run(turnPrompt, {
+    storyline: contextAsOf(storyline, session.playheadOrder),
+    session: sessionContext,
+    beyondScript: scriptExhausted(storyline, session.playheadOrder),
+  });
 
   return sessions.openTurn(
     userId,
@@ -112,6 +123,10 @@ export async function generateConsequences(
   }
   if (await timelineReader.turnHasConsequences(db, turnId)) return empty;
 
+  // Deliberately the WHOLE timeline, unlike generateTurn. This stage is
+  // reasoning about what a decision changed, which needs the story entire; and
+  // narrowing it here would also shrink what `recordRelationshipState` can
+  // legally attach to. Do not wrap this in contextAsOf.
   const storyline = await assembleStorylineContext(userId, session.storylineId);
 
   const chosen = turn.choices.find((choice) => choice.id === turn.selectedChoiceId);
@@ -128,13 +143,11 @@ export async function generateConsequences(
     },
   });
 
-  // A model is free to name a beat that does not exist, so the anchor is snapped
-  // to a real one rather than trusted. 0 means "before everything", which
-  // gapOrderAfter handles as the empty-timeline case.
-  const orders = new Set(storyline.timeline.map((beat) => beat.narrativeOrder));
-  const anchor = orders.has(value.afterNarrativeOrder)
-    ? value.afterNarrativeOrder
-    : (storyline.timeline.at(-1)?.narrativeOrder ?? 0);
+  // Consequences land where the reader is, not where a model guesses. Asked for
+  // a position, it used to pick one well behind the narration — anchoring at
+  // 1500-3500 in a session that had reached 6000 — which files the result of a
+  // decision above or below the only place the reader can see it.
+  const anchor = session.playheadOrder;
 
   const characterIds = new Set(storyline.characters.map((c) => c.id));
   const relationshipIds = new Set(storyline.relationships.map((r) => r.id));
@@ -152,7 +165,7 @@ export async function generateConsequences(
   }));
 
   return db.transaction(async (tx) => {
-    const written = await timeline.insertEventsAfterIn(tx, session.storylineId, anchor, events);
+    const written = await insertAtOrAfter(tx, session.storylineId, anchor, events);
 
     for (const entry of value.contextEntries) {
       await timelineWriter.insertContextEntry(tx, session.storylineId, {
@@ -188,10 +201,44 @@ export async function generateConsequences(
       }
     }
 
+    // The reader has to be able to see what their own choice caused, so the
+    // playhead covers it. A raise, not a set: this function is safe to retry.
+    const reached = written.at(-1)?.narrativeOrder;
+    if (reached !== undefined) {
+      await sessionWriter.raisePlayheadTo(tx, session.id, reached);
+    }
+
     return {
       events: written.length,
       contextEntries: value.contextEntries.length,
       relationshipStates: states,
     };
   });
+}
+
+/**
+ * Inserts after `anchor`, falling back to the end of the timeline.
+ *
+ * `gapOrderAfter` midpoints into the space above the anchor and gives up when
+ * two beats are already adjacent, which `insertEventsAfterIn` reports as a
+ * ConflictError. That is the right answer for a caller that must land in a
+ * specific place, and the wrong one here: losing a reader's consequence because
+ * one region of the timeline is crowded trades a real beat for a tidy invariant.
+ *
+ * Appending instead puts it slightly later than the decision strictly warrants,
+ * which is a far smaller lie than dropping it.
+ */
+async function insertAtOrAfter(
+  tx: Parameters<typeof timeline.insertEventsAfterIn>[0],
+  storylineId: string,
+  anchor: number,
+  events: NewEvent[]
+) {
+  try {
+    return await timeline.insertEventsAfterIn(tx, storylineId, anchor, events);
+  } catch (error) {
+    if (!(error instanceof ConflictError)) throw error;
+    const last = await timelineReader.nextNarrativeOrder(tx, storylineId);
+    return timeline.insertEventsAfterIn(tx, storylineId, last, events);
+  }
 }

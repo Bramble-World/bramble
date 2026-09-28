@@ -8,10 +8,26 @@ const sessionColumns = {
   id: storylineSessions.id,
   storylineId: storylineSessions.storylineId,
   lastActiveAt: storylineSessions.lastActiveAt,
+  playheadOrder: storylineSessions.playheadOrder,
 };
 
 export async function getSession(userId: string, sessionId: string): Promise<PublicSession | null> {
-  const [session] = await db
+  return getSessionIn(db, userId, sessionId);
+}
+
+/**
+ * `getSession` against a caller's transaction.
+ *
+ * Exists because `startSession` has to read the session back after stepping its
+ * playhead, and reading it on `db` would land outside that transaction and
+ * return the pre-step value.
+ */
+export async function getSessionIn(
+  tx: Executor,
+  userId: string,
+  sessionId: string
+): Promise<PublicSession | null> {
+  const [session] = await tx
     .select(sessionColumns)
     .from(storylineSessions)
     .where(and(eq(storylineSessions.userId, userId), eq(storylineSessions.id, sessionId)))

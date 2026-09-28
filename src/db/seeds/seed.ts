@@ -10,7 +10,7 @@
  * which is exactly the shape the real extraction pipeline will produce.
  */
 import 'dotenv/config';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '../../index';
 import {
   characterRelationships,
@@ -332,6 +332,21 @@ async function seed() {
           triggeredByTurnId: firstDecision,
         });
       }
+
+      // The playthrough has been through everything above, so its playhead sits
+      // at the end of what it created. Left at the default 0 the turn prompt
+      // would show a seeded session no history at all — the services set this
+      // on every answer, and the seed writes turns directly, so it has to say
+      // so itself.
+      await tx
+        .update(storylineSessions)
+        .set({
+          playheadOrder: sql`COALESCE((
+            SELECT MAX(${events.narrativeOrder}) FROM ${events}
+             WHERE ${events.storylineId} = ${storyline.id}
+          ), 0)`,
+        })
+        .where(eq(storylineSessions.id, session.id));
     }
 
     // ---------------------------------------------------------------------

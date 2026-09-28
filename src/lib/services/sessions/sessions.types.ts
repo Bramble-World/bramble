@@ -2,6 +2,8 @@ export type PublicSession = {
   id: string;
   storylineId: string;
   lastActiveAt: Date;
+  /** The highest `events.narrativeOrder` this playthrough has reached. 0 = before everything. */
+  playheadOrder: number;
 };
 
 export type PublicChoice = {

@@ -1,5 +1,5 @@
-import { and, eq, exists, isNull, sql } from 'drizzle-orm';
-import { storylineSessions, storyTurns, turnChoices } from '@/db/schema/tables';
+import { and, eq, exists, isNull, lt, sql } from 'drizzle-orm';
+import { events, storylineSessions, storyTurns, turnChoices } from '@/db/schema/tables';
 import { Executor } from '../executor';
 import { NewChoice, PublicSession, TurnWithChoices } from './sessions.types';
 
@@ -12,6 +12,7 @@ export async function insertSession(
     id: storylineSessions.id,
     storylineId: storylineSessions.storylineId,
     lastActiveAt: storylineSessions.lastActiveAt,
+    playheadOrder: storylineSessions.playheadOrder,
   });
   return session;
 }
@@ -144,4 +145,53 @@ export async function touchSession(tx: Executor, sessionId: string): Promise<voi
     .update(storylineSessions)
     .set({ lastActiveAt: new Date() })
     .where(eq(storylineSessions.id, sessionId));
+}
+
+/**
+ * Steps the playhead to the next beat above where it is.
+ *
+ * One statement rather than read-then-write, for the same reason
+ * `answerTurnGuarded` is: two answers landing together would both read the same
+ * value and the second would write a position the first had already passed. The
+ * subquery is correlated against the row being updated, so the step is computed
+ * from the value at write time.
+ *
+ * `COALESCE(..., playhead_order)` is what makes running out of story a no-op
+ * rather than a failure. A playthrough that has passed the last beat simply
+ * stays there, and the filter then shows it everything — which is correct, since
+ * everything is what it has been through.
+ */
+export async function advancePlayhead(tx: Executor, sessionId: string): Promise<void> {
+  await tx
+    .update(storylineSessions)
+    .set({
+      playheadOrder: sql`COALESCE((
+        SELECT MIN(${events.narrativeOrder}) FROM ${events}
+         WHERE ${events.storylineId} = ${storylineSessions.storylineId}
+           AND ${events.narrativeOrder} > ${storylineSessions.playheadOrder}
+      ), ${storylineSessions.playheadOrder})`,
+    })
+    .where(eq(storylineSessions.id, sessionId));
+}
+
+/**
+ * Raises the playhead to cover a beat the reader's own choice just caused.
+ *
+ * Without this the consequence of a decision is filed at a position the reader
+ * has not reached, so the one beat they are guaranteed to care about is the one
+ * beat they cannot see.
+ *
+ * The `<` guard makes it a raise rather than a set: retries and out-of-order
+ * calls cannot walk the playhead backwards, which matters because
+ * `generateConsequences` is safe to retry by design.
+ */
+export async function raisePlayheadTo(
+  tx: Executor,
+  sessionId: string,
+  order: number
+): Promise<void> {
+  await tx
+    .update(storylineSessions)
+    .set({ playheadOrder: order })
+    .where(and(eq(storylineSessions.id, sessionId), lt(storylineSessions.playheadOrder, order)));
 }

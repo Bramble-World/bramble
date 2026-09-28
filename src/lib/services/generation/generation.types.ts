@@ -55,6 +55,15 @@ export type RelationshipContext = {
   baselineDynamic: Dynamic | null;
   /** The latest state, by the narrative order of the event that caused it. */
   currentDynamic: Dynamic | null;
+  /**
+   * Every recorded state and the beat that caused it, ascending.
+   *
+   * `currentDynamic` is the latest of these overall, which is what the arc and
+   * consequence stages want. The turn stage wants the latest as of where the
+   * reader has actually got to, and cannot recompute that from a single
+   * collapsed value — so the history is carried rather than thrown away.
+   */
+  states: Array<{ narrativeOrder: number; dynamic: Dynamic }>;
 };
 
 export type BeatContext = {
