@@ -23,6 +23,13 @@ type EventFields = {
   occurredAt?: Date;
   /** Characters present at this beat. Verified to belong to the storyline. */
   participantCharacterIds?: string[];
+  /**
+   * The one character who set this beat in motion, where a single person did.
+   *
+   * Distinct from being present, which is what `participantCharacterIds`
+   * records. Stored for measurement; no prompt reads it.
+   */
+  actorCharacterId?: string;
 };
 
 /**

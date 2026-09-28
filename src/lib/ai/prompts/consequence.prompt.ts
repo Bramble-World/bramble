@@ -39,6 +39,12 @@ export const consequenceOutputSchema = z.object({
         participantCharacterIds: z
           .array(z.string())
           .describe('Character ids from the cast who are involved. May be empty.'),
+        actorCharacterId: z
+          .string()
+          .nullable()
+          .describe(
+            'The one character who set this beat in motion, if a single person did. Null when it is something that happened to them rather than something someone did.'
+          ),
         generationRationale: z
           .string()
           .min(1)

@@ -38,5 +38,8 @@ export type PublicCharacter = {
   personId: string;
   role: CharacterRole;
   description: string | null;
+  /** What they are after in this story; what they steer around. */
+  want: string | null;
+  avoids: string | null;
   voiceProfileOverride: VoiceProfile | null;
 };

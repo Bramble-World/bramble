@@ -54,6 +54,8 @@ export async function assembleStorylineContext(
     // Resolved once, here. A storyline-specific voice wins over the person's
     // canonical one; everything downstream just reads `voice`.
     voice: character.voiceProfileOverride ?? character.person.voiceProfile ?? null,
+    want: character.want,
+    avoids: character.avoids,
     isSelf: character.person.isSelf,
   }));
 

@@ -11,6 +11,9 @@ import {
 import { timestamps } from '../../../util/timestamps';
 import { storylines } from '../storylines';
 import { storyTurns } from '../storylineSessions/storyTurns';
+// Safe direction: characters imports storylines and persons, never events, so
+// this does not close a cycle.
+import { characters } from '../characters';
 
 export const eventOriginEnum = pgEnum('event_origin', [
   'extracted', // came from the original message-data extraction pipeline
@@ -31,6 +34,27 @@ export const events = pgTable(
     title: text().notNull(),
     description: text().notNull(),
     stakes: text(),
+
+    /**
+     * Who set this beat in motion, where one person did.
+     *
+     * Distinct from `eventParticipants`, which records who was *present* — a
+     * distinction that turned out to be the whole of a reported defect. A
+     * housemate appeared in eleven of seventeen beats and caused none of them,
+     * and there was no way to see that except by reading beat titles, because
+     * presence was the only thing stored.
+     *
+     * Null is legal and common: plenty of beats are something that happened to
+     * everyone rather than something one person did.
+     *
+     * **Read by no prompt.** It exists so "did the cast come alive" is a query
+     * rather than a judgement call. Feeding it back to the model would turn
+     * choosing who acts into a fairness rota, which is the formula this was
+     * trying to escape.
+     */
+    actorCharacterId: uuid('actor_character_id').references(() => characters.id, {
+      onDelete: 'set null',
+    }),
 
     origin: eventOriginEnum().notNull().default('extracted'),
     triggeredByTurnId: uuid('triggered_by_turn_id').references(() => storyTurns.id, {
@@ -53,5 +77,6 @@ export const events = pgTable(
     // index it replaces.
     uniqueIndex('idx_events_storyline_order').on(table.storylineId, table.narrativeOrder),
     index('idx_events_triggered_by').on(table.triggeredByTurnId),
+    index('idx_events_actor').on(table.actorCharacterId),
   ]
 );

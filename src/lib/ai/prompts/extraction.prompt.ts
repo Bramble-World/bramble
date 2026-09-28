@@ -85,6 +85,18 @@ export const extractionOutputSchema = z.object({
         role: z.enum(['protagonist', 'antagonist', 'supporting']),
         description: z.string().nullable().describe('Who they are in this particular story.'),
         voiceTone: z.string().nullable().describe('How they write — rhythm, register, habits.'),
+        want: z
+          .string()
+          .min(1)
+          .describe(
+            'What this person is trying to get out of this, in their terms — something another person could give them or refuse them. Not a feeling.'
+          ),
+        avoids: z
+          .string()
+          .nullable()
+          .describe(
+            'What they are steering around. Null only if the conversation never shows one.'
+          ),
       })
     )
     .min(1)
@@ -198,6 +210,12 @@ export const extractionPrompt: PromptSpec<ExtractionVars, ExtractionOutput> = {
       '- If someone here is already in "People you already know", give their id.',
       '- relationshipType is the persistent fact (siblings, coworkers). The closeness,',
       '  tension and power fields are how they stand at the start of this story.',
+      '- Give everyone a want, including the quiet ones. A want is something another',
+      '  person can grant or withhold: "wants the three of them to eat together',
+      '  before the move is finished" is a want; "wants to feel respected" is not,',
+      '  because nobody can hand it over. At least one pair of these wants must be',
+      '  incompatible — if everyone can have what they want at once, there is no',
+      '  story here and you have read it wrong.',
     ].join('\n'),
 
     prompt: [
