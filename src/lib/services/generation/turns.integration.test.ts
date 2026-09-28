@@ -137,6 +137,59 @@ describe('commitChoice then generateConsequences', () => {
     expect(fake.calls.length).toBe(before);
   });
 
+  /**
+   * The bug this column exists for.
+   *
+   * Idempotence used to be inferred from a beat pointing at the turn, but the
+   * consequence prompt is allowed to decide a choice changed nothing — and that
+   * outcome writes no beat. So "ran, and nothing happened" was stored exactly
+   * like "never ran": every retry paid for a fresh generation, and could write a
+   * beat the second time that the first had not. Measured on real data, 38 of 65
+   * answered turns were in that state.
+   *
+   * This is the test that could not have passed before, and it needs an
+   * empty-then-nonempty fixture, because a fake that always returns the same
+   * thing cannot tell the two readings apart.
+   */
+  it('does not recompute a turn whose consequences were legitimately empty', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    let calls = 0;
+    fake.register(consequencePrompt, () => {
+      calls += 1;
+      // Empty the first time, and emphatically not empty afterwards — so a
+      // second generation would be visible in the timeline rather than silent.
+      return calls === 1
+        ? { events: [], contextEntries: [], relationshipStates: [] }
+        : {
+            events: [
+              {
+                title: 'Should never exist',
+                description: 'Written by a generation that should not have happened.',
+                stakes: null,
+                participantCharacterIds: [],
+                generationRationale: 'x',
+              },
+            ],
+            contextEntries: [],
+            relationshipStates: [],
+          };
+    });
+
+    const first = await generateConsequences(userId, turn.id, { generator: fake });
+    expect(first.events).toBe(0);
+
+    const second = await generateConsequences(userId, turn.id, { generator: fake });
+
+    expect(second.events).toBe(0);
+    // The model was asked once, not twice.
+    expect(calls).toBe(1);
+    const beats = await timeline.listTimeline(storylineId);
+    expect(beats.map((b) => b.title)).not.toContain('Should never exist');
+  });
+
   it('writes generated beats with lineage back to the decision', async () => {
     const session = await freshSession();
     const turn = await generateTurn(userId, session.id, { generator: fake });

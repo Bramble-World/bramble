@@ -121,7 +121,10 @@ export async function generateConsequences(
   if (!turn.selectedChoiceId) {
     throw new ValidationError('This turn has not been answered yet');
   }
-  if (await timelineReader.turnHasConsequences(db, turnId)) return empty;
+  // Cheap pre-check, so a retry of an already-resolved turn costs one SELECT
+  // rather than a model call. It is not the guard — the claim inside the
+  // transaction is, because this read and that write are seconds apart.
+  if (await sessionReader.turnHasResolvedConsequences(db, turnId)) return empty;
 
   // Deliberately the WHOLE timeline, unlike generateTurn. This stage is
   // reasoning about what a decision changed, which needs the story entire; and
@@ -165,6 +168,11 @@ export async function generateConsequences(
   }));
 
   return db.transaction(async (tx) => {
+    // The real guard, and the first thing in the transaction. A generation that
+    // ran while another caller was already committing must write nothing at
+    // all — a second set of beats for one decision is worse than a wasted call.
+    if (!(await sessionWriter.claimConsequences(tx, turnId))) return empty;
+
     const written = await insertAtOrAfter(tx, session.storylineId, anchor, events);
 
     for (const entry of value.contextEntries) {
