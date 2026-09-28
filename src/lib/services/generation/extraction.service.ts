@@ -239,7 +239,15 @@ async function resolvePerson(
   knownPersonIds: Set<string>
 ) {
   if (member.existingPersonId && knownPersonIds.has(member.existingPersonId)) {
-    return persons.getPerson(userId, member.existingPersonId);
+    // Same repair as the handle path below: a person the model recognised from
+    // an earlier storyline keeps their row, and would otherwise keep a missing
+    // voice with it.
+    const known = await persons.getPerson(userId, member.existingPersonId);
+    return persons.ensureVoiceProfile(
+      userId,
+      known,
+      member.voiceTone ? { tone: member.voiceTone } : undefined
+    );
   }
 
   if (member.sourceHandle) {

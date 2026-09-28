@@ -5,6 +5,7 @@ import { users } from '@/db/schema/tables';
 import { createFakeGenerator, FakeGenerator } from '@/lib/ai';
 import { registerFixtures } from '@/lib/ai/fixtures';
 import { extractionPrompt } from '@/lib/ai/prompts/extraction.prompt';
+import * as persons from '../persons/persons.service';
 import { extractStoryline } from './extraction.service';
 import { threeWeeksLater, unsentApology, verbatimTexts } from './__fixtures__/transcripts';
 
@@ -238,5 +239,40 @@ describe('extractStoryline', () => {
     expect(failed).toHaveLength(1);
     expect(failed[0].status).toBe('failed');
     expect(failed[0].failureReason).not.toBeNull();
+  });
+});
+
+/**
+ * A person outlives the storyline that introduced them, so a gap in their row
+ * outlives it too.
+ *
+ * Andi was created before extraction captured voices and still had none days
+ * later, across three storylines, because every later extraction matched her
+ * existing row and returned it before the voice it had just worked out could be
+ * used. The turn prompt renders voice notes, so she reached the model with
+ * nothing saying how she speaks.
+ */
+describe('voice repair on a person who already exists', () => {
+  it('fills a missing voice, and refuses to overwrite one that is there', async () => {
+    const handle = `+1555010${Math.floor(Math.random() * 9000) + 1000}`;
+
+    // Created the way a pre-fix row was: no voice at all.
+    const first = await persons.getOrCreatePersonByHandle(userId, handle, 'Andi');
+    expect(first.voiceProfile).toBeNull();
+
+    // A later extraction sees her again and has worked out how she speaks.
+    const repaired = await persons.getOrCreatePersonByHandle(userId, handle, 'Andi', {
+      tone: 'dry and organised',
+    });
+    expect(repaired.id).toBe(first.id);
+    expect(repaired.voiceProfile).toStrictEqual({ tone: 'dry and organised' });
+
+    // A third extraction reads her differently. The first reading stands: a
+    // person's voice must not be decided by whichever thread was imported last.
+    const again = await persons.getOrCreatePersonByHandle(userId, handle, 'Andi', {
+      tone: 'completely different',
+    });
+    expect(again.id).toBe(first.id);
+    expect(again.voiceProfile).toStrictEqual({ tone: 'dry and organised' });
   });
 });

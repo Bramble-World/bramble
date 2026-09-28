@@ -1,6 +1,7 @@
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/index';
 import { personRelationships, persons } from '@/db/schema/tables';
-import { NewPerson, PublicPerson } from './persons.types';
+import { NewPerson, PublicPerson, VoiceProfile } from './persons.types';
 
 const returned = {
   id: persons.id,
@@ -27,6 +28,33 @@ export async function insertPersonIfAbsent(input: NewPerson): Promise<PublicPers
       voiceProfile: input.voiceProfile,
     })
     .onConflictDoNothing()
+    .returning(returned);
+
+  return person ?? null;
+}
+
+/**
+ * Fills in a person's voice, but only where there is nothing there yet.
+ *
+ * `WHERE voice_profile IS NULL` is the whole design. Extraction produces a fresh
+ * reading of how someone speaks every time it sees them, and letting the newest
+ * one win would mean a person's voice was decided by whichever conversation was
+ * imported last — including a thin one where they barely spoke. Filling only a
+ * gap makes this repair, not churn, and makes the call safe to make on every
+ * extraction rather than only a first one.
+ *
+ * A per-storyline reading belongs on `characters.voiceProfileOverride`, which
+ * the context reader already prefers over this column. Nothing writes it yet.
+ */
+export async function setVoiceProfileIfAbsent(
+  personId: string,
+  userId: string,
+  voiceProfile: VoiceProfile
+): Promise<PublicPerson | null> {
+  const [person] = await db
+    .update(persons)
+    .set({ voiceProfile })
+    .where(and(eq(persons.id, personId), eq(persons.userId, userId), isNull(persons.voiceProfile)))
     .returning(returned);
 
   return person ?? null;

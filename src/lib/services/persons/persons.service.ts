@@ -17,6 +17,22 @@ import { PublicPerson, VoiceProfile } from './persons.types';
  * unique index arbitrates the race rather than the application, so two
  * concurrent first requests produce one row and both callers see it.
  */
+/**
+ * Gives a person a voice if they do not have one, and otherwise leaves them be.
+ *
+ * Separate from the lookups so every path that resolves an existing person can
+ * repair the same gap, and so the "only fills, never overwrites" rule is stated
+ * in one place rather than at each call site.
+ */
+export async function ensureVoiceProfile(
+  userId: string,
+  person: PublicPerson,
+  voiceProfile?: VoiceProfile
+): Promise<PublicPerson> {
+  if (!voiceProfile || person.voiceProfile) return person;
+  return (await writer.setVoiceProfileIfAbsent(person.id, userId, voiceProfile)) ?? person;
+}
+
 export async function getOrCreateSelfPerson(userId: string, name: string): Promise<PublicPerson> {
   const existing = await reader.getSelfPerson(userId);
   if (existing) return existing;
@@ -53,7 +69,15 @@ export async function getOrCreatePersonByHandle(
   const ref = hashContactHandle(handle);
 
   const existing = await reader.getPersonByContactRef(userId, ref);
-  if (existing) return existing;
+  // A person already known by their handle keeps their row — that sharing is the
+  // point, and it is what makes someone recognisable across storylines. But
+  // returning it untouched also threw away the voice this extraction just
+  // worked out, so anyone who existed before voices were captured never got
+  // one: their row said null on the day it was written and said null forever,
+  // while everyone created afterwards got a voice on their first insert. The
+  // turn prompt renders voice notes, so those people reached the model with
+  // nothing saying how they speak.
+  if (existing) return ensureVoiceProfile(userId, existing, voiceProfile);
 
   // The voice belongs on the row whichever way the person was found. Taking it
   // only on the name-only path meant everyone who had actually sent a message —
