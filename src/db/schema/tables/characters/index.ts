@@ -23,6 +23,25 @@ export const characters = pgTable(
     role: characterRoleEnum().notNull().default('supporting'),
     description: text(), // storyline-specific framing
 
+    /**
+     * What this person is trying to get, in this story.
+     *
+     * The thing that makes a character able to act rather than only respond. A
+     * voice profile governs how someone speaks; nothing governed what they were
+     * after, so a character the situation did not hand initiative to had no move
+     * available except replying to whoever spoke last. Measured before this
+     * existed: across 17 generated beats of a three-person storyline, one
+     * housemate was the subject of four and the other of none, while being
+     * present in eleven.
+     *
+     * Deliberately something another person can grant or refuse — "wants the
+     * three of them to eat together before the move is finished", not "wants to
+     * feel respected". A want nobody can withhold generates nothing.
+     */
+    want: text(),
+    /** What they steer around. Null when the conversation never shows one. */
+    avoids: text(),
+
     // Optional deviation from the person's canonical voice, for this storyline only.
     voiceProfileOverride: jsonb('voice_profile_override').$type<{
       vocabulary?: string[];

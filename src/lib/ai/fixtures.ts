@@ -67,6 +67,7 @@ export function registerFixtures(fake: FakeGenerator): void {
           description: `You said something you did not say the first time, and it landed.`,
           stakes: 'Whatever was unsaid is now said.',
           participantCharacterIds: cast.slice(0, 2).map((c) => c.id),
+          actorCharacterId: cast.find((c) => !c.isSelf)?.id ?? null,
           generationRationale:
             'The reader chose to be direct where the original exchange was evasive, so the story now has to account for that having been said out loud.',
         },
@@ -114,6 +115,8 @@ export function registerFixtures(fake: FakeGenerator): void {
           role: 'protagonist' as const,
           description: null,
           voiceTone: 'direct, then apologetic',
+          want: 'to have the thing she said taken back properly',
+          avoids: 'saying it plainly in front of anyone else',
         },
         {
           name: otherName,
@@ -122,6 +125,10 @@ export function registerFixtures(fake: FakeGenerator): void {
           role: 'supporting' as const,
           description: 'Deflects when cornered.',
           voiceTone: 'clipped, changes the subject',
+          // Incompatible with the protagonist's want, which is exactly what the
+          // extraction rule asks for: only one of them can have theirs.
+          want: 'to get through the week without the subject coming up',
+          avoids: null,
         },
       ],
       relationships: [

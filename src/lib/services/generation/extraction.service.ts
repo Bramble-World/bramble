@@ -124,6 +124,11 @@ async function persist(
     const character = await storylines.castCharacter(userId, storylineId, personId, {
       role: member.role,
       description: member.description ?? undefined,
+      // Per storyline, not per person: the same human wants different things in
+      // different stories, which is the whole reason characters and persons are
+      // separate tables.
+      want: member.want,
+      avoids: member.avoids ?? undefined,
     });
     characterIdByName.set(member.name, character.id);
   }

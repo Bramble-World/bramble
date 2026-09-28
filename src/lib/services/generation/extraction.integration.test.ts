@@ -186,6 +186,8 @@ describe('extractStoryline', () => {
           role: 'protagonist' as const,
           description: null,
           voiceTone: null,
+          want: 'to know when this actually happened',
+          avoids: null,
         },
       ],
       relationships: [],
@@ -274,5 +276,40 @@ describe('voice repair on a person who already exists', () => {
     });
     expect(again.id).toBe(first.id);
     expect(again.voiceProfile).toStrictEqual({ tone: 'dry and organised' });
+  });
+});
+
+/**
+ * Every character gets something to pursue, including the quiet ones.
+ *
+ * `want` is required rather than nullable on purpose: every nullable field in
+ * this schema gets nulled for the person who barely speaks in a group chat, and
+ * that is precisely the character who then never acts. A character with no want
+ * can only respond to whoever spoke last.
+ */
+describe('character wants', () => {
+  it('gives every cast member a want', async () => {
+    const storyline = await extractStoryline(userId, unsentApology, { generator: fake });
+
+    const cast = await db.query.characters.findMany({ where: { storylineId: storyline.id } });
+
+    expect(cast.length).toBeGreaterThan(1);
+    for (const character of cast) {
+      expect(character.want).toBeTruthy();
+    }
+  });
+
+  // Per storyline, not per person: the same human wants different things in
+  // different stories, which is why characters and persons are separate tables.
+  it('keeps the want on the character rather than the person', async () => {
+    const storyline = await extractStoryline(userId, unsentApology, { generator: fake });
+
+    const [character] = await db.query.characters.findMany({
+      where: { storylineId: storyline.id },
+      with: { person: true },
+    });
+
+    expect(character.want).toBeTruthy();
+    expect(character.person).not.toHaveProperty('want');
   });
 });

@@ -22,6 +22,8 @@ const characterColumns = {
   personId: characters.personId,
   role: characters.role,
   description: characters.description,
+  want: characters.want,
+  avoids: characters.avoids,
   voiceProfileOverride: characters.voiceProfileOverride,
 };
 
