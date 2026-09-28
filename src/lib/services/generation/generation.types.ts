@@ -42,6 +42,15 @@ export type CharacterContext = {
   description: string | null;
   /** `voiceProfileOverride` when this story deviates, else the person's own. */
   voice: VoiceProfile | null;
+  /**
+   * What they are trying to get, and what they steer around.
+   *
+   * The difference between a character who can act and one who can only reply.
+   * Voice governs how someone speaks; this governs whether they have anything
+   * of their own to bring into a scene.
+   */
+  want: string | null;
+  avoids: string | null;
   isSelf: boolean;
 };
 

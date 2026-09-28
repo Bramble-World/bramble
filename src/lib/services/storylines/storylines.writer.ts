@@ -176,6 +176,8 @@ export async function insertCharacterIfAbsent(input: {
   personId: string;
   role?: CharacterRole;
   description?: string;
+  want?: string;
+  avoids?: string;
 }): Promise<PublicCharacter | null> {
   const [character] = await db.insert(characters).values(input).onConflictDoNothing().returning({
     id: characters.id,
@@ -183,6 +185,8 @@ export async function insertCharacterIfAbsent(input: {
     personId: characters.personId,
     role: characters.role,
     description: characters.description,
+    want: characters.want,
+    avoids: characters.avoids,
     voiceProfileOverride: characters.voiceProfileOverride,
   });
   return character ?? null;

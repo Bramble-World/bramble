@@ -165,6 +165,13 @@ export async function generateConsequences(
     // Silently dropped rather than rejected: a hallucinated id should not throw
     // away a whole beat, and the timeline service would refuse the write anyway.
     participantCharacterIds: event.participantCharacterIds.filter((id) => characterIds.has(id)),
+    // Same treatment for the same reason. Recorded for measurement only — no
+    // prompt reads it, because feeding it back would turn "who acts" into a
+    // rota, which is the formula this exists to escape.
+    actorCharacterId:
+      event.actorCharacterId && characterIds.has(event.actorCharacterId)
+        ? event.actorCharacterId
+        : undefined,
   }));
 
   return db.transaction(async (tx) => {

@@ -171,3 +171,69 @@ describe('per-character background', () => {
     expect(prompt).not.toContain('someone:');
   });
 });
+
+/**
+ * What a character is after.
+ *
+ * Voice governs how someone speaks; nothing governed what they were pursuing,
+ * so a character the situation did not hand initiative to had no move available
+ * except answering whoever spoke last. Measured before this existed: one
+ * housemate caused four of seventeen beats, another caused none while being
+ * present in eleven.
+ */
+describe('wants', () => {
+  const cast = (over: Partial<StorylineContext['characters'][number]> = {}) => ({
+    id: 'c1',
+    personId: 'p1',
+    name: 'Maya',
+    role: 'supporting' as const,
+    description: null,
+    voice: null,
+    want: 'the spare key back before the weekend',
+    avoids: 'asking twice',
+    isSelf: false,
+    ...over,
+  });
+
+  const withCast = (
+    characters: StorylineContext['characters'],
+    timeline: StorylineContext['timeline'] = storyline().timeline
+  ) =>
+    turnPrompt.render({
+      storyline: { ...storyline(), characters, timeline },
+      session,
+      beyondScript: false,
+    });
+
+  it('tells the model what an on-stage character is after', () => {
+    const onStageBeat = { ...storyline().timeline[0], participantCharacterIds: ['c1'] };
+    const { prompt } = withCast([cast()], [onStageBeat]);
+
+    expect(prompt).toContain('Wants: the spare key back before the weekend');
+    expect(prompt).toContain('Avoids: asking twice');
+  });
+
+  /**
+   * A twelve-person group chat rendering two lines each is unconditional growth
+   * on a prompt that already carries a timeline and the whole playthrough. The
+   * cast list itself still names everyone — only the extra lines are windowed.
+   */
+  it('leaves out the wants of someone who has not been near the story', () => {
+    const offStageBeat = { ...storyline().timeline[0], participantCharacterIds: [] };
+    const { prompt } = withCast([cast()], [offStageBeat]);
+
+    expect(prompt).toContain('Maya');
+    expect(prompt).not.toContain('Wants: the spare key back before the weekend');
+  });
+
+  // The reader is always in play, whatever the last few beats happen to record.
+  it('always shows the protagonist their own want', () => {
+    const offStageBeat = { ...storyline().timeline[0], participantCharacterIds: [] };
+    const { prompt } = withCast(
+      [cast({ id: 'self', name: 'Blossom', role: 'protagonist', isSelf: true })],
+      [offStageBeat]
+    );
+
+    expect(prompt).toContain('Wants: the spare key back before the weekend');
+  });
+});

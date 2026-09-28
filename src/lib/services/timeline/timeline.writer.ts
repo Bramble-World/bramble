@@ -50,6 +50,7 @@ export async function insertEvent(
       description: input.description,
       stakes: input.stakes,
       occurredAt: input.occurredAt,
+      actorCharacterId: input.actorCharacterId,
       origin: input.origin,
       triggeredByTurnId: generated ? input.triggeredByTurnId : null,
       generationRationale: generated ? input.generationRationale : null,

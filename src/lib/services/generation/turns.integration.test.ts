@@ -170,6 +170,7 @@ describe('commitChoice then generateConsequences', () => {
                 description: 'Written by a generation that should not have happened.',
                 stakes: null,
                 participantCharacterIds: [],
+                actorCharacterId: null,
                 generationRationale: 'x',
               },
             ],
@@ -203,6 +204,7 @@ describe('commitChoice then generateConsequences', () => {
           description: 'It was said out loud this time.',
           stakes: null,
           participantCharacterIds: vars.storyline.characters.map((c) => c.id),
+          actorCharacterId: null,
           generationRationale: 'The reader chose directness where the original was evasive.',
         },
       ],
@@ -250,6 +252,7 @@ describe('commitChoice then generateConsequences', () => {
           description: 'x',
           stakes: null,
           participantCharacterIds: [],
+          actorCharacterId: null,
           generationRationale: 'because',
         },
       ],
@@ -320,6 +323,7 @@ describe('commitChoice then generateConsequences', () => {
             vars.storyline.characters[0].id,
             '00000000-0000-0000-0000-000000000000',
           ],
+          actorCharacterId: null,
           generationRationale: 'because',
         },
       ],
@@ -359,6 +363,7 @@ describe('commitChoice then generateConsequences', () => {
           description: 'x',
           stakes: null,
           participantCharacterIds: [],
+          actorCharacterId: null,
           generationRationale: 'because',
         },
       ],
@@ -395,6 +400,75 @@ describe('commitChoice then generateConsequences', () => {
  * These pin the cut at the only place it can be observed: what the generator
  * was actually handed.
  */
+/**
+ * Who set a beat in motion.
+ *
+ * Distinct from who was present, and that distinction was the whole of a
+ * reported defect: a housemate appeared in eleven of seventeen beats and caused
+ * none of them, with no way to see it except by reading titles. Recorded for
+ * measurement — no prompt reads it, because feeding it back would turn choosing
+ * who acts into a rota.
+ */
+describe('the actor behind a beat', () => {
+  it('records which character caused it', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    const cast = await storylines.listCharacters(storylineId);
+    const other = cast.find((c) => c.role !== 'protagonist')!;
+
+    fake.register(consequencePrompt, () => ({
+      events: [
+        {
+          title: 'She moved first',
+          description: 'x',
+          stakes: null,
+          participantCharacterIds: [],
+          actorCharacterId: other.id,
+          generationRationale: 'because',
+        },
+      ],
+      contextEntries: [],
+      relationshipStates: [],
+    }));
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+
+    const [written] = await db.query.events.findMany({ where: { triggeredByTurnId: turn.id } });
+    expect(written.actorCharacterId).toBe(other.id);
+  });
+
+  // Same treatment as participants: a hallucinated id must not throw away an
+  // otherwise good beat, and must not be written either.
+  it('drops an actor who is not in this storyline', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    fake.register(consequencePrompt, () => ({
+      events: [
+        {
+          title: 'Nobody in particular',
+          description: 'x',
+          stakes: null,
+          participantCharacterIds: [],
+          actorCharacterId: '00000000-0000-0000-0000-000000000000',
+          generationRationale: 'because',
+        },
+      ],
+      contextEntries: [],
+      relationshipStates: [],
+    }));
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+
+    const [written] = await db.query.events.findMany({ where: { triggeredByTurnId: turn.id } });
+    expect(written.title).toBe('Nobody in particular');
+    expect(written.actorCharacterId).toBeNull();
+  });
+});
+
 describe('the playhead', () => {
   const orders = (call: { vars: unknown }) =>
     (

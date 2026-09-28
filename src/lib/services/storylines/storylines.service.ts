@@ -84,7 +84,7 @@ export async function castCharacter(
   userId: string,
   storylineId: string,
   personId: string,
-  input: { role?: CharacterRole; description?: string } = {}
+  input: { role?: CharacterRole; description?: string; want?: string; avoids?: string } = {}
 ): Promise<PublicCharacter> {
   // Both reads are scoped to userId, so this proves common ownership without
   // ever comparing two userIds by hand.
