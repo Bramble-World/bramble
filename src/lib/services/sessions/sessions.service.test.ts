@@ -16,6 +16,9 @@ vi.mock('./sessions.reader', () => ({
   findIdleSessions: vi.fn(),
   choiceBelongsToTurn: vi.fn(),
   turnIsUnanswered: vi.fn(),
+  getTurnForUser: vi.fn(),
+  countAnsweredTurns: vi.fn(),
+  lastPlayedByStoryline: vi.fn(),
 }));
 vi.mock('./sessions.writer', () => ({
   insertSession: vi.fn(),
@@ -76,6 +79,7 @@ describe('answerTurn', () => {
   it('does not advance the playhead when the answer was rejected', async () => {
     writer.answerTurnGuarded.mockResolvedValue(null);
     reader.turnIsUnanswered.mockResolvedValue(false);
+    reader.getTurnForUser.mockResolvedValue({ ...turn, selectedChoiceId: 'a-different-choice' });
 
     await expect(service.answerTurn(USER, TURN, CHOICE)).rejects.toBeInstanceOf(ConflictError);
     expect(writer.advancePlayhead).not.toHaveBeenCalled();
@@ -89,6 +93,33 @@ describe('answerTurn', () => {
 
     it('reports an already-answered turn as a conflict', async () => {
       reader.turnIsUnanswered.mockResolvedValue(false);
+      reader.getTurnForUser.mockResolvedValue({ ...turn, selectedChoiceId: 'a-different-choice' });
+
+      await expect(service.answerTurn(USER, TURN, CHOICE)).rejects.toBeInstanceOf(ConflictError);
+    });
+
+    /**
+     * The retry whose first response was lost. The client fires the next turn
+     * the instant an answer lands, so this is a likely path rather than a rare
+     * one — and a 409 here would strand a client on an operation that actually
+     * succeeded, with nothing to distinguish it from one that did not.
+     */
+    it('returns the recorded turn when the same choice is answered twice', async () => {
+      reader.turnIsUnanswered.mockResolvedValue(false);
+      reader.getTurnForUser.mockResolvedValue(turn);
+
+      await expect(service.answerTurn(USER, TURN, CHOICE)).resolves.toBe(turn);
+      expect(writer.advancePlayhead).not.toHaveBeenCalled();
+    });
+
+    /**
+     * `storyTurns` has no owner column — ownership runs through the session — so
+     * reconciling against an unscoped read would answer "yes, that is already
+     * your answer" about a stranger's turn.
+     */
+    it("does not reconcile against another user's answered turn", async () => {
+      reader.turnIsUnanswered.mockResolvedValue(false);
+      reader.getTurnForUser.mockResolvedValue(null);
 
       await expect(service.answerTurn(USER, TURN, CHOICE)).rejects.toBeInstanceOf(ConflictError);
     });
@@ -167,7 +198,9 @@ describe('openTurn', () => {
     });
     reader.getOpenTurn.mockResolvedValue(open);
 
-    await expect(service.openTurn(USER, 'session-1', 'new beat', [])).resolves.toBe(open);
+    await expect(service.openTurn(USER, 'session-1', 'new beat', [{ label: 'x' }])).resolves.toBe(
+      open
+    );
     expect(writer.insertTurnWithChoices).not.toHaveBeenCalled();
   });
 });

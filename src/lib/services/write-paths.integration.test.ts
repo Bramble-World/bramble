@@ -101,9 +101,13 @@ describe('§5 creating a turn is two steps that commit as one', () => {
     expect(results.some((r) => r.status === 'fulfilled')).toBe(true);
   });
 
-  it('allows a closing beat with no options at all', async () => {
-    const turn = await sessions.openTurn(ownerId, sessionId, 'And that was that.', []);
-    expect(turn.choices).toStrictEqual([]);
+  // A turn with nothing to choose is a screen with no buttons and no next
+  // request to make — unrecoverable in a shipped client. The column tolerates
+  // it and the seed still contains some; the write path no longer does.
+  it('refuses a turn with nothing to choose', async () => {
+    await expect(sessions.openTurn(ownerId, sessionId, 'And that was that.', [])).rejects.toThrow(
+      /at least one choice/
+    );
   });
 });
 

@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { PublicPerson } from '@/lib/services/persons/persons.types';
 import type { PublicStoryline } from '@/lib/services/storylines/storylines.types';
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
-import { arcView, personView, sessionView, storylineDetailView, turnView } from './index';
+import {
+  arcView,
+  personDetailView,
+  personView,
+  sessionView,
+  storylineDetailView,
+  turnView,
+} from './index';
 
 /**
  * Every fixture is deliberately loaded with the things that must not ship, so
@@ -75,7 +82,7 @@ describe('views', () => {
   });
 
   it('carries setting as the premise and never the arc summary', () => {
-    const view = arcView(storyline, new Date('2026-06-02T09:00:00.000Z'));
+    const view = arcView(storyline, 'protagonist', new Date('2026-06-02T09:00:00.000Z'));
 
     expect(view.setting).toBe('Two flats and a group chat, March to June.');
     expect(view.lastPlayedAt).toBe('2026-06-02T09:00:00.000Z');
@@ -88,8 +95,48 @@ describe('views', () => {
   });
 
   it('emits dates as ISO strings, never Date objects', () => {
-    const view = arcView(storyline, new Date('2026-06-02T09:00:00.000Z'));
+    const view = arcView(storyline, 'protagonist', new Date('2026-06-02T09:00:00.000Z'));
     expect(typeof view.lastPlayedAt).toBe('string');
+  });
+  /**
+   * Screens 10 and 11 from one payload. Everything here is recorded fact —
+   * there is no hook line and no bio, because filling those would mean a model
+   * writing a sentence about a real person the reader knows.
+   */
+  it('gives a person their relationship and their arcs, and nothing invented', () => {
+    const view = personDetailView({
+      person,
+      relationshipType: 'oldest friend',
+      arcs: [{ storyline, role: 'antagonist', lastPlayedAt: new Date('2026-06-02T09:00:00.000Z') }],
+    });
+
+    expect(view).toStrictEqual({
+      id: 'p1',
+      name: 'Maya',
+      isSelf: false,
+      relationshipType: 'oldest friend',
+      arcs: [
+        {
+          storylineId: 's1',
+          title: 'The Unsent Apology',
+          setting: 'Two flats and a group chat, March to June.',
+          tone: 'wistful',
+          role: 'antagonist',
+          lastPlayedAt: '2026-06-02T09:00:00.000Z',
+          startable: true,
+        },
+      ],
+    });
+  });
+
+  it('leaves a never-played arc null rather than dating it', () => {
+    const view = personDetailView({
+      person,
+      relationshipType: null,
+      arcs: [{ storyline, role: 'supporting', lastPlayedAt: null }],
+    });
+
+    expect(view.arcs[0].lastPlayedAt).toBeNull();
   });
 });
 
@@ -126,8 +173,13 @@ describe('nothing internal escapes any view', () => {
   const everyView = () => [
     personView(person),
     turnView(turn),
-    arcView(storyline, new Date()),
+    arcView(storyline, 'supporting', new Date()),
     storylineDetailView(storyline, [person]),
+    personDetailView({
+      person,
+      relationshipType: 'oldest friend',
+      arcs: [{ storyline, role: 'antagonist', lastPlayedAt: new Date() }],
+    }),
     sessionView({
       id: 'sess1',
       storylineId: 's1',

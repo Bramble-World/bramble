@@ -100,6 +100,20 @@ export async function openTurn(
   narrativeContent: string,
   choices: NewChoice[]
 ): Promise<TurnWithChoices> {
+  // A turn with nothing to choose is a dead end, and a dead end is what a
+  // shipped client cannot recover from: a screen with no buttons and no next
+  // request to make. `turnOutputSchema` already enforces `.min(2)` on the model,
+  // so nothing on the live path reaches this — but an empty array was writable
+  // through here, and the only reason it never shipped was that no client
+  // existed to be killed by it.
+  //
+  // Zero, not `< 2`: one option is a degenerate turn but a renderable one, and
+  // the minimum that makes a turn interesting belongs to the model's schema
+  // rather than to the column's integrity.
+  if (choices.length === 0) {
+    throw new ValidationError('A turn must offer at least one choice');
+  }
+
   await getSession(userId, sessionId);
 
   return db.transaction(async (tx) => {
@@ -135,6 +149,16 @@ export async function answerTurn(
       // out only once it has already failed — off the happy path, where an extra
       // read costs nothing and a clear error is worth a lot.
       if (!(await reader.turnIsUnanswered(tx, turnId))) {
+        // Self-reconciling: a retry of a request whose response was lost finds
+        // its own answer already recorded. Failing that with a 409 would strand
+        // a client on an operation that succeeded, with no way to tell the two
+        // apart — and the retry is the likeliest caller, not the rarest, since
+        // the client fires the next turn immediately after answering.
+        //
+        // Scoped read: `storyTurns` has no owner column, so an unscoped one here
+        // would answer "yes, already answered" about a stranger's turn.
+        const existing = await reader.getTurnForUser(tx, userId, turnId);
+        if (existing?.selectedChoiceId === choiceId) return existing;
         throw new ConflictError('This turn has already been answered');
       }
       if (!(await reader.choiceBelongsToTurn(tx, turnId, choiceId))) {
@@ -154,4 +178,46 @@ export async function answerTurn(
     if (!turn) throw new NotFoundError('Turn', turnId);
     return turn;
   });
+}
+
+/**
+ * Where a playthrough is, and what to show — the resume probe.
+ *
+ * Three states with one remedy each, and no fourth. A client that died between
+ * answering and having consequences written, one that died after, and a session
+ * that has only just started are all `awaiting_turn`: the remedy is identical, so
+ * telling them apart would give a shipped binary a branch to get wrong forever.
+ *
+ * Free and instant on purpose — no model call — so a client can call it on every
+ * launch rather than guessing from local state.
+ */
+export async function sessionSnapshot(
+  userId: string,
+  sessionId: string
+): Promise<{
+  session: PublicSession;
+  state: 'awaiting_answer' | 'awaiting_turn' | 'blocked';
+  turnsAnswered: number;
+  turn: TurnWithChoices | null;
+}> {
+  const session = await getSession(userId, sessionId);
+
+  const [storyline, open, turnsAnswered] = await Promise.all([
+    storylineReader.getStoryline(userId, session.storylineId),
+    reader.getOpenTurn(db, sessionId),
+    reader.countAnsweredTurns(db, sessionId),
+  ]);
+
+  // A storyline can fail after a session has begun, so this is a live check
+  // rather than something settled at start. `blocked` still carries the open
+  // turn if there is one — it is already the reader's to see, and hiding it
+  // would blank a screen they were mid-way through.
+  const state =
+    !storyline || storyline.status !== 'ready'
+      ? 'blocked'
+      : open
+        ? 'awaiting_answer'
+        : 'awaiting_turn';
+
+  return { session, state, turnsAnswered, turn: open };
 }

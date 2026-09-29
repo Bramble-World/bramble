@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 import { db } from '@/index';
-import { users } from '@/db/schema/tables';
+import { characters, users } from '@/db/schema/tables';
 import * as persons from '../persons/persons.service';
 import * as storylines from '../storylines/storylines.service';
 import * as sessions from '../sessions/sessions.service';
@@ -14,6 +14,12 @@ import { getWorld, weightsFor } from './world.service';
  * Raw SQL, so typecheck proves nothing about it — every assertion here is
  * against a real database.
  */
+/**
+ * Cleanup is by prefix, not by exact id: several tests here create a second
+ * user, and a test that fails before its own cleanup would otherwise leave a row
+ * that makes the *next* run fail for a different reason — which is how a real
+ * defect gets mistaken for a flake.
+ */
 const CLERK = 'user_world_owner';
 let userId: string;
 let storylineId: string;
@@ -21,15 +27,15 @@ let selfId: string;
 let otherId: string;
 
 beforeAll(async () => {
-  await db.delete(users).where(eq(users.clerkId, CLERK));
+  await db.delete(users).where(like(users.clerkId, `${CLERK}%`));
 });
 
 afterAll(async () => {
-  await db.delete(users).where(eq(users.clerkId, CLERK));
+  await db.delete(users).where(like(users.clerkId, `${CLERK}%`));
 });
 
 beforeEach(async () => {
-  await db.delete(users).where(eq(users.clerkId, CLERK));
+  await db.delete(users).where(like(users.clerkId, `${CLERK}%`));
   const [user] = await db
     .insert(users)
     .values({ clerkId: CLERK, email: 'owner@world.local' })
@@ -179,6 +185,61 @@ describe('getWorld', () => {
 
     expect(world.nodes.find((n) => n.name === 'Maya')!.relationshipType).toBe('oldest friend');
     expect(world.edges).toHaveLength(1);
+  });
+
+  /**
+   * The thickness of an edge. Without it every line on the map weighs the same,
+   * which says nothing about which of these people actually appear together —
+   * and a client that rendered a constant would look like a bug rather than a
+   * fact.
+   */
+  it('counts the storylines the two ends of an edge share', async () => {
+    const world = await getWorld(userId);
+    expect(world.edges[0].sharedStorylines).toBe(1);
+
+    // A second storyline both are cast in must move the number, or it is not
+    // counting anything.
+    const second = await storylines.createStoryline(userId, {
+      title: 'Another',
+      sourceSurface: 'imessage',
+    });
+    await storylines.markStatus(userId, second.id, 'ready');
+    await storylines.castCharacter(userId, second.id, selfId, { role: 'protagonist' });
+    await storylines.castCharacter(userId, second.id, otherId);
+
+    const after = await getWorld(userId);
+    expect(after.edges[0].sharedStorylines).toBe(2);
+  });
+
+  /**
+   * The edge count is per reader.
+   *
+   * `characters` has no owner column and no constraint relating the owner of its
+   * storyline to the owner of its person, so a row casting this reader's person
+   * in someone else's storyline is writable and looks entirely valid afterwards
+   * — invariants.md's category of silent failure. Written directly here because
+   * no service will produce one, and the `s.user_id` predicate in the reader is
+   * the only thing that stops it inflating this reader's map.
+   */
+  it('counts only the reader own storylines toward an edge', async () => {
+    const [other] = await db
+      .insert(users)
+      .values({ clerkId: `${CLERK}_edges`, email: 'edges@world.local' })
+      .returning({ id: users.id });
+
+    const theirs = await storylines.createStoryline(other.id, {
+      title: 'Theirs',
+      sourceSurface: 'imessage',
+    });
+    await db.insert(characters).values([
+      { storylineId: theirs.id, personId: selfId, role: 'protagonist' },
+      { storylineId: theirs.id, personId: otherId },
+    ]);
+
+    const world = await getWorld(userId);
+    expect(world.edges[0].sharedStorylines).toBe(1);
+
+    await db.delete(users).where(eq(users.id, other.id));
   });
 
   it('never shows one reader another reader world', async () => {

@@ -1,9 +1,10 @@
 import type { PublicPerson } from '@/lib/services/persons/persons.types';
-import type { PublicStoryline } from '@/lib/services/storylines/storylines.types';
+import type { CharacterRole, PublicStoryline } from '@/lib/services/storylines/storylines.types';
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
 import type {
   ArcView,
   ChoiceView,
+  PersonDetailView,
   PersonView,
   SessionStateView,
   SessionView,
@@ -57,12 +58,17 @@ export function turnView(turn: TurnWithChoices): TurnView {
   // that cannot occur.
 }
 
-export function arcView(storyline: PublicStoryline, lastPlayedAt: Date | null = null): ArcView {
+export function arcView(
+  storyline: PublicStoryline,
+  role: CharacterRole = 'supporting',
+  lastPlayedAt: Date | null = null
+): ArcView {
   return {
     storylineId: storyline.id,
     title: storyline.title,
     setting: storyline.setting,
     tone: storyline.tone,
+    role,
     lastPlayedAt: iso(lastPlayedAt),
     startable: storyline.status === 'ready',
   };
@@ -88,6 +94,22 @@ export function storylineDetailView(
   // with endless stories a duration cannot ever have one. Shipping a field the
   // client renders and then removing it is a breaking change; adding one later
   // is not.
+}
+
+export function personDetailView(input: {
+  person: PublicPerson;
+  relationshipType: string | null;
+  arcs: Array<{ storyline: PublicStoryline; role: CharacterRole; lastPlayedAt: Date | null }>;
+}): PersonDetailView {
+  return {
+    id: input.person.id,
+    name: input.person.name,
+    isSelf: input.person.isSelf,
+    relationshipType: input.relationshipType,
+    arcs: input.arcs.map((arc) => arcView(arc.storyline, arc.role, arc.lastPlayedAt)),
+  };
+  // No arc count as a separate field: the client has the array. A count that can
+  // disagree with the list it summarises is a bug waiting for pagination.
 }
 
 export function sessionView(input: {

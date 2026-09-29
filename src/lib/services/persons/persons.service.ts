@@ -3,6 +3,9 @@ import * as reader from './persons.reader';
 import * as writer from './persons.writer';
 import { hashContactHandle } from './persons.contact';
 import { PublicPerson, VoiceProfile } from './persons.types';
+import * as sessionReader from '../sessions/sessions.reader';
+import * as storylineReader from '../storylines/storylines.reader';
+import { CharacterRole, PublicStoryline } from '../storylines/storylines.types';
 
 /**
  * The account holder's own `persons` row, created on first request.
@@ -158,4 +161,51 @@ export async function linkPersons(
 
   // Untargeted onConflictDoNothing, so a no-op means the pair already exists.
   throw new ConflictError('These two people are already related');
+}
+
+/**
+ * Everything the person screens show about one human — screens 10 and 11.
+ *
+ * Assembled here rather than in the route so the composition has somewhere to be
+ * tested against a real database, and so the ownership argument is made once:
+ * `getPerson` throws for a person who is not the caller's, and the two reads
+ * after it are themselves scoped on `userId`, so nothing derived from the URL
+ * reaches an unscoped query.
+ *
+ * Only what is recorded. No hook line, no bio, no invented second label — a
+ * sparse screen is honest; a generated one is the same leak as `arcSummary`
+ * wearing different clothes.
+ */
+export async function personDetail(
+  userId: string,
+  personId: string
+): Promise<{
+  person: PublicPerson;
+  relationshipType: string | null;
+  arcs: Array<{ storyline: PublicStoryline; role: CharacterRole; lastPlayedAt: Date | null }>;
+}> {
+  const person = await getPerson(userId, personId);
+
+  const [relationshipType, cast] = await Promise.all([
+    reader.relationshipToSelf(userId, personId),
+    storylineReader.arcsForPerson(userId, personId),
+  ]);
+
+  const lastPlayed = await sessionReader.lastPlayedByStoryline(
+    userId,
+    cast.map(({ storyline }) => storyline.id)
+  );
+
+  const arcs = cast.map(({ storyline, role }) => ({
+    storyline,
+    role,
+    lastPlayedAt: lastPlayed.get(storyline.id) ?? null,
+  }));
+
+  // Most recently played first; never played falls to the back in import order.
+  // Recency is the only ordering with meaning here — `createdAt` is the moment
+  // of import, which is identical for every arc that came out of one file.
+  arcs.sort((a, b) => (b.lastPlayedAt?.getTime() ?? 0) - (a.lastPlayedAt?.getTime() ?? 0));
+
+  return { person, relationshipType, arcs };
 }

@@ -55,7 +55,7 @@ export async function getWorld(userId: string): Promise<World> {
           aPersonId: e.aPersonId,
           bPersonId: e.bPersonId,
           relationshipType: e.relationshipType,
-          sharedStorylines: 0,
+          sharedStorylines: e.sharedStorylines,
         })
       ),
     truncated: nodes.length > kept.length,

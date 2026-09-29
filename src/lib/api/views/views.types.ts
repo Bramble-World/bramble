@@ -62,9 +62,27 @@ export type ArcView = {
   /** Place and period — never `arcSummary`, which gives away the ending. */
   setting: string | null;
   tone: string | null;
+  /** How this person figures in it: protagonist, antagonist, supporting. */
+  role: string;
   /** Null when never played. */
   lastPlayedAt: string | null;
   startable: boolean;
+};
+
+/**
+ * One person, with the arcs they appear in — screens 10 and 11.
+ *
+ * Carries only what is recorded. There is no hook line, no bio and no second
+ * label, because there is nothing behind them: the alternative to a sparse
+ * screen is a model writing a sentence about a real person the reader knows.
+ */
+export type PersonDetailView = {
+  id: string;
+  name: string;
+  isSelf: boolean;
+  /** The structural fact only — "Roommates", "oldest friend". Null when unrecorded. */
+  relationshipType: string | null;
+  arcs: ArcView[];
 };
 
 export type StorylineDetailView = {

@@ -1,6 +1,6 @@
-import { and, asc, eq, gt, inArray, max, min, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, lte, max, min, sql } from 'drizzle-orm';
 import { db } from '@/index';
-import { characterRelationships, characters, events } from '@/db/schema/tables';
+import { characterRelationships, characters, eventParticipants, events } from '@/db/schema/tables';
 import { Executor } from '../executor';
 import { PublicEvent } from './timeline.types';
 
@@ -121,4 +121,27 @@ export async function storylinesOf(
     .limit(1);
 
   return { relationship: rel?.storylineId ?? null, event: evt?.storylineId ?? null };
+}
+
+/**
+ * Characters who appear in beats at or below a given narrative order.
+ *
+ * The database-row form of the rule `metCharacterIds` expresses over prompt
+ * context. A client-facing read cannot use `listTimeline`, because `PublicEvent`
+ * carries no participants — and guessing, or returning the whole cast, puts
+ * people on screen the story has not introduced. One of them was described by
+ * extraction as "the investor who offers $300,000", so that is a plot on a
+ * screen the reader opens first.
+ */
+export async function charactersMetUpTo(
+  storylineId: string,
+  reachedOrder: number
+): Promise<Set<string>> {
+  const rows = await db
+    .selectDistinct({ characterId: eventParticipants.characterId })
+    .from(eventParticipants)
+    .innerJoin(events, eq(events.id, eventParticipants.eventId))
+    .where(and(eq(events.storylineId, storylineId), lte(events.narrativeOrder, reachedOrder)));
+
+  return new Set(rows.map((r) => r.characterId));
 }
