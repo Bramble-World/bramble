@@ -13,7 +13,8 @@ import { NewEvent } from '../timeline/timeline.types';
 import { assembleSessionContext, assembleStorylineContext } from './context.reader';
 import { contextAsOf, scriptExhausted } from './playhead';
 import * as sessionWriter from '../sessions/sessions.writer';
-import { ConflictError } from '@/lib/utils/errors';
+import { ConflictError, StorylineNotReadyError } from '@/lib/utils/errors';
+import * as storylineReader from '../storylines/storylines.reader';
 
 /** Injected so a test can supply the fake without touching process env. */
 /**
@@ -273,4 +274,48 @@ async function insertAtOrAfter(
     const last = await timelineReader.nextNarrativeOrder(tx, storylineId);
     return timeline.insertEventsAfterIn(tx, storylineId, last, events);
   }
+}
+
+/**
+ * Brings a session to a playable state and returns what to show.
+ *
+ * The whole client-facing loop is this one operation, and that is the point.
+ * Consequences must be written before the next turn is generated — the turn
+ * prompt reads the canon they write — and publishing that as three ordered calls
+ * would make correctness depend on a shipped binary doing three things in the
+ * right order. A client that skipped the middle one, through a bug, an old build
+ * or a crash, would generate every later turn against stale canon: no error
+ * anywhere, just quality quietly decaying.
+ *
+ * Defined convergently rather than as a sequence, so the same call is the loop,
+ * the resume and the retry. Whatever is owed gets settled, then a turn is
+ * produced. Calling it twice is safe: `generateConsequences` is claimed
+ * transactionally and `generateTurn` is get-or-create behind the one-open-turn
+ * index, so a second call finds the work done and costs a SELECT.
+ *
+ * Failing the whole thing when a consequence fails is deliberate. Skipping ahead
+ * would produce a turn built on canon that is missing the reader's last decision
+ * — a regression with nothing to report it.
+ */
+export async function advanceSession(
+  userId: string,
+  sessionId: string,
+  deps: GenerationDeps = {}
+): Promise<TurnWithChoices> {
+  const session = await sessions.getSession(userId, sessionId);
+
+  // Re-checked here, not just at startSession: a storyline can fail after a
+  // session has begun, and nothing would otherwise notice.
+  const storyline = await storylineReader.getStoryline(userId, session.storylineId);
+  if (!storyline) throw new NotFoundError('Storyline', session.storylineId);
+  if (storyline.status !== 'ready') throw new StorylineNotReadyError(storyline.status);
+
+  // Oldest first. Each one's beats are canon for the turn after it, so settling
+  // them out of order would build later beats on earlier gaps.
+  const owed = await sessionReader.findTurnsOwedConsequences(db, sessionId);
+  for (const turn of owed) {
+    await generateConsequences(userId, turn.id, deps);
+  }
+
+  return generateTurn(userId, sessionId, deps);
 }
