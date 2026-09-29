@@ -7,7 +7,12 @@ import {
 } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { env } from '@/env';
-import { InternalServerError, RateLimitError } from '@/lib/utils/errors';
+import {
+  GenerationFailedError,
+  GenerationTimeoutError,
+  GenerationUnusableError,
+  UpstreamBusyError,
+} from '@/lib/utils/errors';
 import { STAGE_MODELS } from './models';
 import { Generator, GenerationResult, PromptSpec } from './prompt';
 
@@ -102,7 +107,7 @@ function translate(error: unknown, promptName: string): Error {
     // distinguishing, because it means the prompt or the schema needs work
     // rather than the request being retried.
     return withCause(
-      new InternalServerError(`The model returned no usable output for "${promptName}"`),
+      new GenerationUnusableError(`The model returned no usable output for "${promptName}"`),
       error
     );
   }
@@ -111,11 +116,35 @@ function translate(error: unknown, promptName: string): Error {
     (error as { statusCode?: number; status?: number })?.statusCode ??
     (error as { status?: number })?.status;
 
+  // The provider throttling us is not the same as our own quota, and the two
+  // need opposite client behaviour — this one clears on its own.
   if (status === 429) {
-    return withCause(new RateLimitError(60), error);
+    return withCause(new UpstreamBusyError(60), error);
   }
 
-  return withCause(new InternalServerError(`Generation failed for "${promptName}"`), error);
+  // Our deadline, not theirs. The SDK surfaces an aborted request as an
+  // AbortError; without this it would read as an ordinary provider failure and
+  // the client would back off when it should simply re-call.
+  if (isAbort(error)) {
+    return withCause(new GenerationTimeoutError(), error);
+  }
+
+  return withCause(new GenerationFailedError(`Generation failed for "${promptName}"`), error);
+}
+
+/**
+ * Whether this failure is our own abort.
+ *
+ * Checked by name and by the standard DOMException code rather than by class:
+ * the abort can surface from undici, from the SDK's own wrapper, or from the
+ * signal itself, and they are not the same constructor.
+ */
+function isAbort(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const e = error as { name?: unknown; code?: unknown; cause?: unknown };
+  if (e.name === 'AbortError' || e.name === 'TimeoutError') return true;
+  if (e.code === 20 || e.code === 'ABORT_ERR') return true;
+  return e.cause ? isAbort(e.cause) : false;
 }
 
 /** Keeps the original error reachable for logs without putting it in the message. */

@@ -62,3 +62,77 @@ export class InternalServerError extends AppError {
     super(message, 'INTERNAL_SERVER_ERROR', 500);
   }
 }
+
+/**
+ * Generation failures, split by what the client should do about them.
+ *
+ * They were one error until now — `generator.openai.ts` mapped both "the model
+ * answered but not against the schema" and "the provider blew up" onto a generic
+ * InternalServerError. That is fine for a page and wrong for a client, because
+ * the two want opposite retry policies: a schema mismatch is usually
+ * deterministic and retrying burns money for the same failure, while a provider
+ * blip usually clears.
+ */
+export class GenerationUnusableError extends AppError {
+  constructor(message = 'The model returned no usable output') {
+    super(message, 'GENERATION_UNUSABLE', 500);
+  }
+}
+
+export class GenerationFailedError extends AppError {
+  constructor(message = 'Generation failed') {
+    super(message, 'GENERATION_FAILED', 503);
+  }
+}
+
+/**
+ * Our own deadline fired, not the provider's.
+ *
+ * 504 rather than 500 because the work may well have succeeded on their side;
+ * we simply stopped waiting. Safe to retry: every generation in this app is
+ * get-or-create against database state, so a retry either finds the finished
+ * work or redoes it exactly once.
+ */
+export class GenerationTimeoutError extends AppError {
+  constructor(public retryAfter = 5) {
+    super('Generation took too long', 'GENERATION_TIMEOUT', 504);
+  }
+}
+
+/**
+ * The provider throttled us — distinct from our own quota.
+ *
+ * Kept apart from RateLimitError on purpose. They would otherwise be
+ * indistinguishable on the wire while needing opposite client behaviour: this
+ * one clears on its own and should be retried after `retryAfter`, whereas our
+ * quota means stop and tell the user.
+ */
+export class UpstreamBusyError extends AppError {
+  constructor(public retryAfter = 60) {
+    super('The model provider is busy', 'UPSTREAM_BUSY', 429);
+  }
+}
+
+/**
+ * A storyline that is not playable yet, or never will be.
+ *
+ * 409 rather than 400: nothing is wrong with the request, the resource is in the
+ * wrong state. The client shows "still preparing" and polls, which is a
+ * different screen from "you sent something bad".
+ */
+export class StorylineNotReadyError extends AppError {
+  constructor(public storylineStatus: string) {
+    super(
+      `This storyline is not ready to play (status: ${storylineStatus})`,
+      'STORYLINE_NOT_READY',
+      409
+    );
+  }
+}
+
+/** A generation is already running for this session. Wait and re-call. */
+export class GenerationInProgressError extends AppError {
+  constructor(public retryAfter = 2) {
+    super('A turn is already being generated for this session', 'GENERATION_IN_PROGRESS', 409);
+  }
+}
