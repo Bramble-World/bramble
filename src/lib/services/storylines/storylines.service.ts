@@ -38,7 +38,31 @@ export async function getStoryline(userId: string, storylineId: string): Promise
 }
 
 export const listStorylines = reader.listStorylines;
+/**
+ * Unscoped: takes a storylineId and no userId. Safe inside this module, where
+ * every caller has already proven ownership; not safe from a route.
+ */
 export const listCharacters = reader.listCharacters;
+
+/**
+ * The cast, with ownership proven first.
+ *
+ * `listCharacters` is scoped only by storylineId, which makes it the most likely
+ * tenancy hole in a naive handler — a `GET /storylines/:id/cast` that passes the
+ * URL's id straight through returns another user's characters with no error
+ * anywhere. The scoped getter is called purely for its throw, the same way
+ * `sessions.getOpenTurn` does it.
+ *
+ * Exists as a function rather than a convention so the rule is mechanical: a
+ * route handler calls only functions whose first parameter is `userId`.
+ */
+export async function listCharactersForUser(
+  userId: string,
+  storylineId: string
+): Promise<PublicCharacter[]> {
+  await getStoryline(userId, storylineId);
+  return reader.listCharacters(storylineId);
+}
 
 /** Moves a storyline to a non-failed state, clearing any earlier failure reason. */
 export async function markStatus(

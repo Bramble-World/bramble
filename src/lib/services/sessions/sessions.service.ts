@@ -29,6 +29,45 @@ export async function startSession(userId: string, storylineId: string): Promise
   });
 }
 
+/**
+ * The playthrough a reader is currently in, if any.
+ *
+ * "Most recently created" is the rule the lab page already uses inline
+ * (`allSessions.at(-1)`). Moving it here makes it one definition rather than a
+ * convention each caller re-derives — and the API is about to be a second
+ * caller, so the moment to do that is now.
+ */
+export async function currentSession(
+  userId: string,
+  storylineId: string
+): Promise<PublicSession | null> {
+  const sessions = await reader.listSessions(userId, storylineId);
+  return sessions.at(-1) ?? null;
+}
+
+/**
+ * Opens the storyline for play, resuming rather than restarting by default.
+ *
+ * A client that taps "start" twice — a double tap, a retried request, a screen
+ * restored from the background — would otherwise get two playthroughs of the
+ * same storyline, each with its own playhead, and the reader would silently lose
+ * their place. Resuming is what almost every caller means.
+ *
+ * `mode: 'new'` keeps deliberate replays available, which is the other half of
+ * what sessions are for.
+ */
+export async function resumeOrStart(
+  userId: string,
+  storylineId: string,
+  mode: 'resume' | 'new' = 'resume'
+): Promise<PublicSession> {
+  if (mode === 'resume') {
+    const existing = await currentSession(userId, storylineId);
+    if (existing) return existing;
+  }
+  return startSession(userId, storylineId);
+}
+
 export async function getSession(userId: string, sessionId: string): Promise<PublicSession> {
   const session = await reader.getSession(userId, sessionId);
   if (!session) throw new NotFoundError('Session', sessionId);

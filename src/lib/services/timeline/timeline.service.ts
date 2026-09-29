@@ -12,7 +12,27 @@ import {
   PublicEvent,
 } from './timeline.types';
 
+/** Unscoped: storylineId only. Internal callers have already proven ownership. */
 export const listTimeline = reader.listTimeline;
+
+/**
+ * The timeline, with ownership proven first.
+ *
+ * Same hazard as `storylines.listCharactersForUser`, and a worse one to get
+ * wrong: this returns the story itself.
+ */
+export async function listTimelineForUser(
+  userId: string,
+  storylineId: string
+): Promise<PublicEvent[]> {
+  // The reader RETURNS NULL rather than throwing, so the result has to be
+  // checked — an `await` on its own reads like a guard and is not one. Getting
+  // this wrong here would return another user's story, silently.
+  const storyline = await storylineReader.getStoryline(userId, storylineId);
+  if (!storyline) throw new NotFoundError('Storyline', storylineId);
+
+  return reader.listTimeline(storylineId);
+}
 
 /**
  * Appends a beat to the end of a storyline's timeline.

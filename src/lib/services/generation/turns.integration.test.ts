@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '@/index';
 import { users } from '@/db/schema/tables';
-import { ConflictError, ValidationError } from '@/lib/utils/errors';
+import { ConflictError, NotFoundError, ValidationError } from '@/lib/utils/errors';
 import { createFakeGenerator, FakeGenerator } from '@/lib/ai';
 import { registerFixtures } from '@/lib/ai/fixtures';
 import { consequencePrompt } from '@/lib/ai/prompts/consequence.prompt';
@@ -590,5 +590,56 @@ describe('playing several turns', () => {
     const orders = (await timeline.listTimeline(storylineId)).map((b) => b.narrativeOrder);
     expect(new Set(orders).size).toBe(orders.length);
     expect(orders).toStrictEqual([...orders].sort((a, b) => a - b));
+  });
+});
+
+/**
+ * The two readers that take no userId.
+ *
+ * `listCharacters(storylineId)` and `listTimeline(storylineId)` are scoped only
+ * by storyline, which makes them the most likely tenancy hole in a naive route:
+ * a handler that passes a URL id straight through returns another user's data
+ * with no error anywhere. The `*ForUser` wrappers exist so a route never has to
+ * remember — and these prove the wrappers throw rather than merely look like
+ * they do. One of them did not, when first written: the underlying reader
+ * returns null rather than throwing, so the `await` guarding it was decorative.
+ */
+describe('ownership on the unscoped readers', () => {
+  let otherUserId: string;
+  const OTHER_CLERK = 'user_ownership_other';
+
+  beforeAll(async () => {
+    await db.delete(users).where(eq(users.clerkId, OTHER_CLERK));
+    const [other] = await db
+      .insert(users)
+      .values({ clerkId: OTHER_CLERK, email: 'other@ownership.local' })
+      .returning({ id: users.id });
+    otherUserId = other.id;
+  });
+
+  afterAll(async () => {
+    await db.delete(users).where(eq(users.clerkId, OTHER_CLERK));
+  });
+
+  it('returns the cast to the owner', async () => {
+    await expect(storylines.listCharactersForUser(userId, storylineId)).resolves.not.toHaveLength(
+      0
+    );
+  });
+
+  it('refuses the cast to anyone else, as not-found rather than forbidden', async () => {
+    await expect(storylines.listCharactersForUser(otherUserId, storylineId)).rejects.toBeInstanceOf(
+      NotFoundError
+    );
+  });
+
+  it('returns the timeline to the owner', async () => {
+    await expect(timeline.listTimelineForUser(userId, storylineId)).resolves.not.toHaveLength(0);
+  });
+
+  it('refuses the timeline to anyone else', async () => {
+    await expect(timeline.listTimelineForUser(otherUserId, storylineId)).rejects.toBeInstanceOf(
+      NotFoundError
+    );
   });
 });
