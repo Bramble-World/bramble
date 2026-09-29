@@ -38,8 +38,22 @@ async function run(work: () => Promise<string>): Promise<ActionResult> {
   try {
     return { ok: true, message: await work() };
   } catch (error) {
+    // Logged before the AppError branch, not after it. The generation layer
+    // deliberately keeps its message generic — provider bodies and model output
+    // can echo the prompt, and the prompt carries story content — and attaches
+    // the real failure as `cause`. But an InternalServerError *is* an AppError,
+    // so returning early here threw that cause away, and a failed extraction
+    // left nothing anywhere to explain it: the stored failureReason is the same
+    // generic sentence, by design.
+    //
+    // The lab is development-only and this goes to the operator's own terminal,
+    // so there is nothing here that the database rules are protecting.
+    console.error('[lab]', error);
+    for (let cause = (error as Error)?.cause; cause; cause = (cause as Error)?.cause) {
+      console.error('[lab]   caused by:', cause);
+    }
+
     if (error instanceof AppError) return { ok: false, message: error.message };
-    console.error(error);
     return { ok: false, message: 'Something went wrong. Check the server log.' };
   }
 }

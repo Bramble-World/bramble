@@ -42,6 +42,11 @@ export type StageModel = {
 export const STAGE_MODELS: Record<StageName, StageModel> = {
   turn: { model: DEFAULT_MODEL, reasoningEffort: 'low' },
   consequence: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
-  extraction: { model: DEFAULT_MODEL, reasoningEffort: 'high' },
+  // Lowered from 'high'. Extraction is the one stage whose output grew several
+  // times over — up to 20 beats, 12 cast, 16 relationships — and reasoning time
+  // grows with it. At 'high' a dense conversation took longer to generate than
+  // the HTTP client would wait for a single header, and failed with nothing to
+  // show for it. Effort is the cheapest dial that buys the margin back.
+  extraction: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
   arc: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
 };

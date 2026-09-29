@@ -24,9 +24,12 @@ describe('beatTarget', () => {
     expect(beatTarget(build(12, 1))).toBe(6);
   });
 
+  // Both values sit strictly below the ceiling, so this measures scaling rather
+  // than clamping. 500 messages would land exactly on MAX_BEATS and pass either
+  // way, which is no test at all.
   it('scales with how much was actually said', () => {
     expect(beatTarget(build(250, 7))).toBe(10);
-    expect(beatTarget(build(500, 7))).toBe(20);
+    expect(beatTarget(build(400, 7))).toBe(16);
   });
 
   /**
@@ -38,6 +41,25 @@ describe('beatTarget', () => {
     const fourMonths = build(60, 120);
     expect(Math.round(60 / 25)).toBeLessThan(8); // volume alone would say ~2
     expect(beatTarget(fourMonths)).toBe(9); // ~120 days / 14
+  });
+
+  /**
+   * Pins the value, not just the behaviour.
+   *
+   * The other cases assert `toBe(MAX_BEATS)`, which adapts to whatever the
+   * constant happens to say — so raising it would break nothing and silently
+   * restore a real outage. This ceiling is bounded by transport rather than by
+   * taste: the extraction call is non-streaming, so no response headers arrive
+   * until the whole object exists, and Node's fetch abandons the request after
+   * 300 seconds of waiting. At 40 a dense conversation crossed that line and
+   * failed with UND_ERR_HEADERS_TIMEOUT, no status code, three identical
+   * retries and nothing to show for it.
+   *
+   * Raising this is legitimate — after the transport is fixed, with a longer
+   * header timeout or by streaming. Not before.
+   */
+  it('keeps the ceiling where the transport can survive it', () => {
+    expect(MAX_BEATS).toBe(20);
   });
 
   it('never exceeds the ceiling, however large the export', () => {
