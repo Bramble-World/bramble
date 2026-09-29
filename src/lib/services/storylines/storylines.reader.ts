@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, max } from 'drizzle-orm';
 import { db } from '@/index';
 import { characters, events, storylines } from '@/db/schema/tables';
-import { PublicCharacter, PublicStoryline } from './storylines.types';
+import { CharacterRole, PublicCharacter, PublicStoryline } from './storylines.types';
 
 const storylineColumns = {
   id: storylines.id,
@@ -110,4 +110,30 @@ export async function charactersInStoryline(
     .from(characters)
     .where(and(eq(characters.storylineId, storylineId), inArray(characters.id, characterIds)));
   return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * The storylines a person is cast in — "arcs with James", screens 10 and 11.
+ *
+ * Scoped on `storylines.userId` rather than on the person, because `characters`
+ * carries no owner column of its own: reaching it through a person id alone
+ * would be an unscoped read wearing a scoped id.
+ *
+ * `role` travels with each arc. Until several conversations are imported every
+ * person yields the same one storyline with the same title, and a list of
+ * identical rows reads as a bug rather than as sparse data; the role is the one
+ * honest thing that differs between them.
+ */
+export async function arcsForPerson(
+  userId: string,
+  personId: string
+): Promise<Array<{ storyline: PublicStoryline; role: CharacterRole }>> {
+  const rows = await db
+    .select({ ...storylineColumns, role: characters.role })
+    .from(characters)
+    .innerJoin(storylines, eq(storylines.id, characters.storylineId))
+    .where(and(eq(storylines.userId, userId), eq(characters.personId, personId)))
+    .orderBy(desc(storylines.createdAt));
+
+  return rows.map(({ role, ...storyline }) => ({ storyline, role }));
 }

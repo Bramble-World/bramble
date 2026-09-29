@@ -39,6 +39,32 @@ export async function parseBody<T>(request: Request, schema: z.ZodType<T>): Prom
     throw new ValidationError('Expected a JSON body');
   }
 
+  return validate(raw, schema);
+}
+
+/**
+ * `parseBody` for a request whose body is entirely optional.
+ *
+ * "Open this storyline" has nothing it needs to say, and a POST with no body is
+ * the natural way to say it — `URLSession` sends one by default. Treating that
+ * as a 400 would make the simplest correct request the one that fails, so an
+ * absent body becomes `{}` and the schema decides whether that is enough.
+ */
+export async function parseOptionalBody<T>(request: Request, schema: z.ZodType<T>): Promise<T> {
+  const text = await request.text();
+  if (text.trim() === '') return validate({}, schema);
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new ValidationError('Expected a JSON body');
+  }
+
+  return validate(raw, schema);
+}
+
+function validate<T>(raw: unknown, schema: z.ZodType<T>): T {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     const fields: Record<string, string> = {};

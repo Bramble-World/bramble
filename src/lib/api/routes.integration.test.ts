@@ -1,0 +1,588 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
+
+/**
+ * The route handlers, against a real database and the fake generator.
+ *
+ * This is the primary verification layer for the API, not the Playwright suite:
+ * CI runs with no secrets at all, so nothing there can authenticate, and that
+ * property is worth keeping. Here `requireCurrentUser` is mocked to a seeded
+ * user and everything below it — ownership, views, transactions, constraints —
+ * is the real thing.
+ *
+ * `@/env` is forced to fake mode rather than the generator being stubbed, so
+ * `getGenerator()` runs its own selection logic and the paid endpoint is
+ * exercised through the same code path production uses. Spending real money in
+ * a test suite is one forgotten mock away otherwise.
+ */
+vi.mock('@/env', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/env')>();
+  return { env: { ...actual.env, BRAMBLE_AI_MODE: 'fake' } };
+});
+vi.mock('@/lib/services/auth/auth.service', () => ({ requireCurrentUser: vi.fn() }));
+
+const { db } = await import('@/index');
+const { storylines: storylineTable, users } = await import('@/db/schema/tables');
+const auth = vi.mocked(await import('@/lib/services/auth/auth.service'));
+const persons = await import('@/lib/services/persons/persons.service');
+const storylines = await import('@/lib/services/storylines/storylines.service');
+const sessions = await import('@/lib/services/sessions/sessions.service');
+const timeline = await import('@/lib/services/timeline/timeline.service');
+
+const world = await import('@/app/api/v1/world/route');
+const personRoute = await import('@/app/api/v1/people/[personId]/route');
+const storylineRoute = await import('@/app/api/v1/storylines/[storylineId]/route');
+const startRoute = await import('@/app/api/v1/storylines/[storylineId]/sessions/route');
+const sessionRoute = await import('@/app/api/v1/sessions/[sessionId]/route');
+const answerRoute = await import('@/app/api/v1/sessions/[sessionId]/answer/route');
+const turnRoute = await import('@/app/api/v1/sessions/[sessionId]/turn/route');
+
+/** The ending, in one sentence. Never leaves the server. */
+const ARC_SUMMARY = 'It begins badly and ends with them reconciled on a rooftop.';
+
+const OWNER = 'user_api_owner';
+const STRANGER = 'user_api_stranger';
+
+let ownerId: string;
+let strangerId: string;
+let storylineId: string;
+let selfPersonId: string;
+let mayaPersonId: string;
+let michaelPersonId: string;
+
+const get = (path: string) => new Request(`http://api.test${path}`);
+const post = (path: string, body?: unknown) =>
+  new Request(`http://api.test${path}`, {
+    method: 'POST',
+    headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+/** Every handler takes `{ params }` and Next 16 makes that a promise. */
+const ctx = <T extends object>(params: T) => ({ params: Promise.resolve(params) });
+
+const asOwner = () => auth.requireCurrentUser.mockResolvedValue({ id: ownerId } as never);
+const asStranger = () => auth.requireCurrentUser.mockResolvedValue({ id: strangerId } as never);
+
+async function seedUser(clerkId: string): Promise<string> {
+  const [user] = await db
+    .insert(users)
+    .values({ clerkId, email: `${clerkId}@api.local` })
+    .returning({ id: users.id });
+  return user.id;
+}
+
+beforeAll(async () => {
+  for (const clerkId of [OWNER, STRANGER]) {
+    await db.delete(users).where(eq(users.clerkId, clerkId));
+  }
+});
+
+afterAll(async () => {
+  for (const clerkId of [OWNER, STRANGER]) {
+    await db.delete(users).where(eq(users.clerkId, clerkId));
+  }
+});
+
+beforeEach(async () => {
+  vi.clearAllMocks();
+  for (const clerkId of [OWNER, STRANGER]) {
+    await db.delete(users).where(eq(users.clerkId, clerkId));
+  }
+  ownerId = await seedUser(OWNER);
+  strangerId = await seedUser(STRANGER);
+
+  const storyline = await storylines.createStoryline(ownerId, {
+    title: 'The Unsent Apology',
+    sourceSurface: 'imessage',
+    setting: 'Two flats and a group chat, March to June.',
+    tone: 'wistful',
+  });
+  storylineId = storyline.id;
+  await storylines.markStatus(ownerId, storylineId, 'ready');
+  // Written directly: `arcSummary` describes the whole arc including beats above
+  // the playhead, and the only way to prove a view does not ship it is for there
+  // to be one to ship.
+  await db
+    .update(storylineTable)
+    .set({ arcSummary: ARC_SUMMARY, arcSummaryGeneratedAt: new Date() })
+    .where(eq(storylineTable.id, storylineId));
+
+  const self = await persons.getOrCreateSelfPerson(ownerId, 'Blossom');
+  const maya = await persons.createPerson(ownerId, { name: 'Maya' });
+  const michael = await persons.createPerson(ownerId, { name: 'Michael' });
+  selfPersonId = self.id;
+  mayaPersonId = maya.id;
+  michaelPersonId = michael.id;
+
+  const a = await storylines.castCharacter(ownerId, storylineId, self.id, { role: 'protagonist' });
+  const b = await storylines.castCharacter(ownerId, storylineId, maya.id);
+  const c = await storylines.castCharacter(ownerId, storylineId, michael.id, {
+    // A description written by extraction, which has read the whole
+    // conversation. This is the leak the met-cut exists for.
+    description: 'the investor who offers $300,000',
+  });
+  await persons.linkPersons(ownerId, self.id, maya.id, 'oldest friend');
+
+  // Maya is in the first beat, Michael only in the third — so who the reader has
+  // met depends entirely on where the playhead is.
+  await timeline.appendEvent(ownerId, storylineId, {
+    origin: 'extracted',
+    title: 'Where things stood',
+    description: 'They had not spoken in three weeks.',
+    participantCharacterIds: [a.id, b.id],
+  });
+  await timeline.appendEvent(ownerId, storylineId, {
+    origin: 'extracted',
+    title: 'The message',
+    description: 'She wrote first.',
+    participantCharacterIds: [a.id, b.id],
+  });
+  await timeline.appendEvent(ownerId, storylineId, {
+    origin: 'extracted',
+    title: 'The offer',
+    description: 'Michael names a number.',
+    participantCharacterIds: [a.id, c.id],
+  });
+});
+
+describe('GET /api/v1/world', () => {
+  /**
+   * Screen 20 is "not enough context yet" — an invitation, not a failure. A 404
+   * would make the client render an error where it should render that, and
+   * "empty becomes 404" is the easiest mistake in the world service.
+   */
+  it('gives a reader with nothing 200 and an empty world', async () => {
+    asStranger();
+
+    const response = await world.GET(get('/api/v1/world'), undefined);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toStrictEqual({ nodes: [], edges: [], truncated: false });
+  });
+
+  it('never serves one reader another reader world', async () => {
+    asOwner();
+    const mine = await (await world.GET(get('/api/v1/world'), undefined)).json();
+
+    asStranger();
+    const theirs = await (await world.GET(get('/api/v1/world'), undefined)).json();
+
+    expect(mine.nodes.length).toBeGreaterThan(0);
+    expect(theirs.nodes).toStrictEqual([]);
+  });
+
+  it('sends the weight and the counts it was derived from', async () => {
+    asOwner();
+    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const maya = body.nodes.find((n: { name: string }) => n.name === 'Maya');
+
+    expect(maya.weight).toBeGreaterThan(0);
+    expect(maya.unexploredBeats).toBe(3);
+    expect(maya.storylineCount).toBe(1);
+    expect(maya.relationshipType).toBe('oldest friend');
+  });
+
+  it('is never cached by anything in front of it', async () => {
+    asOwner();
+    const response = await world.GET(get('/api/v1/world'), undefined);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+});
+
+describe('GET /api/v1/people/:personId', () => {
+  it('gives a person their relationship and the arcs they are in', async () => {
+    asOwner();
+
+    const response = await personRoute.GET(
+      get(`/api/v1/people/${mayaPersonId}`),
+      ctx({ personId: mayaPersonId })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.person.name).toBe('Maya');
+    expect(body.person.relationshipType).toBe('oldest friend');
+    expect(body.person.arcs).toHaveLength(1);
+    expect(JSON.stringify(body)).not.toContain('rooftop');
+    expect(body.person.arcs[0]).toMatchObject({
+      storylineId,
+      title: 'The Unsent Apology',
+      role: 'supporting',
+      startable: true,
+      lastPlayedAt: null,
+    });
+  });
+
+  // 404 and not 403: "not yours" and "no such thing" must be the same answer, or
+  // the error itself confirms the id exists.
+  it("answers 404 for another reader's person", async () => {
+    asStranger();
+
+    const response = await personRoute.GET(
+      get(`/api/v1/people/${mayaPersonId}`),
+      ctx({ personId: mayaPersonId })
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  /**
+   * Without this the malformed id reaches Postgres, which rejects the cast, and
+   * a bad request is reported to the client as an internal error.
+   */
+  it('answers 400 for an id that is not a uuid', async () => {
+    asOwner();
+
+    const response = await personRoute.GET(
+      get('/api/v1/people/not-a-uuid'),
+      ctx({ personId: 'not-a-uuid' })
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe('VALIDATION_ERROR');
+  });
+});
+
+describe('GET /api/v1/storylines/:storylineId', () => {
+  /**
+   * The demonstrated leak, not a hypothetical one: Michael's description was
+   * written by extraction from the whole conversation and says what he offers.
+   * He appears only in the third beat, so before the reader gets there he must
+   * not be on the screen at all.
+   */
+  it('shows only the people the reader has met', async () => {
+    asOwner();
+    await sessions.startSession(ownerId, storylineId);
+
+    const response = await storylineRoute.GET(
+      get(`/api/v1/storylines/${storylineId}`),
+      ctx({ storylineId })
+    );
+    const body = await response.json();
+
+    const names = body.storyline.cast.map((p: { name: string }) => p.name);
+    expect(names).toContain('Maya');
+    expect(names).not.toContain('Michael');
+  });
+
+  /**
+   * Two leaks, one assertion. `arcSummary` describes the whole arc — the app has
+   * a playhead specifically to keep that from the model, and serving it to the
+   * reader is the same leak on a screen. `description` is what extraction wrote
+   * about a character after reading everything.
+   */
+  it('never returns the arc summary or a cast description', async () => {
+    asOwner();
+    await sessions.startSession(ownerId, storylineId);
+
+    const response = await storylineRoute.GET(
+      get(`/api/v1/storylines/${storylineId}`),
+      ctx({ storylineId })
+    );
+    const raw = await response.text();
+
+    expect(raw).not.toContain('rooftop');
+    expect(raw).not.toContain('$300,000');
+  });
+
+  it("answers 404 for another reader's storyline", async () => {
+    asStranger();
+
+    const response = await storylineRoute.GET(
+      get(`/api/v1/storylines/${storylineId}`),
+      ctx({ storylineId })
+    );
+
+    expect(response.status).toBe(404);
+  });
+});
+
+describe('POST /api/v1/storylines/:storylineId/sessions', () => {
+  it('starts a playthrough from a body-less POST', async () => {
+    asOwner();
+
+    const response = await startRoute.POST(
+      post(`/api/v1/storylines/${storylineId}/sessions`),
+      ctx({ storylineId })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.session.storylineId).toBe(storylineId);
+    expect(body.session.state).toBe('awaiting_turn');
+    expect(body.session.turn).toBeNull();
+  });
+
+  /**
+   * A double tap, a retried request, a screen restored from the background. A
+   * second playthrough with its own playhead would lose the reader their place
+   * with nothing anywhere to report it.
+   */
+  it('resumes rather than restarting', async () => {
+    asOwner();
+
+    const first = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`),
+        ctx({ storylineId })
+      )
+    ).json();
+    const second = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`, {}),
+        ctx({ storylineId })
+      )
+    ).json();
+
+    expect(second.session.id).toBe(first.session.id);
+  });
+
+  it('starts a fresh playthrough on request', async () => {
+    asOwner();
+
+    const first = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`),
+        ctx({ storylineId })
+      )
+    ).json();
+    const replay = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`, { mode: 'new' }),
+        ctx({ storylineId })
+      )
+    ).json();
+
+    expect(replay.session.id).not.toBe(first.session.id);
+  });
+
+  it("answers 404 for another reader's storyline", async () => {
+    asStranger();
+
+    const response = await startRoute.POST(
+      post(`/api/v1/storylines/${storylineId}/sessions`),
+      ctx({ storylineId })
+    );
+
+    expect(response.status).toBe(404);
+  });
+});
+
+describe('the play loop', () => {
+  let sessionId: string;
+
+  beforeEach(async () => {
+    asOwner();
+    sessionId = (await sessions.startSession(ownerId, storylineId)).id;
+  });
+
+  it('brings a session to a playable state and returns what to show', async () => {
+    const response = await turnRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/turn`),
+      ctx({ sessionId })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.turn.narrative).toEqual(expect.any(String));
+    expect(body.turn.choices.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // Same URL is the loop, the resume and the retry. A second call must find the
+  // work done rather than pay for it again.
+  it('returns the same turn when called twice', async () => {
+    const first = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+    const again = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+
+    expect(again.turn.id).toBe(first.turn.id);
+  });
+
+  it('reports the session as awaiting an answer once a turn is open', async () => {
+    await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }));
+
+    const body = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+    ).json();
+
+    expect(body.session.state).toBe('awaiting_answer');
+    expect(body.session.turn.choices.length).toBeGreaterThanOrEqual(2);
+    expect(body.session.turnsAnswered).toBe(0);
+  });
+
+  it('records an answer and moves the session on', async () => {
+    const { turn } = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+
+    const response = await answerRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/answer`, {
+        turnId: turn.id,
+        choiceId: turn.choices[0].id,
+      }),
+      ctx({ sessionId })
+    );
+
+    expect(response.status).toBe(200);
+
+    const after = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+    ).json();
+    expect(after.session.state).toBe('awaiting_turn');
+    expect(after.session.turnsAnswered).toBe(1);
+  });
+
+  /**
+   * The retry whose first response was lost. The client fires the next turn the
+   * instant an answer lands, so this is a likely path — and a 409 would strand
+   * it on an operation that actually succeeded.
+   */
+  it('reconciles a repeated answer instead of conflicting', async () => {
+    const { turn } = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+    const body = { turnId: turn.id, choiceId: turn.choices[0].id };
+
+    await answerRoute.POST(post(`/api/v1/sessions/${sessionId}/answer`, body), ctx({ sessionId }));
+    const retry = await answerRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/answer`, body),
+      ctx({ sessionId })
+    );
+
+    expect(retry.status).toBe(200);
+  });
+
+  it('refuses a second, different answer to the same turn', async () => {
+    const { turn } = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+
+    await answerRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/answer`, {
+        turnId: turn.id,
+        choiceId: turn.choices[0].id,
+      }),
+      ctx({ sessionId })
+    );
+    const response = await answerRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/answer`, {
+        turnId: turn.id,
+        choiceId: turn.choices[1].id,
+      }),
+      ctx({ sessionId })
+    );
+
+    expect(response.status).toBe(409);
+  });
+
+  /**
+   * The session in the URL and the turn in the body are two separate claims.
+   * Checking only the second would let a client answer a turn of its own from
+   * whatever session it happened to name.
+   */
+  it('refuses a turn that belongs to a different session', async () => {
+    const { turn } = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+    const elsewhere = (await sessions.startSession(ownerId, storylineId)).id;
+
+    const response = await answerRoute.POST(
+      post(`/api/v1/sessions/${elsewhere}/answer`, {
+        turnId: turn.id,
+        choiceId: turn.choices[0].id,
+      }),
+      ctx({ sessionId: elsewhere })
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it('answers 400 when the body is missing the turn id', async () => {
+    const response = await answerRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/answer`, { choiceId: crypto.randomUUID() }),
+      ctx({ sessionId })
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.fields).toHaveProperty('turnId');
+  });
+
+  it("answers 404 on another reader's session, on every verb", async () => {
+    asStranger();
+
+    const probe = await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }));
+    const advance = await turnRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/turn`),
+      ctx({ sessionId })
+    );
+    const answer = await answerRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/answer`, {
+        turnId: crypto.randomUUID(),
+        choiceId: crypto.randomUUID(),
+      }),
+      ctx({ sessionId })
+    );
+
+    expect([probe.status, advance.status, answer.status]).toStrictEqual([404, 404, 404]);
+  });
+
+  /**
+   * A storyline can fail after a session has begun. `blocked` is a live check,
+   * not something settled at start, or the client gets a 500 from a generation
+   * that never had a chance.
+   */
+  it('reports a session as blocked when its storyline stops being playable', async () => {
+    await storylines.markFailed(ownerId, storylineId, 'extraction gave up');
+
+    const body = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+    ).json();
+
+    expect(body.session.state).toBe('blocked');
+  });
+});
+
+describe('the world after playing', () => {
+  // The whole claim the map makes: bigger means more left to explore. If a node
+  // does not shrink as the reader plays, a finished person stays the largest
+  // thing on the map forever.
+  it('shrinks a person node as the reader advances', async () => {
+    asOwner();
+    const before = await (await world.GET(get('/api/v1/world'), undefined)).json();
+
+    const sessionId = (await sessions.startSession(ownerId, storylineId)).id;
+    const { turn } = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+    await answerRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/answer`, {
+        turnId: turn.id,
+        choiceId: turn.choices[0].id,
+      }),
+      ctx({ sessionId })
+    );
+
+    const after = await (await world.GET(get('/api/v1/world'), undefined)).json();
+
+    const beats = (w: { nodes: Array<{ personId: string; unexploredBeats: number }> }) =>
+      w.nodes.find((n) => n.personId === mayaPersonId)!.unexploredBeats;
+
+    expect(beats(after)).toBeLessThan(beats(before));
+  });
+
+  it('counts the reader themselves as met from the start', async () => {
+    asOwner();
+    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
+
+    const self = body.nodes.find((n: { personId: string }) => n.personId === selfPersonId);
+    const michael = body.nodes.find((n: { personId: string }) => n.personId === michaelPersonId);
+
+    expect(self.met).toBe(true);
+    expect(michael.met).toBe(false);
+  });
+});

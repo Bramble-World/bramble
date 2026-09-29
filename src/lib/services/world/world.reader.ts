@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { db } from '@/index';
 import { personRelationships, persons } from '@/db/schema/tables';
 
@@ -124,16 +124,48 @@ export async function explorationFor(userId: string): Promise<ExplorationRow[]> 
   }));
 }
 
-/** Structural edges between the reader's people. */
-export async function edgesFor(
-  userId: string
-): Promise<Array<{ aPersonId: string; bPersonId: string; relationshipType: string | null }>> {
-  return db
-    .select({
-      aPersonId: personRelationships.personAId,
-      bPersonId: personRelationships.personBId,
-      relationshipType: personRelationships.relationshipType,
-    })
-    .from(personRelationships)
-    .where(eq(personRelationships.userId, userId));
+/**
+ * Structural edges between the reader's people, with how much story they share.
+ *
+ * `sharedStorylines` counts the storylines both are cast in. It is what gives an
+ * edge a thickness worth drawing — the relationship type alone is a label, and
+ * a map where every line is the same weight says nothing about which of these
+ * people actually appear together.
+ *
+ * Counted in SQL rather than by folding cast rows in JS, like everything else
+ * here: this read runs on every cold start of the client.
+ */
+export async function edgesFor(userId: string): Promise<
+  Array<{
+    aPersonId: string;
+    bPersonId: string;
+    relationshipType: string | null;
+    sharedStorylines: number;
+  }>
+> {
+  const rows = await db.execute(sql`
+    select
+      pr.person_a_id as "aPersonId",
+      pr.person_b_id as "bPersonId",
+      pr.relationship_type as "relationshipType",
+      (
+        select count(distinct ca.storyline_id)::int
+        from characters ca
+        join characters cb
+          on cb.storyline_id = ca.storyline_id
+         and cb.person_id = pr.person_b_id
+        join storylines s
+          on s.id = ca.storyline_id and s.user_id = ${userId}
+        where ca.person_id = pr.person_a_id
+      ) as "sharedStorylines"
+    from ${personRelationships} pr
+    where pr.user_id = ${userId}
+  `);
+
+  return rows.rows as unknown as Array<{
+    aPersonId: string;
+    bPersonId: string;
+    relationshipType: string | null;
+    sharedStorylines: number;
+  }>;
 }

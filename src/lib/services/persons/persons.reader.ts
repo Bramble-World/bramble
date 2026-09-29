@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/index';
-import { persons } from '@/db/schema/tables';
+import { personRelationships, persons } from '@/db/schema/tables';
 import { ContactRef } from './persons.contact';
 import { PublicPerson } from './persons.types';
 
@@ -72,4 +72,32 @@ export async function ownedPersonIds(userId: string, personIds: string[]): Promi
     .from(persons)
     .where(and(eq(persons.userId, userId), inArray(persons.id, personIds)));
   return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * How this person is related to the reader themselves, if it was ever recorded.
+ *
+ * The pair columns are stored sorted (`CHECK (person_a_id < person_b_id)`), so
+ * the reader can be on either side of the row and both have to be checked.
+ * Returns null when there is no self person yet, which is the ordinary state
+ * before an import has run rather than an error.
+ */
+export async function relationshipToSelf(userId: string, personId: string): Promise<string | null> {
+  const self = await getSelfPerson(userId);
+  if (!self || self.id === personId) return null;
+
+  const [a, b] = [self.id, personId].sort();
+  const [row] = await db
+    .select({ relationshipType: personRelationships.relationshipType })
+    .from(personRelationships)
+    .where(
+      and(
+        eq(personRelationships.userId, userId),
+        eq(personRelationships.personAId, a),
+        eq(personRelationships.personBId, b)
+      )
+    )
+    .limit(1);
+
+  return row?.relationshipType ?? null;
 }
