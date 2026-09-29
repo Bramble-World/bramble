@@ -52,8 +52,30 @@ export function contextAsOf(context: StorylineContext, playheadOrder: number): S
  * extraction decides who counts as a participant.
  */
 function charactersMet(context: StorylineContext, reached: BeatContext[]): Set<string> {
+  return metCharacterIds(context.characters, reached);
+}
+
+/**
+ * The membership rule itself, over the smallest shape that can express it.
+ *
+ * Exported and row-agnostic because the API needs the same answer from database
+ * rows, not from a prompt-shaped `StorylineContext`. Duplicating the rule there
+ * would let the map and the prompt disagree about who the reader has met — and
+ * the whole point of the rule is that a person the reader has not met has
+ * nothing to say yet, so two answers means one screen leaks what the other
+ * hides.
+ *
+ * Takes already-reached beats rather than a playhead, so the caller decides what
+ * "reached" means. `contextAsOf` cuts by `narrativeOrder`; a client-facing read
+ * cuts by the furthest playhead across that user's sessions, which is not the
+ * same number.
+ */
+export function metCharacterIds(
+  characters: ReadonlyArray<{ id: string; isSelf: boolean }>,
+  reached: ReadonlyArray<{ participantCharacterIds: string[] }>
+): Set<string> {
   const met = new Set(reached.flatMap((beat) => beat.participantCharacterIds));
-  for (const character of context.characters) {
+  for (const character of characters) {
     if (character.isSelf) met.add(character.id);
   }
   return met;

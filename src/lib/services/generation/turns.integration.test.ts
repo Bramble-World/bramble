@@ -2,7 +2,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '@/index';
 import { users } from '@/db/schema/tables';
-import { ConflictError, ValidationError } from '@/lib/utils/errors';
+import {
+  ConflictError,
+  NotFoundError,
+  StorylineNotReadyError,
+  ValidationError,
+} from '@/lib/utils/errors';
+import * as sessionReader from '../sessions/sessions.reader';
 import { createFakeGenerator, FakeGenerator } from '@/lib/ai';
 import { registerFixtures } from '@/lib/ai/fixtures';
 import { consequencePrompt } from '@/lib/ai/prompts/consequence.prompt';
@@ -10,7 +16,7 @@ import * as persons from '../persons/persons.service';
 import * as storylines from '../storylines/storylines.service';
 import * as sessions from '../sessions/sessions.service';
 import * as timeline from '../timeline/timeline.service';
-import { commitChoice, generateConsequences, generateTurn } from './turns.service';
+import { advanceSession, commitChoice, generateConsequences, generateTurn } from './turns.service';
 
 /**
  * The decision loop, end to end, against the fake generator and a real database.
@@ -590,5 +596,121 @@ describe('playing several turns', () => {
     const orders = (await timeline.listTimeline(storylineId)).map((b) => b.narrativeOrder);
     expect(new Set(orders).size).toBe(orders.length);
     expect(orders).toStrictEqual([...orders].sort((a, b) => a - b));
+  });
+});
+
+/**
+ * The two readers that take no userId.
+ *
+ * `listCharacters(storylineId)` and `listTimeline(storylineId)` are scoped only
+ * by storyline, which makes them the most likely tenancy hole in a naive route:
+ * a handler that passes a URL id straight through returns another user's data
+ * with no error anywhere. The `*ForUser` wrappers exist so a route never has to
+ * remember — and these prove the wrappers throw rather than merely look like
+ * they do. One of them did not, when first written: the underlying reader
+ * returns null rather than throwing, so the `await` guarding it was decorative.
+ */
+describe('ownership on the unscoped readers', () => {
+  let otherUserId: string;
+  const OTHER_CLERK = 'user_ownership_other';
+
+  beforeAll(async () => {
+    await db.delete(users).where(eq(users.clerkId, OTHER_CLERK));
+    const [other] = await db
+      .insert(users)
+      .values({ clerkId: OTHER_CLERK, email: 'other@ownership.local' })
+      .returning({ id: users.id });
+    otherUserId = other.id;
+  });
+
+  afterAll(async () => {
+    await db.delete(users).where(eq(users.clerkId, OTHER_CLERK));
+  });
+
+  it('returns the cast to the owner', async () => {
+    await expect(storylines.listCharactersForUser(userId, storylineId)).resolves.not.toHaveLength(
+      0
+    );
+  });
+
+  it('refuses the cast to anyone else, as not-found rather than forbidden', async () => {
+    await expect(storylines.listCharactersForUser(otherUserId, storylineId)).rejects.toBeInstanceOf(
+      NotFoundError
+    );
+  });
+
+  it('returns the timeline to the owner', async () => {
+    await expect(timeline.listTimelineForUser(userId, storylineId)).resolves.not.toHaveLength(0);
+  });
+
+  it('refuses the timeline to anyone else', async () => {
+    await expect(timeline.listTimelineForUser(otherUserId, storylineId)).rejects.toBeInstanceOf(
+      NotFoundError
+    );
+  });
+});
+
+/**
+ * One call that brings a session to a playable state.
+ *
+ * The ordering constraint — consequences before the next turn, because the turn
+ * prompt reads the canon they write — used to be publishable only as three calls
+ * in the right order. A client that skipped the middle one would generate every
+ * later turn against stale canon, with no error anywhere and quality quietly
+ * decaying. Here it is structural: the client cannot get it wrong because it
+ * cannot express it.
+ */
+describe('advanceSession', () => {
+  it('settles an owed consequence before generating the next turn', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    // Answered, never resolved — the state a client lands in when it dies
+    // between the two.
+    const owedBefore = await sessionReader.findTurnsOwedConsequences(db, session.id);
+    expect(owedBefore.map((t) => t.id)).toStrictEqual([turn.id]);
+
+    const order: string[] = [];
+    fake.register(consequencePrompt, () => {
+      order.push('consequence');
+      return { events: [], contextEntries: [], relationshipStates: [] };
+    });
+    const realTurnFixture = fake.calls.length;
+    void realTurnFixture;
+
+    await advanceSession(userId, session.id, { generator: fake });
+
+    // The consequence prompt ran, and it ran before the turn that followed it.
+    const promptOrder = fake.calls.map((c) => c.promptName).slice(-2);
+    expect(promptOrder).toStrictEqual(['consequence.commit', 'turn.generate']);
+    expect(order).toStrictEqual(['consequence']);
+
+    const owedAfter = await sessionReader.findTurnsOwedConsequences(db, session.id);
+    expect(owedAfter).toStrictEqual([]);
+  });
+
+  it('is safe to call twice — the second finds the work done', async () => {
+    const session = await freshSession();
+    await advanceSession(userId, session.id, { generator: fake });
+    const callsAfterFirst = fake.calls.length;
+
+    const again = await advanceSession(userId, session.id, { generator: fake });
+
+    expect(again).toBeTruthy();
+    // No new generation: the open turn is returned as it stands.
+    expect(fake.calls.length).toBe(callsAfterFirst);
+  });
+
+  // A storyline can fail after a session has begun, and nothing else re-checks.
+  it('refuses a session whose storyline is no longer ready', async () => {
+    const session = await freshSession();
+    await storylines.markFailed(userId, storylineId, 'went wrong');
+
+    await expect(advanceSession(userId, session.id, { generator: fake })).rejects.toBeInstanceOf(
+      StorylineNotReadyError
+    );
+
+    await storylines.markStatus(userId, storylineId, 'ready');
   });
 });

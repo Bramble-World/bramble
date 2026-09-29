@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lt, max } from 'drizzle-orm';
+import { and, asc, count, eq, isNotNull, isNull, lt, max } from 'drizzle-orm';
 import { db } from '@/index';
 import { storylineSessions, storyTurns, turnChoices } from '@/db/schema/tables';
 import { Executor } from '../executor';
@@ -159,4 +159,45 @@ export async function turnHasResolvedConsequences(tx: Executor, turnId: string):
     .limit(1);
 
   return row?.at != null;
+}
+
+/**
+ * Turns in this session that were answered and never resolved.
+ *
+ * The state a client lands in when it dies between answering and having the
+ * consequences written — and the reason `POST /sessions/:id/turn` can be defined
+ * as "bring this session to a playable state" rather than as three ordered calls
+ * the client has to get right.
+ *
+ * Ascending, because consequences must be written in the order they were caused:
+ * each one's beats become canon the next turn's prompt reads.
+ *
+ * `idx_story_turns_owed_consequences` is exactly this predicate and has had no
+ * caller since it was added.
+ */
+export async function findTurnsOwedConsequences(
+  tx: Executor,
+  sessionId: string
+): Promise<Array<{ id: string; turnOrder: number }>> {
+  return tx
+    .select({ id: storyTurns.id, turnOrder: storyTurns.turnOrder })
+    .from(storyTurns)
+    .where(
+      and(
+        eq(storyTurns.sessionId, sessionId),
+        isNotNull(storyTurns.selectedChoiceId),
+        isNull(storyTurns.consequencesGeneratedAt)
+      )
+    )
+    .orderBy(asc(storyTurns.turnOrder));
+}
+
+/** How many turns the reader has answered — the only honest progress signal. */
+export async function countAnsweredTurns(tx: Executor, sessionId: string): Promise<number> {
+  const [row] = await tx
+    .select({ n: count() })
+    .from(storyTurns)
+    .where(and(eq(storyTurns.sessionId, sessionId), isNotNull(storyTurns.selectedChoiceId)));
+
+  return row?.n ?? 0;
 }
