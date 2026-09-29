@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
-import { InternalServerError, RateLimitError } from '@/lib/utils/errors';
+import {
+  GenerationFailedError,
+  GenerationTimeoutError,
+  GenerationUnusableError,
+  UpstreamBusyError,
+} from '@/lib/utils/errors';
 import { createGenerator, schemaName } from './generator.openai';
 import { STAGE_MODELS } from './models';
 import { PromptSpec } from './prompt';
@@ -116,17 +121,72 @@ describe('the OpenAI generator', () => {
     expect(result.meta.finishReason).toBe('stop');
   });
 
-  // Output that does not match the schema is a prompt or schema problem, not a
-  // transient one, so it must not surface as something a caller would retry.
-  it('translates unusable output into an internal error', async () => {
+  /**
+   * Output that does not match the schema is a prompt or schema problem, not a
+   * transient one, so it must not surface as something a caller would retry.
+   *
+   * Distinct from a provider failure on purpose: both used to be one generic
+   * error, and a client cannot choose a retry policy from that. This one is
+   * usually deterministic, so retrying it buys the same failure twice.
+   */
+  it('translates unusable output into GENERATION_UNUSABLE', async () => {
     const generator = createGenerator(() => modelReturning('not json at all'));
 
-    await expect(generator.run(spec, { title: 'Unsent' })).rejects.toBeInstanceOf(
-      InternalServerError
-    );
+    const error = await generator.run(spec, { title: 'Unsent' }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(GenerationUnusableError);
+    expect(error.code).toBe('GENERATION_UNUSABLE');
+    expect(error.statusCode).toBe(500);
   });
 
-  it('translates a rate limit into a RateLimitError', async () => {
+  // A provider blip, by contrast, usually clears — so it is a different class
+  // with a different status and a retry policy to match.
+  it('translates a provider failure into GENERATION_FAILED', async () => {
+    const generator = createGenerator(
+      () =>
+        new MockLanguageModelV3({
+          doGenerate: async () => {
+            throw Object.assign(new Error('upstream exploded'), { statusCode: 500 });
+          },
+        })
+    );
+
+    const error = await generator.run(spec, { title: 'Unsent' }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(GenerationFailedError);
+    expect(error.statusCode).toBe(503);
+  });
+
+  /**
+   * Our own deadline, not the provider's.
+   *
+   * `Generator.run` has always accepted a signal and nothing ever passed one.
+   * Now that callers do, an abort must not read as an ordinary provider failure:
+   * the client should re-call immediately rather than back off.
+   */
+  it('translates our own abort into GENERATION_TIMEOUT', async () => {
+    const generator = createGenerator(
+      () =>
+        new MockLanguageModelV3({
+          doGenerate: async () => {
+            throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+          },
+        })
+    );
+
+    const error = await generator.run(spec, { title: 'Unsent' }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(GenerationTimeoutError);
+    expect(error.statusCode).toBe(504);
+  });
+
+  /**
+   * The provider throttling us is not our own quota.
+   *
+   * Kept apart because they need opposite client behaviour, and while they
+   * shared the RATE_LIMITED code they were indistinguishable on the wire.
+   */
+  it('translates a provider 429 into UPSTREAM_BUSY, not our own rate limit', async () => {
     const generator = createGenerator(
       () =>
         new MockLanguageModelV3({
@@ -136,7 +196,11 @@ describe('the OpenAI generator', () => {
         })
     );
 
-    await expect(generator.run(spec, { title: 'Unsent' })).rejects.toBeInstanceOf(RateLimitError);
+    const error = await generator.run(spec, { title: 'Unsent' }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(UpstreamBusyError);
+    expect(error.code).toBe('UPSTREAM_BUSY');
+    expect(error.retryAfter).toBe(60);
   });
 
   // The model's own text can echo the prompt, and the prompt carries story

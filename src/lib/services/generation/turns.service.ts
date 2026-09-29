@@ -16,7 +16,16 @@ import * as sessionWriter from '../sessions/sessions.writer';
 import { ConflictError } from '@/lib/utils/errors';
 
 /** Injected so a test can supply the fake without touching process env. */
-export type GenerationDeps = { generator?: Generator };
+/**
+ * Injected so a test can supply the fake without touching process env, and so a
+ * caller can impose a deadline.
+ *
+ * `signal` reaches `Generator.run`, which has always accepted one and which
+ * nothing ever passed — leaving every generation bounded only by undici's 300s
+ * headers timeout, a failure mode with no status code and three automatic
+ * retries. See `src/lib/ai/deadline.ts`.
+ */
+export type GenerationDeps = { generator?: Generator; signal?: AbortSignal };
 
 /**
  * Presents the next beat of a session.
@@ -50,11 +59,15 @@ export async function generateTurn(
   // the generator is recorded as having been given and what it was actually
   // shown are the same thing. A render that quietly dropped beats would leave
   // the anti-leak test asserting against a context the model never saw.
-  const { value } = await generator.run(turnPrompt, {
-    storyline: contextAsOf(storyline, session.playheadOrder),
-    session: sessionContext,
-    beyondScript: scriptExhausted(storyline, session.playheadOrder),
-  });
+  const { value } = await generator.run(
+    turnPrompt,
+    {
+      storyline: contextAsOf(storyline, session.playheadOrder),
+      session: sessionContext,
+      beyondScript: scriptExhausted(storyline, session.playheadOrder),
+    },
+    { signal: deps.signal }
+  );
 
   return sessions.openTurn(
     userId,
@@ -136,15 +149,19 @@ export async function generateConsequences(
   if (!chosen) throw new ValidationError('The recorded choice is not one this turn offered');
 
   const generator = deps.generator ?? getGenerator();
-  const { value } = await generator.run(consequencePrompt, {
-    storyline,
-    decision: {
-      narrativeContent: turn.narrativeContent,
-      chosenLabel: chosen.label,
-      chosenDescription: chosen.description,
-      rejectedLabels: turn.choices.filter((c) => c.id !== chosen.id).map((c) => c.label),
+  const { value } = await generator.run(
+    consequencePrompt,
+    {
+      storyline,
+      decision: {
+        narrativeContent: turn.narrativeContent,
+        chosenLabel: chosen.label,
+        chosenDescription: chosen.description,
+        rejectedLabels: turn.choices.filter((c) => c.id !== chosen.id).map((c) => c.label),
+      },
     },
-  });
+    { signal: deps.signal }
+  );
 
   // Consequences land where the reader is, not where a model guesses. Asked for
   // a position, it used to pick one well behind the narration — anchoring at

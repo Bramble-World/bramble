@@ -44,7 +44,7 @@ export async function summarizeArc(
   const context = await assembleStorylineContext(userId, storylineId);
 
   const generator = deps.generator ?? getGenerator();
-  const { value } = await generator.run(arcPrompt, { storyline: context });
+  const { value } = await generator.run(arcPrompt, { storyline: context }, { signal: deps.signal });
 
   const won = await storylineWriter.setArcSummaryIfUnchanged({
     storylineId,

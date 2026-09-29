@@ -55,11 +55,15 @@ export async function extractStoryline(
     const user = await assembleUserContext(userId);
 
     const generator = deps.generator ?? getGenerator();
-    const { value } = await generator.run(extractionPrompt, {
-      user,
-      surface: transcript.surface,
-      messages: transcript.messages,
-    });
+    const { value } = await generator.run(
+      extractionPrompt,
+      {
+        user,
+        surface: transcript.surface,
+        messages: transcript.messages,
+      },
+      { signal: deps.signal }
+    );
 
     return await persist(userId, storyline.id, value, new Set(user.persons.map((p) => p.id)));
   } catch (error) {
