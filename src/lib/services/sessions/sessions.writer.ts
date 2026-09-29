@@ -214,9 +214,55 @@ export async function raisePlayheadTo(
 export async function claimConsequences(tx: Executor, turnId: string): Promise<boolean> {
   const [row] = await tx
     .update(storyTurns)
-    .set({ consequencesGeneratedAt: new Date() })
+    // Abandonment is cleared, not kept alongside the stamp. It describes a
+    // current state — "we are not going to work this one out" — and a turn that
+    // has just been worked out is no longer in it. `consequence_attempts` keeps
+    // the history of how hard it was.
+    .set({ consequencesGeneratedAt: new Date(), consequencesAbandonedAt: null })
     .where(and(eq(storyTurns.id, turnId), isNull(storyTurns.consequencesGeneratedAt)))
     .returning({ id: storyTurns.id });
 
   return row !== undefined;
+}
+
+/**
+ * Records that working out this turn's consequences is being attempted.
+ *
+ * Its own statement, on `db` rather than a caller's transaction, and deliberately
+ * so: every transaction in `generateConsequences` is rolled back by the failure
+ * this counter exists to count, which would leave the count at zero no matter how
+ * many times it was tried. The write has to survive the failure to mean anything.
+ *
+ * Incremented in SQL rather than read-then-written, so two concurrent callers
+ * cannot both read 2 and both write 3.
+ */
+export async function recordConsequenceAttempt(tx: Executor, turnId: string): Promise<void> {
+  await tx
+    .update(storyTurns)
+    .set({ consequenceAttempts: sql`${storyTurns.consequenceAttempts} + 1` })
+    .where(eq(storyTurns.id, turnId));
+}
+
+/**
+ * Stops trying to work out this turn's consequences.
+ *
+ * The escape from the only unrecoverable state the loop had. The story continues
+ * one beat poorer, which is a far better outcome than a session that can never
+ * produce another turn — and the stamp says plainly that this happened, so the
+ * gap is visible rather than inferred from an absence.
+ *
+ * Guarded on both stamps being null so it cannot overwrite a success that landed
+ * concurrently, and so a second call is a no-op rather than a fresh timestamp.
+ */
+export async function abandonConsequences(tx: Executor, turnId: string): Promise<void> {
+  await tx
+    .update(storyTurns)
+    .set({ consequencesAbandonedAt: new Date() })
+    .where(
+      and(
+        eq(storyTurns.id, turnId),
+        isNull(storyTurns.consequencesGeneratedAt),
+        isNull(storyTurns.consequencesAbandonedAt)
+      )
+    );
 }
