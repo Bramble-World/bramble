@@ -1,4 +1,4 @@
-import { RelationshipContext, StorylineContext } from './generation.types';
+import { BeatContext, RelationshipContext, StorylineContext } from './generation.types';
 
 /**
  * The storyline as one playthrough has actually experienced it.
@@ -19,13 +19,44 @@ import { RelationshipContext, StorylineContext } from './generation.types';
  * back into that object would narrow their view too.
  */
 export function contextAsOf(context: StorylineContext, playheadOrder: number): StorylineContext {
+  const timeline = context.timeline.filter((beat) => beat.narrativeOrder <= playheadOrder);
+  const met = charactersMet(context, timeline);
+
   return {
     ...context,
-    timeline: context.timeline.filter((beat) => beat.narrativeOrder <= playheadOrder),
-    relationships: context.relationships.map((relationship) =>
-      dynamicAsOf(relationship, playheadOrder)
-    ),
+    timeline,
+    // Anyone the reader has not met yet is not in the story yet. Without this
+    // the cast list is a guest list for the whole conversation, and the model
+    // was naming an investor in the first beat because extraction had described
+    // him as "the investor who offers $300,000" and handed that over on turn one.
+    characters: context.characters.filter((character) => met.has(character.id)),
+    relationships: context.relationships
+      // Both ends, or the row renders a name the reader has no way to place —
+      // and `nameOf` would fall back to "someone", which is worse than absence.
+      .filter((r) => met.has(r.characterAId) && met.has(r.characterBId))
+      .map((relationship) => dynamicAsOf(relationship, playheadOrder)),
   };
+}
+
+/**
+ * Who the reader has met.
+ *
+ * Membership is earned by appearing in a beat they have reached — the same cut
+ * as the timeline, applied to the people in it. The protagonist is always in:
+ * the reader is present at their own story even in a beat that does not list
+ * them.
+ *
+ * A character who is never a participant in any beat therefore never appears.
+ * That is the honest outcome — someone mentioned but never present is not in
+ * the story — but it is a behaviour change worth knowing about, because
+ * extraction decides who counts as a participant.
+ */
+function charactersMet(context: StorylineContext, reached: BeatContext[]): Set<string> {
+  const met = new Set(reached.flatMap((beat) => beat.participantCharacterIds));
+  for (const character of context.characters) {
+    if (character.isSelf) met.add(character.id);
+  }
+  return met;
 }
 
 /**

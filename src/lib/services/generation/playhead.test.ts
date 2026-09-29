@@ -31,11 +31,27 @@ const relationship = (
   })),
 });
 
+const person = (id: string, over: Partial<StorylineContext['characters'][number]> = {}) => ({
+  id,
+  personId: `p-${id}`,
+  name: id.toUpperCase(),
+  role: 'supporting' as const,
+  description: null,
+  voice: null,
+  want: null,
+  avoids: null,
+  isSelf: false,
+  ...over,
+});
+
+/** A beat with the two default cast members present, so they count as met. */
+const peopled = (n: number) => ({ ...beat(n), participantCharacterIds: ['a', 'b'] });
+
 const context = (overrides: Partial<StorylineContext> = {}): StorylineContext => ({
   storyline: { id: 's1', title: 'A story', setting: null, tone: null, arcSummary: null },
-  characters: [],
+  characters: [person('a'), person('b')],
   relationships: [],
-  timeline: [beat(1000), beat(2000), beat(3000)],
+  timeline: [peopled(1000), peopled(2000), peopled(3000)],
   background: { storylineLevel: [], byCharacterId: {} },
   motifs: [],
   ...overrides,
@@ -118,6 +134,77 @@ describe('contextAsOf', () => {
     contextAsOf(original, 1000);
 
     expect(JSON.parse(JSON.stringify(original))).toStrictEqual(snapshot);
+  });
+});
+
+/**
+ * Who the reader has met.
+ *
+ * Extraction reads the whole conversation and describes the cast from the end
+ * looking back, so a character who appears two months in arrives pre-loaded
+ * with their ending. Measured: a real storyline's first turn named an investor
+ * and proposed messaging him, at a playhead where the only visible beat was two
+ * siblings in a kitchen — because the cast list described him as "the investor
+ * who offers $300,000" and was rendered in full from turn one.
+ */
+describe('the cast the reader has met', () => {
+  const later = (n: number, ids: string[]) => ({ ...beat(n), participantCharacterIds: ids });
+
+  it('hides a character who has not appeared yet', () => {
+    const cut = contextAsOf(
+      context({
+        characters: [person('a'), person('b'), person('investor', { name: 'Michael' })],
+        timeline: [peopled(1000), later(9000, ['a', 'investor'])],
+      }),
+      1000
+    );
+
+    expect(cut.characters.map((c) => c.name)).toStrictEqual(['A', 'B']);
+    expect(cut.characters.map((c) => c.id)).not.toContain('investor');
+  });
+
+  it('lets them in once the reader reaches a beat they are in', () => {
+    const full = context({
+      characters: [person('a'), person('b'), person('investor', { name: 'Michael' })],
+      timeline: [peopled(1000), later(9000, ['a', 'investor'])],
+    });
+
+    expect(contextAsOf(full, 9000).characters.map((c) => c.id)).toContain('investor');
+  });
+
+  // The reader is present at their own story even in a beat that does not
+  // happen to list them.
+  it('always keeps the protagonist', () => {
+    const cut = contextAsOf(
+      context({
+        characters: [person('self', { isSelf: true }), person('a')],
+        timeline: [later(1000, ['a'])],
+      }),
+      1000
+    );
+
+    expect(cut.characters.map((c) => c.id)).toContain('self');
+  });
+
+  /**
+   * Both ends, or the row renders a name the reader cannot place — and the
+   * prompt's `nameOf` would fall back to "someone", which is worse than the row
+   * being absent.
+   */
+  it('drops a relationship that reaches someone unmet', () => {
+    const cut = contextAsOf(
+      context({
+        characters: [person('a'), person('b'), person('investor')],
+        timeline: [peopled(1000)],
+        relationships: [
+          { ...relationship([]), id: 'known', characterAId: 'a', characterBId: 'b' },
+          { ...relationship([]), id: 'unknown', characterAId: 'a', characterBId: 'investor' },
+        ],
+      }),
+      1000
+    );
+
+    expect(cut.relationships.map((r) => r.id)).toStrictEqual(['known']);
   });
 });
 

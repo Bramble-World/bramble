@@ -523,6 +523,39 @@ describe('the playhead', () => {
   });
 
   /**
+   * The leak that prompted this.
+   *
+   * A real storyline's first turn named an investor and proposed messaging him,
+   * at a playhead whose only visible beat was two siblings in a kitchen —
+   * because extraction had described him as "the investor who offers $300,000"
+   * and the cast list was rendered in full from turn one. Hiding the beat he
+   * appears in is not enough if his name and his ending are in the prompt
+   * anyway.
+   */
+  it('does not name a character the reader has not met', async () => {
+    const outsider = await persons.createPerson(userId, { name: 'Zenobia' });
+    const cast = await storylines.castCharacter(userId, storylineId, outsider.id, {
+      description: 'The investor who eventually wires the money.',
+    });
+    await timeline.appendEvent(userId, storylineId, {
+      origin: 'extracted',
+      title: 'Much later, the money arrives',
+      description: 'x',
+      participantCharacterIds: [cast.id],
+    });
+
+    const session = await freshSession();
+    await generateTurn(userId, session.id, { generator: fake });
+    const call = fake.calls.at(-1)!;
+
+    // Present in the storyline, absent from the prompt — including the
+    // description, which is where the ending was actually leaking.
+    expect(call.prompt).toContain('Where things stood');
+    expect(call.prompt).not.toContain('Zenobia');
+    expect(call.prompt).not.toContain('eventually wires the money');
+  });
+
+  /**
    * Consequences reason about what a decision changed, which needs the story
    * entire — and the relationship states they write must be able to attach to
    * any beat. Narrowing this is the tempting "consistency" fix that would

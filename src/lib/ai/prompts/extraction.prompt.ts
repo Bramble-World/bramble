@@ -75,7 +75,12 @@ export type ExtractionVars = {
 export const extractionOutputSchema = z.object({
   title: z.string().min(1).describe('A short title for the story, under 60 characters.'),
   tone: z.string().min(1).describe('A few words describing how this story feels.'),
-  setting: z.string().nullable().describe('Narrative framing, if one suggests itself.'),
+  setting: z
+    .string()
+    .nullable()
+    .describe(
+      'Where and when this takes place: place, period, circumstances. Not what happens in it and not how it turns out — this is shown on every turn, including the first.'
+    ),
   arcSummary: z
     .string()
     .min(1)
@@ -98,7 +103,12 @@ export const extractionOutputSchema = z.object({
             'The exact name this person sent messages under, copied from the transcript. Null if they are only mentioned and never wrote.'
           ),
         role: z.enum(['protagonist', 'antagonist', 'supporting']),
-        description: z.string().nullable().describe('Who they are in this particular story.'),
+        description: z
+          .string()
+          .nullable()
+          .describe(
+            'Who they are as this story opens — their place in it, not what becomes of them. Written as if the rest has not happened yet: no "eventually", no "later", no outcomes.'
+          ),
         voiceTone: z.string().nullable().describe('How they write — rhythm, register, habits.'),
         want: z
           .string()
@@ -225,6 +235,12 @@ export const extractionPrompt: PromptSpec<ExtractionVars, ExtractionOutput> = {
       '- If someone here is already in "People you already know", give their id.',
       '- relationshipType is the persistent fact (siblings, coworkers). The closeness,',
       '  tension and power fields are how they stand at the start of this story.',
+      '- Write the setting and the cast descriptions from the beginning, not from',
+      '  the end. You have read the whole conversation; the reader has not, and',
+      '  these are shown to them from the very first beat. "The investor who offers',
+      '  $300,000" and "a shared home, later a funded company" both hand over the',
+      '  ending before the story starts. Say who someone is and where this is',
+      '  happening, and let the beats do the rest.',
       '- Give everyone a want, including the quiet ones. A want is something another',
       '  person can grant or withhold: "wants the three of them to eat together',
       '  before the move is finished" is a want; "wants to feel respected" is not,',
