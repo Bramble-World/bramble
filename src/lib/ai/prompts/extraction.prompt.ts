@@ -22,8 +22,23 @@ export type TranscriptMessage = {
   sentAt: string;
 };
 
-/** Hard ceiling on the beats a single extraction may return. */
-export const MAX_BEATS = 40;
+/**
+ * Hard ceiling on the beats a single extraction may return.
+ *
+ * Bounded by wall-clock, not by quality. This is a non-streaming call, so no
+ * response headers arrive until the whole object is generated — and Node's fetch
+ * abandons a request after 300 seconds of waiting for them, which surfaces as
+ * `UND_ERR_HEADERS_TIMEOUT` with no status code and three identical retries. A
+ * 40-beat ceiling on a dense real conversation crossed that line; the extraction
+ * was still working and the client had already given up.
+ *
+ * 20 is a deliberate middle: still two and a half times the flat 8 that left
+ * four months of a founder conversation unplayable, and comfortably inside the
+ * window at `medium` reasoning effort. Raising it again means fixing the
+ * transport first — a dispatcher with a longer header timeout, or streaming so
+ * the headers arrive immediately.
+ */
+export const MAX_BEATS = 20;
 
 /**
  * How many beats a conversation of this size deserves.

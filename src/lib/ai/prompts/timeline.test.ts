@@ -102,7 +102,7 @@ describe('stakes', () => {
     expect(line).toBe('1000. Beat 1000 — what happened');
   });
 
-  // Stakes run ~90 characters and a timeline may hold 40 beats. The old ones are
+  // Stakes run ~90 characters and a timeline may hold twenty beats. The old ones are
   // context; only the recent ones are pressure.
   it('carries stakes on the recent beats and not the whole history', () => {
     const beats = Array.from({ length: 8 }, (_, i) =>
