@@ -209,10 +209,31 @@ export async function findTurnsOwedConsequences(
       and(
         eq(storyTurns.sessionId, sessionId),
         isNotNull(storyTurns.selectedChoiceId),
-        isNull(storyTurns.consequencesGeneratedAt)
+        isNull(storyTurns.consequencesGeneratedAt),
+        // Turns we gave up on are not owed. Without this the settle-then-
+        // generate loop retries an unproducible turn on every request and the
+        // session can never reach `generateTurn` again.
+        isNull(storyTurns.consequencesAbandonedAt)
       )
     )
     .orderBy(asc(storyTurns.turnOrder));
+}
+
+/**
+ * How many times this turn's consequences have been attempted.
+ *
+ * Read after a failure to decide whether there is budget left. A missing turn
+ * reports 0 rather than throwing: the caller is already handling an error, and
+ * a second one raised while deciding what to do about the first buries it.
+ */
+export async function consequenceAttempts(tx: Executor, turnId: string): Promise<number> {
+  const [row] = await tx
+    .select({ attempts: storyTurns.consequenceAttempts })
+    .from(storyTurns)
+    .where(eq(storyTurns.id, turnId))
+    .limit(1);
+
+  return row?.attempts ?? 0;
 }
 
 /** How many turns the reader has answered — the only honest progress signal. */

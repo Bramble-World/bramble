@@ -140,6 +140,14 @@ export async function generateConsequences(
   // transaction is, because this read and that write are seconds apart.
   if (await sessionReader.turnHasResolvedConsequences(db, turnId)) return empty;
 
+  // Counted here, before the work, and on `db` rather than in a transaction:
+  // everything below either commits together or rolls back together, so a
+  // counter written inside that boundary would be undone by the very failure it
+  // exists to count. Placed above context assembly as well as the model call,
+  // because both are pure functions of stored state and both can fail the same
+  // way every time.
+  await sessionWriter.recordConsequenceAttempt(db, turnId);
+
   // Deliberately the WHOLE timeline, unlike generateTurn. This stage is
   // reasoning about what a decision changed, which needs the story entire; and
   // narrowing it here would also shrink what `recordRelationshipState` can
@@ -297,6 +305,23 @@ async function insertAtOrAfter(
  * would produce a turn built on canon that is missing the reader's last decision
  * — a regression with nothing to report it.
  */
+/**
+ * How many times one turn's consequences may be attempted before we give up.
+ *
+ * Above the client's own retry policy, which is three with jittered backoff and
+ * then a button. A provider blip that outlasts that burst should not cost the
+ * story a beat, so the budget leaves room for the reader to press the button
+ * twice more before anything is abandoned.
+ *
+ * Every failure counts, including our own 60s deadline. Exempting timeouts would
+ * mean a storyline whose context reliably outruns the deadline still wedges
+ * forever, which is the bug rather than a refinement of it. The price is a
+ * reader who backgrounds the app mid-generation five times on the same turn and
+ * loses one beat of canon — worth it against a session that can never move
+ * again.
+ */
+export const CONSEQUENCE_ATTEMPT_BUDGET = 5;
+
 export async function advanceSession(
   userId: string,
   sessionId: string,
@@ -314,7 +339,22 @@ export async function advanceSession(
   // them out of order would build later beats on earlier gaps.
   const owed = await sessionReader.findTurnsOwedConsequences(db, sessionId);
   for (const turn of owed) {
-    await generateConsequences(userId, turn.id, deps);
+    try {
+      await generateConsequences(userId, turn.id, deps);
+    } catch (error) {
+      // Budget left: fail the whole call, exactly as before. Skipping ahead
+      // would build the next beat on canon missing the reader's last decision —
+      // a silent quality regression with nothing to report it — and most
+      // failures here are transient and clear on the next try.
+      if ((await sessionReader.consequenceAttempts(db, turn.id)) < CONSEQUENCE_ATTEMPT_BUDGET) {
+        throw error;
+      }
+
+      // Budget gone. Stamp it and carry on in the same request, so the tap that
+      // exhausts the budget is the one that gets a turn back rather than a fifth
+      // identical error.
+      await sessionWriter.abandonConsequences(db, turn.id);
+    }
   }
 
   return generateTurn(userId, sessionId, deps);

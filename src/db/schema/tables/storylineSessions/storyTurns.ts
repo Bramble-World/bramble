@@ -44,18 +44,53 @@ export const storyTurns = pgTable(
      */
     consequencesGeneratedAt: timestamp('consequences_generated_at', { withTimezone: true }),
 
+    /**
+     * How many times working out this turn's consequences has been started.
+     *
+     * Counted because `consequences_generated_at` can say "done" and "owed" and
+     * nothing else, and the third real state is "tried, and it will not work".
+     * The consequence prompt is a pure function of stored state — this turn's
+     * narrative, the chosen and rejected labels, the whole timeline — so a
+     * failure on it reproduces exactly on every retry. Without a count, the
+     * settle-then-generate loop in `advanceSession` retries the same turn
+     * forever and the session can never produce another beat.
+     *
+     * Incremented before the model call and outside the transaction that writes
+     * the result. A counter written inside that transaction would roll back with
+     * the very failure it exists to count.
+     */
+    consequenceAttempts: integer('consequence_attempts').notNull().default(0),
+
+    /**
+     * When we stopped trying.
+     *
+     * Kept apart from `consequences_generated_at` rather than folded into it:
+     * "resolved, and it changed nothing" and "never resolved, and we gave up"
+     * are different facts about the story, and a single stamp meaning both would
+     * be the same conflation that made the original idempotence bug.
+     *
+     * Cleared when a later attempt succeeds, so it reads as a current state
+     * rather than a historical event — `consequence_attempts` is what keeps the
+     * history.
+     */
+    consequencesAbandonedAt: timestamp('consequences_abandoned_at', { withTimezone: true }),
+
     ...timestamps,
   },
   (table) => [
     index('idx_story_turns_session').on(table.sessionId),
     index('idx_story_turns_session_order').on(table.sessionId, table.turnOrder),
     index('idx_story_turns_selected_choice').on(table.selectedChoiceId),
-    // Finds the turns that still owe consequences — answered, unresolved — which
-    // is the retry/backfill question and otherwise a full scan.
+    // Finds the turns that still owe consequences — answered, unresolved, and
+    // not given up on — which is the retry question and otherwise a full scan.
+    //
+    // Abandoned turns are excluded here rather than by a budget comparison in
+    // the predicate, so raising or lowering the budget stays a code change
+    // instead of a migration.
     index('idx_story_turns_owed_consequences')
       .on(table.sessionId)
       .where(
-        sql`${table.selectedChoiceId} IS NOT NULL AND ${table.consequencesGeneratedAt} IS NULL`
+        sql`${table.selectedChoiceId} IS NOT NULL AND ${table.consequencesGeneratedAt} IS NULL AND ${table.consequencesAbandonedAt} IS NULL`
       ),
     // A session has at most one turn awaiting an answer. This makes "open the
     // next turn" a get-or-create against the database rather than a convention,
