@@ -21,6 +21,17 @@ export type Transcript = {
 };
 
 /**
+ * `GenerationDeps`, plus a hook for callers that must know the storyline id
+ * before the work finishes.
+ *
+ * Only extraction has this, because only extraction creates the row it is
+ * building — every other stage is handed one.
+ */
+export type ExtractionDeps = GenerationDeps & {
+  onStorylineCreated?: (storylineId: string) => Promise<void>;
+};
+
+/**
  * Turns a conversation into a storyline.
  *
  * The transcript is an argument and never a column. Nothing below writes a
@@ -43,13 +54,19 @@ export type Transcript = {
 export async function extractStoryline(
   userId: string,
   transcript: Transcript,
-  deps: GenerationDeps = {}
+  deps: ExtractionDeps = {}
 ): Promise<PublicStoryline> {
   const storyline = await storylines.createStoryline(userId, {
     title: 'Untitled',
     sourceSurface: transcript.surface,
   });
   await storylines.markStatus(userId, storyline.id, 'generating');
+
+  // Announced before the model call, not after it. The import worker uses this
+  // to record which storyline it is building, so a crash part-way through is
+  // recoverable rather than producing a second one on retry. Awaited, because a
+  // caller that has not recorded it yet is in exactly the state this prevents.
+  await deps.onStorylineCreated?.(storyline.id);
 
   try {
     const user = await assembleUserContext(userId);

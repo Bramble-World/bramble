@@ -136,3 +136,47 @@ export class GenerationInProgressError extends AppError {
     super('A turn is already being generated for this session', 'GENERATION_IN_PROGRESS', 409);
   }
 }
+
+/**
+ * The account has spent its conversation allowance.
+ *
+ * 409 rather than 403: nothing about the caller is unauthorised, the resource
+ * simply cannot be created in the state the account is currently in. A client
+ * that treated this as an auth failure would sign the reader out.
+ */
+export class ImportLimitReachedError extends AppError {
+  constructor(public limit: number) {
+    super(`This account can import ${limit} conversations.`, 'IMPORT_LIMIT_REACHED', 409);
+  }
+}
+
+/**
+ * The transcript is past what a single extraction can carry.
+ *
+ * 413 rather than 400, because the request is well-formed — it is only too big,
+ * and the remedy is to send less of it rather than to fix its shape. The Mac
+ * already trims to the newest messages that fit; reaching this means the two
+ * ceilings have drifted apart.
+ */
+export class TranscriptTooLargeError extends AppError {
+  constructor(public maxChars: number) {
+    super(
+      `That transcript is past the ${maxChars} character ceiling.`,
+      'TRANSCRIPT_TOO_LARGE',
+      413
+    );
+  }
+}
+
+/**
+ * The transcript was gone before the worker read it.
+ *
+ * Retryable, and the client already holds the only durable copy: expiry,
+ * eviction and a crash between enqueue and read all land here, and the remedy
+ * for each is the same re-send.
+ */
+export class TranscriptExpiredError extends AppError {
+  constructor() {
+    super('That transcript is no longer being held.', 'TRANSCRIPT_EXPIRED', 410);
+  }
+}

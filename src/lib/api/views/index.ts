@@ -1,9 +1,12 @@
 import type { PublicPerson } from '@/lib/services/persons/persons.types';
 import type { CharacterRole, PublicStoryline } from '@/lib/services/storylines/storylines.types';
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
+import type { PublicImport } from '@/lib/services/imports/imports.types';
+import { failureIsRetryable } from '@/lib/services/imports/imports.types';
 import type {
   ArcView,
   ChoiceView,
+  ImportView,
   PersonDetailView,
   PersonView,
   SessionStateView,
@@ -110,6 +113,26 @@ export function personDetailView(input: {
   };
   // No arc count as a separate field: the client has the array. A count that can
   // disagree with the list it summarises is a bug waiting for pagination.
+}
+
+export function importView(row: PublicImport): ImportView {
+  return {
+    id: row.id,
+    conversationKey: row.conversationKey,
+    status: row.status,
+    stage: row.stage,
+    storylineId: row.storylineId,
+    // Flattened from two columns into one nullable object, because "failed with
+    // no code" and "not failed" are the same thing to a client and a pair of
+    // independently-nullable fields invites it to check the wrong one.
+    failure: row.failureCode
+      ? { code: row.failureCode, retryable: failureIsRetryable(row.failureCode) }
+      : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+  // startedAt is absent: it exists for the stall sweep, and a client that could
+  // see it would be tempted to compute its own timeout from it.
 }
 
 export function sessionView(input: {
