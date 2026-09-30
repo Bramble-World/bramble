@@ -16,5 +16,12 @@ vi.mock('@/env', () => ({
     // No key in unit tests, so getGenerator() resolves to the fake.
     OPENAI_API_KEY: undefined,
     BRAMBLE_AI_MODE: undefined,
+    // No Redis in unit tests; the store throws without it, which is what the
+    // test covering that branch asserts.
+    REDIS_URL: undefined,
+    // Present so the crypto tests have a key to work under. Exactly 32 bytes,
+    // because the module refuses anything else rather than silently using a
+    // weaker cipher.
+    IMPORT_MASTER_KEY: Buffer.from('unit-test-import-master-key-32by', 'utf8').toString('base64'),
   },
 }));

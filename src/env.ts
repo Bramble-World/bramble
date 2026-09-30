@@ -35,6 +35,19 @@ export const env = createEnv({
     // Forces the fake even when a key is present. For playing the loop end to
     // end without paying for it.
     BRAMBLE_AI_MODE: z.enum(['live', 'fake']).optional(),
+    // Where transcripts wait, encrypted, between the import request and the
+    // worker that reads them. Optional like the rest so a bare checkout builds;
+    // the store throws a clear error rather than silently degrading, because the
+    // degraded version of "hold this privately" is "hold this".
+    REDIS_URL: z.string().optional(),
+    /**
+     * The master key that wraps every per-import data key, base64, 32 bytes.
+     *
+     * Deliberately a different secret from `REDIS_URL`: the whole point of
+     * envelope encryption here is that Redis access alone reveals nothing, so a
+     * key stored beside the credentials that reach it would buy nothing at all.
+     */
+    IMPORT_MASTER_KEY: z.string().optional(),
   },
 
   /**
@@ -59,6 +72,8 @@ export const env = createEnv({
     CONTACT_HASH_SECRET: process.env.CONTACT_HASH_SECRET,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     BRAMBLE_AI_MODE: process.env.BRAMBLE_AI_MODE,
+    REDIS_URL: process.env.REDIS_URL,
+    IMPORT_MASTER_KEY: process.env.IMPORT_MASTER_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },

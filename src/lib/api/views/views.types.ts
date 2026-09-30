@@ -120,6 +120,27 @@ export type TurnView = {
  */
 export type SessionStateView = 'awaiting_answer' | 'awaiting_turn' | 'blocked';
 
+/**
+ * One conversation the reader handed over, and what became of it.
+ *
+ * Carries no message content and never can: the row behind it holds none
+ * either, so this is not a view that drops fields for safety — the safety is in
+ * the schema. `failure` is a code the client branches on, never a message: the
+ * only text available at that point comes from the model or from an exception
+ * wrapping the prompt, and the prompt is the transcript.
+ */
+export type ImportView = {
+  id: string;
+  conversationKey: string;
+  status: 'queued' | 'running' | 'ready' | 'failed';
+  /** Only set while running. Stages, not a percentage — extraction is one call. */
+  stage: 'reading' | 'writing' | 'casting' | null;
+  storylineId: string | null;
+  failure: { code: string; retryable: boolean } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type SessionView = {
   id: string;
   storylineId: string;

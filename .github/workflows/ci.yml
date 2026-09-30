@@ -94,8 +94,24 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bramble_ci
+      # The import tests run against a real Redis rather than a fake, because
+      # what they assert is that a transcript is ciphertext at rest and gone
+      # afterwards — and a fake would let both of those be true by construction.
+      REDIS_URL: redis://localhost:6379
+      # Not a secret, deliberately. The tests assert that the value in Redis is
+      # unreadable without the key and bound to its import, neither of which
+      # depends on which key. The real one lives in Doppler and never enters CI.
+      IMPORT_MASTER_KEY: Y2ktbm90LWEtc2VjcmV0LWltcG9ydC1tYXN0ZXItayE=
       # Not a secret, and deliberately not one. persons.source_contact_ref is an
       # HMAC, so the integration tests need *a* key to hash under; they assert
       # that the same handle produces the same ref and that the raw handle never

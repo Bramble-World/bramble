@@ -11,18 +11,40 @@ silent. The silent ones are the dangerous ones.
 
 ## 1. Privacy — the product-level rule
 
-**Raw message content is never persisted.** Messages reach the LLM transiently
-during generation and are never written to any column. This is the product's
-central claim, not an implementation detail.
+**Message content is never written to a long-term store.** It is held encrypted
+in Redis for at most 30 minutes, readable only by the extraction worker, which
+deletes it when done. Anthropic receives the transcript to perform the
+extraction. Postgres holds only the model's retelling — storylines, people,
+events — and an `imports` row with no message content in it. This is the
+product's central claim, not an implementation detail.
 
 - `events.generationRationale` holds the model's _own reasoning_, never quoted
   source text.
 - `persons.sourceContactRef` is a **one-way hash** of a phone number or email.
   Writing the raw value would look identical to the database.
+- **The import path carries no real contact details at all.** The Mac replaces
+  phone numbers and emails with keyed pseudonyms (`c_…`) before sending, and the
+  API accepts only `me` or that shape — an allow-list, because a deny-list for
+  "looks like a phone number" has to anticipate every international format and
+  the cost of missing one is a real number reaching a column.
+- **Nothing on the import path is logged**: not request bodies, not Redis
+  values, not decrypted transcripts, not extraction prompts or outputs. The job
+  payload is exactly `{ importId }`, because a queue stores its payloads and
+  shows them in a dashboard, which would outlive the ciphertext's 30 minutes.
+- **The transcript is encrypted with a key Redis access alone cannot reach.** A
+  per-import data key encrypts the transcript; a master key held in a separate
+  secret encrypts the data key. Associated data binds each ciphertext to
+  `importId:userId`, so a blob cannot be replayed into another import or
+  account.
 
 **Fails:** silently, and as a privacy breach rather than a bug. Nothing detects
 it. Worth an explicit check in code review of anything touching the generation
 pipeline.
+
+**Asserted, not trusted:** `import-runner.integration.test.ts` runs a real
+extraction and then scans every column of every table in the schema for a phrase
+that only ever existed in a message — rather than the handful of columns anyone
+would think to check — and proves the scan itself is not vacuous.
 
 ---
 

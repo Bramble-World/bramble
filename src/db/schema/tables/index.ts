@@ -9,6 +9,7 @@ export { contextEntries } from './contextEntries';
 export { storylineSessions } from './storylineSessions';
 export { storyTurns } from './storylineSessions/storyTurns';
 export { turnChoices } from './storylineSessions/turnChoices';
+export { imports, importStatusEnum, importStageEnum } from './imports';
 export { motifs } from './motifs';
 export { motifParticipants } from './motifs/motifParticipants';
 export { motifOccurrences } from './motifs/motifOccurrences';
