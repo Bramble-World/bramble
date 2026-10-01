@@ -25,6 +25,7 @@ export const GET = withUser(async (user) => {
   const nodes: WorldNodeView[] = world.nodes.map((node) => ({
     personId: node.personId,
     name: node.name,
+    isSelf: node.isSelf,
     relationshipType: node.relationshipType,
     weight: weights.get(node.personId) ?? 0,
     unexploredBeats: node.unexploredBeats,
