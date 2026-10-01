@@ -1,6 +1,6 @@
-import { and, asc, count, eq, inArray, isNotNull, isNull, lt, max } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, max, sql } from 'drizzle-orm';
 import { db } from '@/index';
-import { storylineSessions, storyTurns, turnChoices } from '@/db/schema/tables';
+import { storylines, storylineSessions, storyTurns, turnChoices } from '@/db/schema/tables';
 import { Executor } from '../executor';
 import { PublicSession, TurnWithChoices } from './sessions.types';
 
@@ -280,4 +280,146 @@ export async function lastPlayedByStoryline(
   return new Map(
     rows.flatMap((row) => (row.lastPlayedAt ? [[row.storylineId, row.lastPlayedAt] as const] : []))
   );
+}
+
+/**
+ * The reader's most recent playthrough of one storyline opened at one beat.
+ *
+ * The resume key is `startedFromEventId`, not the playhead. The playhead moves as
+ * they play, so a session opened at beat 5 and played to beat 9 is
+ * indistinguishable from one opened at 9 — the question "is this the playthrough
+ * they started from the moment they just tapped" can only be answered by what it
+ * was opened at.
+ *
+ * Most recent by `lastActiveAt`, matching the index, because `mode: 'new'` lets a
+ * reader deliberately keep several playthroughs of the same beat and the one they
+ * mean is the one they last touched.
+ */
+export async function latestSessionFromEvent(
+  tx: Executor,
+  userId: string,
+  storylineId: string,
+  eventId: string
+): Promise<PublicSession | null> {
+  const [session] = await tx
+    .select(sessionColumns)
+    .from(storylineSessions)
+    .where(
+      and(
+        eq(storylineSessions.userId, userId),
+        eq(storylineSessions.storylineId, storylineId),
+        eq(storylineSessions.startedFromEventId, eventId)
+      )
+    )
+    .orderBy(desc(storylineSessions.lastActiveAt))
+    .limit(1);
+
+  return session ?? null;
+}
+
+/**
+ * Serialises session creation for one storyline, for the caller's transaction.
+ *
+ * Find-or-create is a race without it: two taps on the same moment both find
+ * nothing, both insert, and the reader has two playthroughs of one beat with
+ * their progress split between them. A unique index cannot express this, because
+ * `mode: 'new'` must still be able to create a second one deliberately.
+ *
+ * Locks the storyline row, which is the same row `lockStorylineForOrdering`
+ * takes. Contending with timeline writes is correct rather than unfortunate —
+ * both are deciding where a reader sits in a story.
+ */
+export async function lockStorylineForSessions(tx: Executor, storylineId: string): Promise<void> {
+  await tx
+    .select({ id: storylines.id })
+    .from(storylines)
+    .where(eq(storylines.id, storylineId))
+    .for('update');
+}
+
+/**
+ * The reader's latest playthrough of each of these beats, with its progress.
+ *
+ * One query for a whole page of ranked moments. The world screen draws twenty of
+ * them and each needs to know whether it has been played, so a query per event is
+ * twenty round trips on the client's cold-start path.
+ *
+ * `distinct on` picks the newest row per beat inside the database rather than
+ * fetching every session and folding them in JS, which matters for a reader who
+ * has replayed a moment several times.
+ */
+export async function playthroughsForEvents(
+  userId: string,
+  eventIds: string[]
+): Promise<Map<string, { sessionId: string; turnsAnswered: number; lastActiveAt: Date }>> {
+  if (eventIds.length === 0) return new Map();
+
+  const rows = await db
+    .selectDistinctOn([storylineSessions.startedFromEventId], {
+      eventId: storylineSessions.startedFromEventId,
+      sessionId: storylineSessions.id,
+      lastActiveAt: storylineSessions.lastActiveAt,
+      /*
+       * Correlated rather than a join and a group by: the outer query is already
+       * picking one row per beat, and grouping would fight that.
+       *
+       * Written with literal identifiers rather than the column helpers, and it
+       * has to be. Drizzle renders `storylineSessions.id` as bare `"id"` — the
+       * table prefix is dropped for the query's own table — which is correct at
+       * the top level and silently wrong here: inside the subquery `"id"` binds
+       * to `story_turns.id`, so the correlation compares a turn's session to the
+       * turn's own id and matches nothing. The count came back 0 for a session
+       * that had demonstrably answered a turn. No interpolation, so nothing here
+       * is user input; a column rename is caught by the tests.
+       */
+      turnsAnswered: sql<number>`(
+        select count(*)::int from story_turns t
+        where t.session_id = storyline_sessions.id
+          and t.selected_choice_id is not null
+      )`,
+    })
+    .from(storylineSessions)
+    .where(
+      and(
+        eq(storylineSessions.userId, userId),
+        inArray(storylineSessions.startedFromEventId, eventIds)
+      )
+    )
+    .orderBy(storylineSessions.startedFromEventId, desc(storylineSessions.lastActiveAt));
+
+  return new Map(
+    rows.flatMap((row) =>
+      row.eventId
+        ? [
+            [
+              row.eventId,
+              {
+                sessionId: row.sessionId,
+                turnsAnswered: row.turnsAnswered,
+                lastActiveAt: row.lastActiveAt,
+              },
+            ] as const,
+          ]
+        : []
+    )
+  );
+}
+
+/**
+ * Every turn in this session the reader has already answered, oldest first.
+ *
+ * The open turn is excluded by the predicate rather than by a filter afterwards:
+ * an unanswered turn has no `selectedChoiceId`, so "answered" and "not the one
+ * awaiting a decision" are the same condition, and expressing it once means the
+ * two cannot drift apart.
+ */
+export async function listAnsweredTurns(
+  tx: Executor,
+  sessionId: string
+): Promise<TurnWithChoices[]> {
+  return tx.query.storyTurns.findMany({
+    where: { sessionId, selectedChoiceId: { isNotNull: true } },
+    with: { choices: { orderBy: { orderIndex: 'asc' } } },
+    orderBy: { turnOrder: 'asc' },
+  });
 }

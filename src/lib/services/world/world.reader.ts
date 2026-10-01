@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/index';
 import { characters, eventParticipants, events, persons, storylines } from '@/db/schema/tables';
+import * as sessionReader from '../sessions/sessions.reader';
 import { WorldEvent, WorldEventPerson } from './world.types';
 
 /**
@@ -55,9 +56,17 @@ export async function topEventsFor(userId: string, limit: number): Promise<World
     .orderBy(desc(events.engagementScore), desc(events.occurredAt), asc(events.id))
     .limit(limit);
 
-  const peopleByEvent = await peopleFor(ranked.map((row) => row.eventId));
+  const eventIds = ranked.map((row) => row.eventId);
+  const [peopleByEvent, playthroughByEvent] = await Promise.all([
+    peopleFor(eventIds),
+    sessionReader.playthroughsForEvents(userId, eventIds),
+  ]);
 
-  return ranked.map((row) => ({ ...row, people: peopleByEvent.get(row.eventId) ?? [] }));
+  return ranked.map((row) => ({
+    ...row,
+    people: peopleByEvent.get(row.eventId) ?? [],
+    playthrough: playthroughByEvent.get(row.eventId) ?? null,
+  }));
 }
 
 /**

@@ -470,17 +470,57 @@ describe('starting a session from a chosen beat', () => {
   });
 
   /**
-   * Picking a moment is an instruction to begin there, so it overrides resuming.
-   * Handing back a half-finished playthrough would silently ignore the only thing
-   * the reader said.
+   * One playthrough per moment. The reader taps a moment, leaves, taps the same
+   * moment a week later and expects to find where they got to — so resume is
+   * keyed on the beat they opened at, not on the storyline.
    */
-  it('starts a fresh playthrough even when one is already open', async () => {
-    const existing = await sessions.resumeOrStart(ownerId, storyId);
+  it('returns the same playthrough when the same moment is tapped again', async () => {
+    const first = await sessions.resumeOrStart(ownerId, storyId, 'resume', beats[2].id);
+    const again = await sessions.resumeOrStart(ownerId, storyId, 'resume', beats[2].id);
 
-    const picked = await sessions.resumeOrStart(ownerId, storyId, 'resume', beats[3].id);
+    expect(again.id).toBe(first.id);
+  });
 
-    expect(picked.id).not.toBe(existing.id);
-    expect(picked.playheadOrder).toBe(beats[3].narrativeOrder);
+  it('keeps a different moment as a separate playthrough', async () => {
+    const one = await sessions.resumeOrStart(ownerId, storyId, 'resume', beats[1].id);
+    const other = await sessions.resumeOrStart(ownerId, storyId, 'resume', beats[3].id);
+
+    expect(other.id).not.toBe(one.id);
+    expect(one.playheadOrder).toBe(beats[1].narrativeOrder);
+    expect(other.playheadOrder).toBe(beats[3].narrativeOrder);
+  });
+
+  it('starts another playthrough of the same moment on request', async () => {
+    const first = await sessions.resumeOrStart(ownerId, storyId, 'resume', beats[2].id);
+    const replay = await sessions.resumeOrStart(ownerId, storyId, 'new', beats[2].id);
+
+    expect(replay.id).not.toBe(first.id);
+    expect(replay.playheadOrder).toBe(beats[2].narrativeOrder);
+  });
+
+  /**
+   * Two taps racing. Without the lock both find nothing, both insert, and the
+   * reader's progress is split across two playthroughs of one beat with no way
+   * to merge them.
+   */
+  it('never creates two playthroughs from concurrent taps on one moment', async () => {
+    const results = await Promise.all([
+      sessions.resumeOrStart(ownerId, storyId, 'resume', beats[0].id),
+      sessions.resumeOrStart(ownerId, storyId, 'resume', beats[0].id),
+      sessions.resumeOrStart(ownerId, storyId, 'resume', beats[0].id),
+    ]);
+
+    expect(new Set(results.map((r) => r.id)).size).toBe(1);
+  });
+
+  // A session opened from the top is not a playthrough of any moment, so tapping
+  // one must not adopt it.
+  it('never resumes a playthrough that was started from the beginning', async () => {
+    const fromTheTop = await sessions.resumeOrStart(ownerId, storyId);
+
+    const picked = await sessions.resumeOrStart(ownerId, storyId, 'resume', beats[0].id);
+
+    expect(picked.id).not.toBe(fromTheTop.id);
   });
 
   // The ordinary resume is untouched by any of this.

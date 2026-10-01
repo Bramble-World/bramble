@@ -4,6 +4,7 @@ import * as storylineReader from '../storylines/storylines.reader';
 import * as timelineReader from '../timeline/timeline.reader';
 import * as reader from './sessions.reader';
 import * as writer from './sessions.writer';
+import { Executor } from '../executor';
 import { NewChoice, PublicSession, TurnWithChoices } from './sessions.types';
 
 export const findIdleSessions = reader.findIdleSessions;
@@ -44,24 +45,40 @@ export async function startSession(
 
   // One transaction, because a session inserted at playhead 0 is a session that
   // would render no history at all — the two writes are one fact.
-  return db.transaction(async (tx) => {
-    const session = await writer.insertSession(tx, userId, storylineId);
+  return db.transaction((tx) => insertSessionIn(tx, userId, storylineId, startAt, fromEventId));
+}
 
-    if (startAt === null) {
-      // Lands on the first beat: a new session has nothing above 0 but the
-      // timeline itself, so the ordinary step does the initialising and there is
-      // no separate first-run branch to keep in sync.
-      await writer.advancePlayhead(tx, session.id);
-    } else {
-      // A raise rather than a set, and it is one here too: the session was just
-      // created at 0, so every real beat is above it.
-      await writer.raisePlayheadTo(tx, session.id, startAt);
-    }
+/**
+ * Creates a playthrough inside a caller's transaction.
+ *
+ * Split out so the find-or-create in `resumeOrStart` can hold one lock across
+ * both the look-up and the insert. Two taps on the same moment would otherwise
+ * both find nothing, both insert, and split the reader's progress across two
+ * playthroughs of one beat.
+ */
+async function insertSessionIn(
+  tx: Executor,
+  userId: string,
+  storylineId: string,
+  startAt: number | null,
+  fromEventId?: string
+): Promise<PublicSession> {
+  const session = await writer.insertSession(tx, userId, storylineId, fromEventId);
 
-    const started = await reader.getSessionIn(tx, userId, session.id);
-    if (!started) throw new NotFoundError('Session', session.id);
-    return started;
-  });
+  if (startAt === null) {
+    // Lands on the first beat: a new session has nothing above 0 but the
+    // timeline itself, so the ordinary step does the initialising and there is
+    // no separate first-run branch to keep in sync.
+    await writer.advancePlayhead(tx, session.id);
+  } else {
+    // A raise rather than a set, and it is one here too: the session was just
+    // created at 0, so every real beat is above it.
+    await writer.raisePlayheadTo(tx, session.id, startAt);
+  }
+
+  const started = await reader.getSessionIn(tx, userId, session.id);
+  if (!started) throw new NotFoundError('Session', session.id);
+  return started;
 }
 
 /**
@@ -97,14 +114,40 @@ export async function resumeOrStart(
   mode: 'resume' | 'new' = 'resume',
   fromEventId?: string
 ): Promise<PublicSession> {
-  // Picking a moment is an instruction to begin there, so it overrides resuming.
-  // Returning someone's half-finished playthrough when they asked to start at a
-  // particular beat would silently ignore the only thing they said.
-  if (mode === 'resume' && !fromEventId) {
-    const existing = await currentSession(userId, storylineId);
-    if (existing) return existing;
+  if (!fromEventId) {
+    if (mode === 'resume') {
+      const existing = await currentSession(userId, storylineId);
+      if (existing) return existing;
+    }
+    return startSession(userId, storylineId);
   }
-  return startSession(userId, storylineId, fromEventId);
+
+  // Validated here rather than inside the transaction, so a bad id costs a read
+  // instead of a lock. `startSession` re-checks on the create path.
+  const storyline = await storylineReader.getStoryline(userId, storylineId);
+  if (!storyline) throw new NotFoundError('Storyline', storylineId);
+  if (storyline.status !== 'ready') {
+    throw new ValidationError(`This storyline is not ready to play (status: ${storyline.status})`);
+  }
+  const startAt = await timelineReader.narrativeOrderOf(storylineId, fromEventId);
+  if (startAt === null) throw new NotFoundError('Event', fromEventId);
+
+  if (mode === 'new') {
+    return db.transaction((tx) => insertSessionIn(tx, userId, storylineId, startAt, fromEventId));
+  }
+
+  // One playthrough per moment. The look-up and the insert share a transaction
+  // and a lock, because without them two taps on the same moment both find
+  // nothing, both insert, and the reader's progress is split across two
+  // playthroughs of one beat with no way to merge them.
+  return db.transaction(async (tx) => {
+    await reader.lockStorylineForSessions(tx, storylineId);
+
+    const existing = await reader.latestSessionFromEvent(tx, userId, storylineId, fromEventId);
+    if (existing) return existing;
+
+    return insertSessionIn(tx, userId, storylineId, startAt, fromEventId);
+  });
 }
 
 export async function getSession(userId: string, sessionId: string): Promise<PublicSession> {
@@ -238,13 +281,22 @@ export async function sessionSnapshot(
   state: 'awaiting_answer' | 'awaiting_turn' | 'blocked';
   turnsAnswered: number;
   turn: TurnWithChoices | null;
+  /**
+   * Every turn already answered, oldest first.
+   *
+   * The reader is resuming a moment they opened days ago, so the screen has to
+   * show them what they have already lived through rather than dropping them
+   * into a narrative that refers to decisions they cannot see.
+   */
+  history: TurnWithChoices[];
 }> {
   const session = await getSession(userId, sessionId);
 
-  const [storyline, open, turnsAnswered] = await Promise.all([
+  const [storyline, open, turnsAnswered, history] = await Promise.all([
     storylineReader.getStoryline(userId, session.storylineId),
     reader.getOpenTurn(db, sessionId),
     reader.countAnsweredTurns(db, sessionId),
+    reader.listAnsweredTurns(db, sessionId),
   ]);
 
   // A storyline can fail after a session has begun, so this is a live check
@@ -258,5 +310,5 @@ export async function sessionSnapshot(
         ? 'awaiting_answer'
         : 'awaiting_turn';
 
-  return { session, state, turnsAnswered, turn: open };
+  return { session, state, turnsAnswered, turn: open, history };
 }

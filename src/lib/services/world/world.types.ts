@@ -44,6 +44,14 @@ export type WorldEvent = {
    * client can change how engagement is drawn without a server release.
    */
   score: number;
+  /**
+   * The reader's latest playthrough opened at this beat, if there is one.
+   *
+   * Loaded for the whole page in one query rather than per event — twenty round
+   * trips on the client's cold-start path is the shape that looks fine in
+   * development and falls over on a real connection.
+   */
+  playthrough: { sessionId: string; turnsAnswered: number; lastActiveAt: Date } | null;
 };
 
 export type World = {

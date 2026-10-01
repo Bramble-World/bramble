@@ -6,14 +6,18 @@ import { NewChoice, PublicSession, TurnWithChoices } from './sessions.types';
 export async function insertSession(
   tx: Executor,
   userId: string,
-  storylineId: string
+  storylineId: string,
+  startedFromEventId?: string
 ): Promise<PublicSession> {
-  const [session] = await tx.insert(storylineSessions).values({ userId, storylineId }).returning({
-    id: storylineSessions.id,
-    storylineId: storylineSessions.storylineId,
-    lastActiveAt: storylineSessions.lastActiveAt,
-    playheadOrder: storylineSessions.playheadOrder,
-  });
+  const [session] = await tx
+    .insert(storylineSessions)
+    .values({ userId, storylineId, startedFromEventId })
+    .returning({
+      id: storylineSessions.id,
+      storylineId: storylineSessions.storylineId,
+      lastActiveAt: storylineSessions.lastActiveAt,
+      playheadOrder: storylineSessions.playheadOrder,
+    });
   return session;
 }
 

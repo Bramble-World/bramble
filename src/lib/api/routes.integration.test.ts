@@ -467,7 +467,57 @@ describe('POST /api/v1/storylines/:storylineId/sessions', () => {
     expect(turn.choices.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('overrides resuming, so a picked moment is never silently ignored', async () => {
+  /**
+   * The resume loop the world card depends on: tap a moment, play, come back,
+   * tap the same moment, and land in the same playthrough with its history.
+   */
+  it('returns the same playthrough when the same moment is tapped again', async () => {
+    asOwner();
+    const world_ = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const picked = world_.events[0];
+    const body = { fromEventId: picked.eventId };
+
+    const first = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${picked.storylineId}/sessions`, body),
+        ctx({ storylineId: picked.storylineId })
+      )
+    ).json();
+    const again = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${picked.storylineId}/sessions`, body),
+        ctx({ storylineId: picked.storylineId })
+      )
+    ).json();
+
+    expect(again.session.id).toBe(first.session.id);
+  });
+
+  it('starts another playthrough of the same moment when asked', async () => {
+    asOwner();
+    const world_ = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const picked = world_.events[0];
+
+    const first = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${picked.storylineId}/sessions`, { fromEventId: picked.eventId }),
+        ctx({ storylineId: picked.storylineId })
+      )
+    ).json();
+    const replay = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${picked.storylineId}/sessions`, {
+          fromEventId: picked.eventId,
+          mode: 'new',
+        }),
+        ctx({ storylineId: picked.storylineId })
+      )
+    ).json();
+
+    expect(replay.session.id).not.toBe(first.session.id);
+  });
+
+  it('starts fresh rather than resuming a session begun from the top', async () => {
     asOwner();
 
     const first = await (
@@ -489,6 +539,20 @@ describe('POST /api/v1/storylines/:storylineId/sessions', () => {
     ).json();
 
     expect(picked.session.id).not.toBe(first.session.id);
+  });
+
+  // Every SessionView carries history, including a brand-new one.
+  it('gives a new playthrough an empty history rather than omitting it', async () => {
+    asOwner();
+
+    const body = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`),
+        ctx({ storylineId })
+      )
+    ).json();
+
+    expect(body.session.history).toStrictEqual([]);
   });
 
   it('answers 404 for a moment from a different storyline', async () => {
@@ -701,6 +765,112 @@ describe('the play loop', () => {
     ).json();
 
     expect(body.session.state).toBe('blocked');
+  });
+});
+
+describe('a moment you have already played', () => {
+  /**
+   * The field that turns "play" into "continue" on the card, and the whole loop
+   * it serves: pick a moment, answer a turn, and the card knows you have been
+   * there and how far you got.
+   */
+  it('reports the playthrough, and its progress, against the moment it started from', async () => {
+    asOwner();
+    const before = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const picked = before.events[0];
+    expect(picked.playthrough).toBeNull();
+
+    const { session } = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${picked.storylineId}/sessions`, { fromEventId: picked.eventId }),
+        ctx({ storylineId: picked.storylineId })
+      )
+    ).json();
+    const { turn } = await (
+      await turnRoute.POST(
+        post(`/api/v1/sessions/${session.id}/turn`),
+        ctx({ sessionId: session.id })
+      )
+    ).json();
+    await answerRoute.POST(
+      post(`/api/v1/sessions/${session.id}/answer`, {
+        turnId: turn.id,
+        choiceId: turn.choices[0].id,
+      }),
+      ctx({ sessionId: session.id })
+    );
+
+    const after = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const played = after.events.find((e: { eventId: string }) => e.eventId === picked.eventId);
+
+    expect(played.playthrough).toMatchObject({ sessionId: session.id, turnsAnswered: 1 });
+    expect(typeof played.playthrough.lastActiveAt).toBe('string');
+    // Only the moment that was played. The rest are still untouched.
+    for (const event of after.events.filter(
+      (e: { eventId: string }) => e.eventId !== picked.eventId
+    )) {
+      expect(event.playthrough).toBeNull();
+    }
+  });
+
+  /**
+   * History is what a reader resuming after a week needs: the decisions they
+   * already made. The open turn is deliberately absent — it is returned as
+   * `turn`, and carrying it in both would make the client render it twice.
+   */
+  it('accumulates answered turns in order, without repeating the open one', async () => {
+    asOwner();
+    const { session } = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`),
+        ctx({ storylineId })
+      )
+    ).json();
+
+    const answered: string[] = [];
+    const chosen: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const { turn } = await (
+        await turnRoute.POST(
+          post(`/api/v1/sessions/${session.id}/turn`),
+          ctx({ sessionId: session.id })
+        )
+      ).json();
+      answered.push(turn.id);
+      chosen.push(turn.choices[0].id);
+      await answerRoute.POST(
+        post(`/api/v1/sessions/${session.id}/answer`, {
+          turnId: turn.id,
+          choiceId: turn.choices[0].id,
+        }),
+        ctx({ sessionId: session.id })
+      );
+    }
+
+    // A third turn, left open.
+    const { turn: open } = await (
+      await turnRoute.POST(
+        post(`/api/v1/sessions/${session.id}/turn`),
+        ctx({ sessionId: session.id })
+      )
+    ).json();
+
+    const body = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${session.id}`), ctx({ sessionId: session.id }))
+    ).json();
+
+    expect(body.session.history.map((h: { turn: { id: string } }) => h.turn.id)).toStrictEqual(
+      answered
+    );
+    expect(
+      body.session.history.map((h: { chosenChoiceId: string }) => h.chosenChoiceId)
+    ).toStrictEqual(chosen);
+    expect(body.session.turn.id).toBe(open.id);
+    expect(body.session.history.map((h: { turn: { id: string } }) => h.turn.id)).not.toContain(
+      open.id
+    );
+    // Each history entry is a full turn, so the client can render what was asked.
+    expect(body.session.history[0].turn.choices.length).toBeGreaterThanOrEqual(2);
   });
 });
 

@@ -61,6 +61,14 @@ export type WorldEventView = {
   score: number;
   /** 0..1, normalised across this response. See `world.service`. */
   weight: number;
+  /**
+   * The reader's latest playthrough opened at this beat, if there is one.
+   *
+   * What turns "play" into "continue" on the card. Always present — `null` when
+   * they have never started here — so the client branches on a value rather than
+   * on a missing key.
+   */
+  playthrough: { sessionId: string; turnsAnswered: number; lastActiveAt: string } | null;
 };
 
 /** One playable storyline, as it appears in a list against a person. */
@@ -149,10 +157,30 @@ export type ImportView = {
   updatedAt: string;
 };
 
+/** One turn the reader has already answered, and what they picked. */
+export type AnsweredTurnView = {
+  turn: TurnView;
+  /**
+   * Null only if the choice row was deleted out from under the turn —
+   * `selected_choice_id` is `on delete set null`. Answered turns otherwise
+   * always have one.
+   */
+  chosenChoiceId: string | null;
+};
+
 export type SessionView = {
   id: string;
   storylineId: string;
   state: SessionStateView;
   turnsAnswered: number;
   turn: TurnView | null;
+  /**
+   * Everything already lived through, oldest first, excluding the open turn.
+   *
+   * A reader resuming a moment opened days ago needs to see the decisions they
+   * have already made — without them the narrative refers to things they cannot
+   * remember taking. Always present: `[]` for a session that has answered
+   * nothing.
+   */
+  history: AnsweredTurnView[];
 };
