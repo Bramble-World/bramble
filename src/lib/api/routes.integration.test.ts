@@ -189,6 +189,23 @@ describe('GET /api/v1/world', () => {
     expect(body.events[0].eventId).toEqual(expect.any(String));
   });
 
+  // Everything the card draws, in one request: title, date, paragraph, people.
+  it('sends everything the card renders', async () => {
+    asOwner();
+
+    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const top = body.events[0];
+
+    expect(top).toMatchObject({
+      title: 'The message',
+      description: 'She wrote first.',
+      storylineTitle: 'The Unsent Apology',
+    });
+    expect(top.occurredAt === null || typeof top.occurredAt === 'string').toBe(true);
+    expect(top.people.map((p: { name: string }) => p.name)).toStrictEqual(['Blossom', 'Maya']);
+    expect(top.people[0].isSelf).toBe(true);
+  });
+
   it('sends the weight and the raw score it came from', async () => {
     asOwner();
 

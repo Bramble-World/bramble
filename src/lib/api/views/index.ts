@@ -117,7 +117,13 @@ export function worldEventView(event: WorldEvent, weight: number): WorldEventVie
     storylineId: event.storylineId,
     storylineTitle: event.storylineTitle,
     title: event.title,
+    description: event.description,
     occurredAt: iso(event.occurredAt),
+    people: event.people.map((person) => ({
+      id: person.id,
+      name: person.name,
+      isSelf: person.isSelf,
+    })),
     score: event.score,
     weight,
   };

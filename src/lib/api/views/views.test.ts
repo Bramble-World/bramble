@@ -65,7 +65,12 @@ const worldEvent = {
   storylineId: 's1',
   storylineTitle: 'The Unsent Apology',
   title: 'The apology that landed wrong',
+  description: 'An apology was offered and waved away before it finished.',
   occurredAt: new Date('2026-04-02T18:00:00.000Z'),
+  people: [
+    { id: 'p0', name: 'Blossom', isSelf: true },
+    { id: 'p1', name: 'Maya', isSelf: false },
+  ],
   score: 9,
 };
 
@@ -98,10 +103,27 @@ describe('views', () => {
       storylineId: 's1',
       storylineTitle: 'The Unsent Apology',
       title: 'The apology that landed wrong',
+      description: 'An apology was offered and waved away before it finished.',
       occurredAt: '2026-04-02T18:00:00.000Z',
+      people: [
+        { id: 'p0', name: 'Blossom', isSelf: true },
+        { id: 'p1', name: 'Maya', isSelf: false },
+      ],
       score: 9,
       weight: 1,
     });
+  });
+
+  // The card shows names, and the reader reads differently from everyone else.
+  it('carries who was there, reader first', () => {
+    const view = worldEventView(worldEvent, 1);
+
+    expect(view.people.map((p) => p.name)).toStrictEqual(['Blossom', 'Maya']);
+    expect(view.people[0].isSelf).toBe(true);
+  });
+
+  it('carries a beat nobody was recorded at as an empty cast, not a missing one', () => {
+    expect(worldEventView({ ...worldEvent, people: [] }, 1).people).toStrictEqual([]);
   });
 
   it('keeps an undated moment null rather than inventing a date', () => {

@@ -51,8 +51,12 @@ export type WorldEventView = {
   /** So twenty titles are not twenty orphans with no story to belong to. */
   storylineTitle: string;
   title: string;
+  /** What happened, retold. Never an excerpt of a message. */
+  description: string;
   /** When it happened, if the conversation said. ISO, or null. */
   occurredAt: string | null;
+  /** Who was there. People, never per-storyline characters. Reader first. */
+  people: PersonView[];
   /** 1-10, as the model wrote it. */
   score: number;
   /** 0..1, normalised across this response. See `world.service`. */

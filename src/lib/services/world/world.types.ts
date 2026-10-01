@@ -12,6 +12,12 @@
  * and the point of the score is that twenty of them are worth drawing.
  */
 
+export type WorldEventPerson = {
+  id: string;
+  name: string;
+  isSelf: boolean;
+};
+
 export type WorldEvent = {
   /** What the client starts a session from. The narrative order never ships. */
   eventId: string;
@@ -19,7 +25,18 @@ export type WorldEvent = {
   /** So twenty titles are not twenty orphans with no story to belong to. */
   storylineTitle: string;
   title: string;
+  /** What happened, retold. Never an excerpt — see invariants.md §1. */
+  description: string;
   occurredAt: Date | null;
+  /**
+   * Who was there, as people rather than characters.
+   *
+   * A `characters` row is one storyline's casting of a person, so keying the
+   * client's model of a human on it would make the same person several objects
+   * across one screen — the reader would see "Maya" three times and have no way
+   * to know it was one Maya. The card shows names, so it gets people.
+   */
+  people: WorldEventPerson[];
   /**
    * 1-10, as the model wrote it.
    *

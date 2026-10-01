@@ -31,12 +31,17 @@ let castA: string;
 let castB: string;
 
 /** Appends an extracted beat with a known score. */
-async function beat(title: string, engagementScore: number | undefined, storyline = storylineId) {
+async function beat(
+  title: string,
+  engagementScore: number | undefined,
+  storyline = storylineId,
+  participantCharacterIds: string[] = [castA, castB]
+) {
   return timeline.appendEvent(userId, storyline, {
     origin: 'extracted',
     title,
-    description: 'x',
-    participantCharacterIds: [castA, castB],
+    description: `what happened at ${title}`,
+    participantCharacterIds,
     engagementScore,
   });
 }
@@ -114,6 +119,72 @@ describe('getWorld', () => {
    * judged this dull". Ranking it last would assert the second while only knowing
    * the first, so it is excluded instead.
    */
+  /**
+   * The card the client draws shows a title, a date, a paragraph and the people
+   * who were there — so all four have to arrive with the ranking, in one request.
+   */
+  it('carries what the card renders: description and who was there', async () => {
+    await beat('the confrontation', 9);
+
+    const [event] = (await getWorld(userId)).events;
+
+    expect(event.description).toBe('what happened at the confrontation');
+    expect(event.people.map((p) => p.name)).toStrictEqual(['Blossom', 'Maya']);
+    expect(event.people[0].isSelf).toBe(true);
+  });
+
+  /**
+   * People, not characters. A `characters` row is one storyline's casting, so
+   * returning those would put the same human on the screen once per storyline and
+   * give the client no way to tell it was one person.
+   */
+  it('names each person once, however many storylines they are cast in', async () => {
+    const second = await storylines.createStoryline(userId, {
+      title: 'Another Arc',
+      sourceSurface: 'imessage',
+    });
+    await storylines.markStatus(userId, second.id, 'ready');
+    const c = await storylines.castCharacter(userId, second.id, selfId, { role: 'protagonist' });
+    const d = await storylines.castCharacter(userId, second.id, otherId);
+
+    await beat('here', 9);
+    await beat('and here', 8, second.id, [c.id, d.id]);
+
+    const world = await getWorld(userId);
+    const ids = world.events.flatMap((e) => e.people.map((p) => p.id));
+
+    // Maya is cast twice, as two characters — and is one person on the screen.
+    expect(new Set(ids).size).toBe(2);
+    for (const event of world.events) {
+      expect(event.people.map((p) => p.id)).toStrictEqual([selfId, otherId]);
+    }
+  });
+
+  /**
+   * The reader comes first whatever they are called. Seeded with a name that
+   * sorts *ahead* of theirs, because with "Blossom" and "Maya" alone an
+   * alphabetical sort produces the same answer and the rule goes untested.
+   */
+  it('puts the reader first even when another name sorts above theirs', async () => {
+    const aaron = await persons.createPerson(userId, { name: 'Aaron' });
+    const castC = await storylines.castCharacter(userId, storylineId, aaron.id);
+
+    await beat('all three', 9, storylineId, [castA, castB, castC.id]);
+
+    const [event] = (await getWorld(userId)).events;
+
+    expect(event.people.map((p) => p.name)).toStrictEqual(['Blossom', 'Aaron', 'Maya']);
+  });
+
+  it('gives a beat with nobody recorded an empty cast rather than dropping it', async () => {
+    await beat('nobody was there', 7, storylineId, []);
+
+    const [event] = (await getWorld(userId)).events;
+
+    expect(event.title).toBe('nobody was there');
+    expect(event.people).toStrictEqual([]);
+  });
+
   it('never offers a beat nobody scored', async () => {
     await beat('scored', 4);
     await beat('never scored', undefined);

@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/index';
-import { events, storylines } from '@/db/schema/tables';
-import { WorldEvent } from './world.types';
+import { characters, eventParticipants, events, persons, storylines } from '@/db/schema/tables';
+import { WorldEvent, WorldEventPerson } from './world.types';
 
 /**
  * The read behind the moments a reader is offered.
@@ -32,12 +32,13 @@ import { WorldEvent } from './world.types';
  * is ten wide and the candidates are many.
  */
 export async function topEventsFor(userId: string, limit: number): Promise<WorldEvent[]> {
-  return db
+  const ranked = await db
     .select({
       eventId: events.id,
       storylineId: events.storylineId,
       storylineTitle: storylines.title,
       title: events.title,
+      description: events.description,
       occurredAt: events.occurredAt,
       // Not-null by the predicate below, which the column type cannot express.
       score: sql<number>`${events.engagementScore}`,
@@ -53,6 +54,48 @@ export async function topEventsFor(userId: string, limit: number): Promise<World
     )
     .orderBy(desc(events.engagementScore), desc(events.occurredAt), asc(events.id))
     .limit(limit);
+
+  const peopleByEvent = await peopleFor(ranked.map((row) => row.eventId));
+
+  return ranked.map((row) => ({ ...row, people: peopleByEvent.get(row.eventId) ?? [] }));
+}
+
+/**
+ * Who was present at each of these beats.
+ *
+ * One query for the whole page rather than one per event: the ranked read is on
+ * the client's cold-start path, and twenty round trips to build one screen is the
+ * shape that looks fine in development and falls over on a real connection.
+ *
+ * Resolved to **people**, not characters. A `characters` row is one storyline's
+ * casting of a person, so returning those would put the same human on the screen
+ * once per storyline they appear in, with no way for the client to tell it was one
+ * person. `isSelf` travels because the card reads differently when it is you.
+ */
+async function peopleFor(eventIds: string[]): Promise<Map<string, WorldEventPerson[]>> {
+  if (eventIds.length === 0) return new Map();
+
+  const rows = await db
+    .selectDistinct({
+      eventId: eventParticipants.eventId,
+      id: persons.id,
+      name: persons.name,
+      isSelf: persons.isSelf,
+    })
+    .from(eventParticipants)
+    .innerJoin(characters, eq(characters.id, eventParticipants.characterId))
+    .innerJoin(persons, eq(persons.id, characters.personId))
+    .where(inArray(eventParticipants.eventId, eventIds))
+    // The reader first, then by name. A card that reads "you and Maya" one launch
+    // and "Maya and you" the next looks broken, and the database guarantees no
+    // order of its own.
+    .orderBy(desc(persons.isSelf), asc(persons.name));
+
+  const byEvent = new Map<string, WorldEventPerson[]>();
+  for (const { eventId, ...person } of rows) {
+    byEvent.set(eventId, [...(byEvent.get(eventId) ?? []), person]);
+  }
+  return byEvent;
 }
 
 /**
