@@ -198,6 +198,7 @@ describe('extractStoryline', () => {
           stakes: null,
           occurredAt: 'the third of never',
           participantNames: [],
+          engagementScore: 5,
         },
       ],
       background: [],

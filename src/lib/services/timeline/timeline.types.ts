@@ -11,6 +11,8 @@ export type PublicEvent = {
   title: string;
   description: string;
   stakes: string | null;
+  /** 1-10, written by the model. Null when never scored — not when scored low. */
+  engagementScore: number | null;
   origin: EventOrigin;
   triggeredByTurnId: string | null;
   generationRationale: string | null;
@@ -30,6 +32,14 @@ type EventFields = {
    * records. Stored for measurement; no prompt reads it.
    */
   actorCharacterId?: string;
+  /**
+   * How much this beat invites being played from, 1-10.
+   *
+   * Optional, because `appendEvent` is reachable from tests and scripts that have
+   * no model behind them. Absent means the beat is simply not rankable, which the
+   * ranked read handles by excluding it rather than by scoring it zero.
+   */
+  engagementScore?: number;
 };
 
 /**

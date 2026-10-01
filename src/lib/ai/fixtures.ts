@@ -70,6 +70,7 @@ export function registerFixtures(fake: FakeGenerator): void {
           actorCharacterId: cast.find((c) => !c.isSelf)?.id ?? null,
           generationRationale:
             'The reader chose to be direct where the original exchange was evasive, so the story now has to account for that having been said out loud.',
+          engagementScore: 7,
         },
       ],
       contextEntries: [
@@ -140,6 +141,10 @@ export function registerFixtures(fake: FakeGenerator): void {
           powerBalance: null,
         },
       ],
+      // Scores are spread deliberately, and deterministically. A fixture that
+      // returned one number for every beat would let a ranked read pass while
+      // ordering by nothing at all — the tests would be asserting against a
+      // single-valued column, which is no order.
       beats: [
         {
           title: 'Where things stood',
@@ -147,6 +152,7 @@ export function registerFixtures(fake: FakeGenerator): void {
           stakes: 'Whether it gets named at all.',
           occurredAt: vars.messages[0]?.sentAt ?? null,
           participantNames: [selfName, otherName],
+          engagementScore: 3,
         },
         {
           title: 'The apology that landed wrong',
@@ -154,6 +160,7 @@ export function registerFixtures(fake: FakeGenerator): void {
           stakes: null,
           occurredAt: vars.messages.at(-1)?.sentAt ?? null,
           participantNames: [selfName, otherName],
+          engagementScore: 9,
         },
       ],
       background: [

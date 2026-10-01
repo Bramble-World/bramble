@@ -46,9 +46,7 @@ const STRANGER = 'user_api_stranger';
 let ownerId: string;
 let strangerId: string;
 let storylineId: string;
-let selfPersonId: string;
 let mayaPersonId: string;
-let michaelPersonId: string;
 
 const get = (path: string) => new Request(`http://api.test${path}`);
 const post = (path: string, body?: unknown) =>
@@ -111,9 +109,7 @@ beforeEach(async () => {
   const self = await persons.getOrCreateSelfPerson(ownerId, 'Blossom');
   const maya = await persons.createPerson(ownerId, { name: 'Maya' });
   const michael = await persons.createPerson(ownerId, { name: 'Michael' });
-  selfPersonId = self.id;
   mayaPersonId = maya.id;
-  michaelPersonId = michael.id;
 
   const a = await storylines.castCharacter(ownerId, storylineId, self.id, { role: 'protagonist' });
   const b = await storylines.castCharacter(ownerId, storylineId, maya.id);
@@ -125,32 +121,40 @@ beforeEach(async () => {
   await persons.linkPersons(ownerId, self.id, maya.id, 'oldest friend');
 
   // Maya is in the first beat, Michael only in the third — so who the reader has
-  // met depends entirely on where the playhead is.
+  // met depends entirely on where the playhead is. Scores are spread so the ranked
+  // read has something to order, and `stakes` is planted on every beat so the
+  // no-machinery assertion has something it could leak.
   await timeline.appendEvent(ownerId, storylineId, {
     origin: 'extracted',
     title: 'Where things stood',
     description: 'They had not spoken in three weeks.',
+    stakes: 'Whether it gets named at all.',
     participantCharacterIds: [a.id, b.id],
+    engagementScore: 4,
   });
   await timeline.appendEvent(ownerId, storylineId, {
     origin: 'extracted',
     title: 'The message',
     description: 'She wrote first.',
+    stakes: 'Whether she answers.',
     participantCharacterIds: [a.id, b.id],
+    engagementScore: 9,
   });
   await timeline.appendEvent(ownerId, storylineId, {
     origin: 'extracted',
     title: 'The offer',
     description: 'Michael names a number.',
+    stakes: 'Whether the $300,000 is taken.',
     participantCharacterIds: [a.id, c.id],
+    engagementScore: 6,
   });
 });
 
 describe('GET /api/v1/world', () => {
   /**
-   * Screen 20 is "not enough context yet" — an invitation, not a failure. A 404
-   * would make the client render an error where it should render that, and
-   * "empty becomes 404" is the easiest mistake in the world service.
+   * "Not enough context yet" is an invitation, not a failure. A 404 would make the
+   * client render an error where it should render that, and "empty becomes 404" is
+   * the easiest mistake in this service.
    */
   it('gives a reader with nothing 200 and an empty world', async () => {
     asStranger();
@@ -159,50 +163,90 @@ describe('GET /api/v1/world', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toStrictEqual({ nodes: [], edges: [], truncated: false });
+    expect(body).toStrictEqual({ events: [], truncated: false });
   });
 
-  it('never serves one reader another reader world', async () => {
+  it('never serves one reader another reader moments', async () => {
     asOwner();
     const mine = await (await world.GET(get('/api/v1/world'), undefined)).json();
 
     asStranger();
     const theirs = await (await world.GET(get('/api/v1/world'), undefined)).json();
 
-    expect(mine.nodes.length).toBeGreaterThan(0);
-    expect(theirs.nodes).toStrictEqual([]);
+    expect(mine.events.length).toBeGreaterThan(0);
+    expect(theirs.events).toStrictEqual([]);
   });
 
-  it('sends the weight and the counts it was derived from', async () => {
+  it('returns the best beats first, each knowing which story it belongs to', async () => {
     asOwner();
-    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
-    const maya = body.nodes.find((n: { name: string }) => n.name === 'Maya');
 
-    expect(maya.weight).toBeGreaterThan(0);
-    expect(maya.unexploredBeats).toBe(3);
-    expect(maya.storylineCount).toBe(1);
-    expect(maya.relationshipType).toBe('oldest friend');
+    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const scores = body.events.map((e: { score: number }) => e.score);
+
+    expect(body.events.length).toBeGreaterThan(1);
+    expect(scores).toStrictEqual([...scores].sort((a: number, b: number) => b - a));
+    expect(body.events[0].storylineTitle).toBe('The Unsent Apology');
+    expect(body.events[0].eventId).toEqual(expect.any(String));
+  });
+
+  // Everything the card draws, in one request: title, date, paragraph, people.
+  it('sends everything the card renders', async () => {
+    asOwner();
+
+    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const top = body.events[0];
+
+    expect(top).toMatchObject({
+      title: 'The message',
+      description: 'She wrote first.',
+      storylineTitle: 'The Unsent Apology',
+    });
+    expect(top.occurredAt === null || typeof top.occurredAt === 'string').toBe(true);
+    expect(top.people.map((p: { name: string }) => p.name)).toStrictEqual(['Blossom', 'Maya']);
+    expect(top.people[0].isSelf).toBe(true);
+  });
+
+  it('sends the weight and the raw score it came from', async () => {
+    asOwner();
+
+    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
+
+    expect(body.events[0].weight).toBe(1);
+    expect(body.events[0].score).toBeGreaterThan(0);
+    for (const event of body.events) {
+      expect(event.weight).toBeGreaterThan(0);
+      expect(event.weight).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('honours a limit, clamped to the ceiling', async () => {
+    asOwner();
+
+    const one = await (await world.GET(get('/api/v1/world?limit=1'), undefined)).json();
+    const absurd = await (await world.GET(get('/api/v1/world?limit=9999'), undefined)).json();
+
+    expect(one.events).toHaveLength(1);
+    expect(one.truncated).toBe(true);
+    expect(absurd.events.length).toBeLessThanOrEqual(20);
   });
 
   /**
-   * The map always contains the reader, so the client has to be able to pick
-   * them out to draw them differently. Deriving it from the name, or from a
-   * null relationship, is a guess that breaks on a namesake or an unrecorded
-   * relationship — so it travels as its own field.
+   * The list names beats the reader has not reached, deliberately — that is what
+   * makes "play from here" possible. What it must never carry is the machinery:
+   * `stakes` is the lever, `generationRationale` is the model explaining its trick,
+   * and `narrativeOrder` is an internal key the client never needs because it
+   * starts a session from `eventId`.
    */
-  it('marks exactly one node as the reader, and includes them', async () => {
+  it('names beats without shipping the machinery behind them', async () => {
     asOwner();
 
-    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
-    const selves = body.nodes.filter((n: { isSelf: boolean }) => n.isSelf);
+    const raw = await (await world.GET(get('/api/v1/world'), undefined)).text();
 
-    expect(selves).toHaveLength(1);
-    expect(selves[0].personId).toBe(selfPersonId);
-    // Everyone else is explicitly not the reader, rather than missing the field.
-    for (const node of body.nodes) {
-      expect(typeof node.isSelf).toBe('boolean');
-    }
-    expect(body.nodes.filter((n: { isSelf: boolean }) => !n.isSelf).length).toBeGreaterThan(0);
+    expect(raw).not.toContain('stakes');
+    expect(raw).not.toContain('generationRationale');
+    expect(raw).not.toContain('narrativeOrder');
+    expect(raw).not.toContain('$300,000');
+    expect(raw).not.toContain('rooftop');
   });
 
   it('is never cached by anything in front of it', async () => {
@@ -569,10 +613,12 @@ describe('the play loop', () => {
 });
 
 describe('the world after playing', () => {
-  // The whole claim the map makes: bigger means more left to explore. If a node
-  // does not shrink as the reader plays, a finished person stays the largest
-  // thing on the map forever.
-  it('shrinks a person node as the reader advances', async () => {
+  /**
+   * Playing changes nothing about the offer. The list is extracted beats — the
+   * script the reader can enter at — and a beat they caused is not an entry point,
+   * so a generated beat must not appear however highly the model scored it.
+   */
+  it('still offers only the imported beats after a turn is played', async () => {
     asOwner();
     const before = await (await world.GET(get('/api/v1/world'), undefined)).json();
 
@@ -587,23 +633,27 @@ describe('the world after playing', () => {
       }),
       ctx({ sessionId })
     );
+    // Settling writes a scored, generated beat — the fake scores consequences 7.
+    await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }));
 
     const after = await (await world.GET(get('/api/v1/world'), undefined)).json();
 
-    const beats = (w: { nodes: Array<{ personId: string; unexploredBeats: number }> }) =>
-      w.nodes.find((n) => n.personId === mayaPersonId)!.unexploredBeats;
-
-    expect(beats(after)).toBeLessThan(beats(before));
+    expect(after.events.map((e: { eventId: string }) => e.eventId)).toStrictEqual(
+      before.events.map((e: { eventId: string }) => e.eventId)
+    );
   });
 
-  it('counts the reader themselves as met from the start', async () => {
+  // Every moment offered carries the id a session is started from, and nothing
+  // that would let a client derive a position itself.
+  it('gives each moment an id a session can be started from', async () => {
     asOwner();
+
     const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
 
-    const self = body.nodes.find((n: { personId: string }) => n.personId === selfPersonId);
-    const michael = body.nodes.find((n: { personId: string }) => n.personId === michaelPersonId);
-
-    expect(self.met).toBe(true);
-    expect(michael.met).toBe(false);
+    for (const event of body.events) {
+      expect(event.eventId).toEqual(expect.any(String));
+      expect(event.storylineId).toBe(storylineId);
+      expect(event).not.toHaveProperty('narrativeOrder');
+    }
   });
 });

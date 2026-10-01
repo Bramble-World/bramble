@@ -2,6 +2,7 @@ import type { PublicPerson } from '@/lib/services/persons/persons.types';
 import type { CharacterRole, PublicStoryline } from '@/lib/services/storylines/storylines.types';
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
 import type { PublicImport } from '@/lib/services/imports/imports.types';
+import type { WorldEvent } from '@/lib/services/world/world.types';
 import { failureIsRetryable } from '@/lib/services/imports/imports.types';
 import type {
   ArcView,
@@ -10,6 +11,7 @@ import type {
   PersonDetailView,
   PersonView,
   SessionStateView,
+  WorldEventView,
   SessionView,
   StorylineDetailView,
   TurnView,
@@ -97,6 +99,37 @@ export function storylineDetailView(
   // with endless stories a duration cannot ever have one. Shipping a field the
   // client renders and then removing it is a breaking change; adding one later
   // is not.
+}
+
+/**
+ * One moment the reader can start playing from.
+ *
+ * A function rather than an inline map in the route, which is how the world nodes
+ * this replaced were built — and why they were the one view the forbidden-key test
+ * could not reach. Routed through here, the assertion covers it.
+ *
+ * The weight is passed in rather than computed: it is normalised across the whole
+ * response, so no single event knows its own.
+ */
+export function worldEventView(event: WorldEvent, weight: number): WorldEventView {
+  return {
+    eventId: event.eventId,
+    storylineId: event.storylineId,
+    storylineTitle: event.storylineTitle,
+    title: event.title,
+    description: event.description,
+    occurredAt: iso(event.occurredAt),
+    people: event.people.map((person) => ({
+      id: person.id,
+      name: person.name,
+      isSelf: person.isSelf,
+    })),
+    score: event.score,
+    weight,
+  };
+  // No stakes, no generationRationale, no narrativeOrder. The first two are the
+  // machinery the story is written with; the third is an internal key the client
+  // never needs, because a session is started from `eventId`.
 }
 
 export function personDetailView(input: {

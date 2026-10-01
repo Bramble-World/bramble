@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PromptSpec } from '../prompt';
+import { ENGAGEMENT_RUBRIC } from './timeline';
 import { UserContext } from '@/lib/services/generation/generation.types';
 
 /** One message as it reaches the pipeline. Never written to any column. */
@@ -160,6 +161,12 @@ export const extractionOutputSchema = z.object({
             'When this beat happened, ISO 8601, taken from the timestamps on the messages it covers. Use the moment it turns on. Null if it spans no particular one.'
           ),
         participantNames: z.array(z.string()).describe('Names from the cast above.'),
+        engagementScore: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .describe('How much this beat invites being played from. See the scale in the rules.'),
       })
     )
     .min(1)
@@ -241,6 +248,8 @@ export const extractionPrompt: PromptSpec<ExtractionVars, ExtractionOutput> = {
       '  $300,000" and "a shared home, later a funded company" both hand over the',
       '  ending before the story starts. Say who someone is and where this is',
       '  happening, and let the beats do the rest.',
+      ENGAGEMENT_RUBRIC,
+      '',
       '- Give everyone a want, including the quiet ones. A want is something another',
       '  person can grant or withhold: "wants the three of them to eat together',
       '  before the move is finished" is a want; "wants to feel respected" is not,',

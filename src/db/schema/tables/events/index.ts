@@ -8,6 +8,7 @@ import {
   integer,
   pgEnum,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm/sql/sql';
 import { timestamps } from '../../../util/timestamps';
 import { storylines } from '../storylines';
 import { storyTurns } from '../storylineSessions/storyTurns';
@@ -56,6 +57,28 @@ export const events = pgTable(
       onDelete: 'set null',
     }),
 
+    /**
+     * How much this beat invites being played from, 1-10, written by the model.
+     *
+     * The reader is offered a short list of beats to start a new session at, so
+     * what is being scored is **"would you want to begin here"** — not how
+     * consequential the beat was. Those diverge: the most consequential beat is
+     * usually an aftermath, and the best entry point is a confrontation or a
+     * question left hanging.
+     *
+     * Nullable, and null means "never scored" rather than "scored low". Every
+     * beat written before this column existed is null, and so is every beat from
+     * a model call that omitted it; treating those as zero would conflate "we did
+     * not ask" with "the model judged this dull", which is exactly the conflation
+     * that made `consequences_generated_at` necessary. The ranked read excludes
+     * nulls instead of ordering them last.
+     *
+     * Scores must be comparable across separate extraction calls, since the
+     * ranking spans every storyline a reader has. That is a property of the
+     * prompt's rubric, not of this column — see `ENGAGEMENT_RUBRIC`.
+     */
+    engagementScore: integer('engagement_score'),
+
     origin: eventOriginEnum().notNull().default('extracted'),
     triggeredByTurnId: uuid('triggered_by_turn_id').references(() => storyTurns.id, {
       onDelete: 'set null',
@@ -78,5 +101,12 @@ export const events = pgTable(
     uniqueIndex('idx_events_storyline_order').on(table.storylineId, table.narrativeOrder),
     index('idx_events_triggered_by').on(table.triggeredByTurnId),
     index('idx_events_actor').on(table.actorCharacterId),
+    // Serves the ranked read behind `GET /api/v1/world`, which runs on every cold
+    // start of the client. Partial, because the two predicates it carries are the
+    // same two the query always applies: an unscored beat is not rankable and a
+    // generated beat is not an entry point.
+    index('idx_events_engagement')
+      .on(table.storylineId, table.engagementScore)
+      .where(sql`${table.engagementScore} IS NOT NULL AND ${table.origin} = 'extracted'`),
   ]
 );

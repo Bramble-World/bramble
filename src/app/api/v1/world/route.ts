@@ -1,47 +1,45 @@
 import { withUser } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { getWorld, weightsFor } from '@/lib/services/world/world.service';
-import type { WorldEdgeView, WorldNodeView } from '@/lib/api/views';
+import { MAX_WORLD_EVENTS } from '@/lib/services/world/world.types';
+import { worldEventView } from '@/lib/api/views';
+import type { WorldEventView } from '@/lib/api/views';
 
 /**
- * The map of people the reader's stories are made of — screens 06, 08, 09, 17.
+ * The moments the reader can start playing from, best first.
  *
- * One request serves all four. Screen 09 (tapping a node) is rendered from this
- * payload rather than a second round trip: a tap on a map must not wait on the
- * network, and everything it shows is already here.
+ * Twenty beats across every storyline they own, ranked by how much the model
+ * thought each one invites being opened on. Tapping one starts a new session
+ * positioned there, which is why `eventId` ships and `narrativeOrder` does not.
  *
- * Both the normalised `weight` and the raw counts it came from are returned. The
- * visual mapping is the thing most likely to be wrong on first contact with a
- * real design, and sending both means changing it costs a client release rather
- * than a server one.
+ * This is a discovery surface, not a highlights reel: most of these are beats the
+ * reader has not reached, and that is deliberate. `contextAsOf` still stops the
+ * *model* reading ahead; what changed is that the reader is now shown unplayed
+ * beats on purpose, because a scene-select cannot work otherwise. The machinery
+ * stays hidden — no `stakes`, no `generationRationale`.
+ *
+ * Both the normalised `weight` and the raw `score` are returned. The visual
+ * mapping is the thing most likely to be wrong on first contact with a real
+ * design, and sending both means changing it costs a client release rather than a
+ * server one.
  *
  * No ownership check on any id, because no id arrived in a request — every row
- * here was produced under a `userId` predicate.
+ * here was produced under a `storylines.userId` predicate.
  */
-export const GET = withUser(async (user) => {
-  const world = await getWorld(user.id);
-  const weights = weightsFor(world.nodes);
+export const GET = withUser(async (user, request) => {
+  // Clamped rather than trusted: this is a public endpoint, and an unbounded
+  // limit is a payload nobody can draw and a query nobody asked for.
+  const requested = Number(new URL(request.url).searchParams.get('limit'));
+  const limit = Number.isFinite(requested) && requested > 0 ? requested : MAX_WORLD_EVENTS;
 
-  const nodes: WorldNodeView[] = world.nodes.map((node) => ({
-    personId: node.personId,
-    name: node.name,
-    isSelf: node.isSelf,
-    relationshipType: node.relationshipType,
-    weight: weights.get(node.personId) ?? 0,
-    unexploredBeats: node.unexploredBeats,
-    storylineCount: node.storylineCount,
-    met: node.met,
-    lastActivityAt: node.lastActivityAt?.toISOString() ?? null,
-  }));
+  const world = await getWorld(user.id, limit);
+  const weights = weightsFor(world.events);
 
-  const edges: WorldEdgeView[] = world.edges.map((edge) => ({
-    aPersonId: edge.aPersonId,
-    bPersonId: edge.bPersonId,
-    relationshipType: edge.relationshipType,
-    sharedStorylines: edge.sharedStorylines,
-  }));
+  const events: WorldEventView[] = world.events.map((event) =>
+    worldEventView(event, weights.get(event.eventId) ?? 0)
+  );
 
-  // An object, never a bare array: `truncated` could not have been added later
-  // to a top-level array without breaking a shipped decoder.
-  return json({ nodes, edges, truncated: world.truncated });
+  // An object, never a bare array: `truncated` could not have been added later to
+  // a top-level array without breaking a shipped decoder.
+  return json({ events, truncated: world.truncated });
 });
