@@ -3,6 +3,7 @@ import type { PublicPerson } from '@/lib/services/persons/persons.types';
 import type { PublicStoryline } from '@/lib/services/storylines/storylines.types';
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
 import {
+  answeredTurnView,
   arcView,
   personDetailView,
   personView,
@@ -72,6 +73,7 @@ const worldEvent = {
     { id: 'p1', name: 'Maya', isSelf: false },
   ],
   score: 9,
+  playthrough: null,
 };
 
 describe('views', () => {
@@ -111,6 +113,7 @@ describe('views', () => {
       ],
       score: 9,
       weight: 1,
+      playthrough: null,
     });
   });
 
@@ -128,6 +131,75 @@ describe('views', () => {
 
   it('keeps an undated moment null rather than inventing a date', () => {
     expect(worldEventView({ ...worldEvent, occurredAt: null }, 0.5).occurredAt).toBeNull();
+  });
+
+  // What turns "play" into "continue" on the card.
+  it('carries a playthrough when one was opened at this moment', () => {
+    const view = worldEventView(
+      {
+        ...worldEvent,
+        playthrough: {
+          sessionId: 'sess1',
+          turnsAnswered: 4,
+          lastActiveAt: new Date('2026-05-01T09:30:00.000Z'),
+        },
+      },
+      1
+    );
+
+    expect(view.playthrough).toStrictEqual({
+      sessionId: 'sess1',
+      turnsAnswered: 4,
+      lastActiveAt: '2026-05-01T09:30:00.000Z',
+    });
+  });
+
+  /**
+   * Always present, never absent. A client branching on a missing key behaves
+   * differently from one branching on null, and only one of those is testable.
+   */
+  it('says null rather than omitting an unplayed moment', () => {
+    expect(worldEventView(worldEvent, 1)).toHaveProperty('playthrough', null);
+  });
+
+  it('renders an answered turn with the decision that closed it', () => {
+    const answered = { ...turn, selectedChoiceId: 'c1' };
+
+    expect(answeredTurnView(answered)).toStrictEqual({
+      turn: turnView(answered),
+      chosenChoiceId: 'c1',
+    });
+  });
+
+  /**
+   * A reader resuming a moment opened days ago needs to see what they already
+   * decided — without it the narrative refers to choices they cannot see.
+   */
+  it('carries history oldest first, and [] when nothing is answered', () => {
+    const first = { ...turn, id: 't1', turnOrder: 1, selectedChoiceId: 'c1' };
+    const second = { ...turn, id: 't2', turnOrder: 2, selectedChoiceId: 'c2' };
+
+    const view = sessionView({
+      id: 'sess1',
+      storylineId: 's1',
+      state: 'awaiting_answer',
+      turnsAnswered: 2,
+      turn,
+      history: [first, second],
+    });
+
+    expect(view.history.map((h) => h.turn.id)).toStrictEqual(['t1', 't2']);
+    expect(view.history.map((h) => h.chosenChoiceId)).toStrictEqual(['c1', 'c2']);
+    expect(
+      sessionView({
+        id: 'sess1',
+        storylineId: 's1',
+        state: 'awaiting_turn',
+        turnsAnswered: 0,
+        turn: null,
+        history: [],
+      }).history
+    ).toStrictEqual([]);
   });
 
   it('keeps a missing choice description as null', () => {
@@ -240,6 +312,7 @@ describe('nothing internal escapes any view', () => {
       state: 'awaiting_answer',
       turnsAnswered: 3,
       turn,
+      history: [],
     }),
   ];
 

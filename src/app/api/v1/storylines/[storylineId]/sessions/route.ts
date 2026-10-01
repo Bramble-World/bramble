@@ -59,6 +59,7 @@ export const POST = withUser(async (user, request, { params }: Params) => {
         state: snapshot.state,
         turnsAnswered: snapshot.turnsAnswered,
         turn: snapshot.turn,
+        history: snapshot.history,
       }),
     },
     { status: 201 }

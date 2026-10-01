@@ -5,6 +5,7 @@ import type { PublicImport } from '@/lib/services/imports/imports.types';
 import type { WorldEvent } from '@/lib/services/world/world.types';
 import { failureIsRetryable } from '@/lib/services/imports/imports.types';
 import type {
+  AnsweredTurnView,
   ArcView,
   ChoiceView,
   ImportView,
@@ -119,6 +120,13 @@ export function worldEventView(event: WorldEvent, weight: number): WorldEventVie
     title: event.title,
     description: event.description,
     occurredAt: iso(event.occurredAt),
+    playthrough: event.playthrough
+      ? {
+          sessionId: event.playthrough.sessionId,
+          turnsAnswered: event.playthrough.turnsAnswered,
+          lastActiveAt: event.playthrough.lastActiveAt.toISOString(),
+        }
+      : null,
     people: event.people.map((person) => ({
       id: person.id,
       name: person.name,
@@ -168,12 +176,23 @@ export function importView(row: PublicImport): ImportView {
   // see it would be tempted to compute its own timeout from it.
 }
 
+/** An answered turn, with the decision that closed it. */
+export function answeredTurnView(turn: TurnWithChoices): AnsweredTurnView {
+  return {
+    turn: turnView(turn),
+    chosenChoiceId: turn.selectedChoiceId,
+  };
+  // respondedAt is absent: the client renders history as a transcript, not a
+  // log, and a timestamp per decision invites a timeline nobody asked for.
+}
+
 export function sessionView(input: {
   id: string;
   storylineId: string;
   state: SessionStateView;
   turnsAnswered: number;
   turn: TurnWithChoices | null;
+  history: TurnWithChoices[];
 }): SessionView {
   return {
     id: input.id,
@@ -181,6 +200,7 @@ export function sessionView(input: {
     state: input.state,
     turnsAnswered: input.turnsAnswered,
     turn: input.turn ? turnView(input.turn) : null,
+    history: input.history.map(answeredTurnView),
   };
   // playheadOrder is absent: it is an internal key over events.narrativeOrder,
   // meaningless to a reader, and paired with any total it becomes a progress

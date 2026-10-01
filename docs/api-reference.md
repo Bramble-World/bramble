@@ -126,7 +126,12 @@ Query: `?limit=` — optional, clamped to 20.
         { "id": "uuid", "name": "Maya", "isSelf": false }
       ],
       "score": 9,
-      "weight": 1
+      "weight": 1,
+      "playthrough": {
+        "sessionId": "uuid",
+        "turnsAnswered": 4,
+        "lastActiveAt": "2026-05-01T09:30:00.000Z"
+      }
     }
   ],
   "truncated": true
@@ -141,6 +146,10 @@ Query: `?limit=` — optional, clamped to 20.
 - **`people`** — people, not per-storyline characters, so one human is one object
   however many storylines they appear in. Reader first, then alphabetical.
 - **`occurredAt`** — null when the conversation did not date the beat.
+- **`playthrough`** — the reader's most recent session opened at this beat, or
+  `null`. What turns "play" into "continue" on the card. Always present, so
+  branch on the value rather than on a missing key. Loaded for the whole page in
+  one query.
 - **`truncated`** — more rankable beats exist than were returned.
 
 A reader with nothing gets `{ "events": [], "truncated": false }` and **200,
@@ -229,9 +238,14 @@ returns.
 `eventId` from `GET /api/v1/world` and the new session's playhead lands **on**
 that beat, so the story continues from it.
 
-- It **always starts a fresh playthrough**, overriding `mode`. Handing back a
-  half-finished session when the reader asked to begin at a particular beat
-  would silently ignore the only thing they said.
+- **`mode: "resume"` (the default) returns the reader's most recent playthrough
+  opened at that same beat**, or creates one. One playthrough per moment: tap a
+  moment, play, come back a week later, tap it again, and you land where you
+  left off. Two rapid calls cannot produce two sessions.
+- **`mode: "new"`** always creates another playthrough of that beat, so a
+  deliberate replay stays possible.
+- Resume is keyed on the beat, not the storyline. A session started from the top
+  is never adopted by a moment, and two different moments are two playthroughs.
 - A beat from a different storyline, or one that does not exist, is a **404** —
   the id is resolved against the storyline named in the path.
 - A malformed id is a **400** with `fields.fromEventId`.
@@ -258,10 +272,28 @@ reconstructing state locally.
         { "id": "uuid", "label": "Tell her the truth", "description": "It may not land." },
         { "id": "uuid", "label": "Change the subject", "description": null }
       ]
-    }
+    },
+    "history": [
+      {
+        "turn": {
+          "id": "uuid",
+          "narrative": "The message sits there, unsent.",
+          "choices": [{ "id": "uuid", "label": "Say the true thing", "description": null }]
+        },
+        "chosenChoiceId": "uuid"
+      }
+    ]
   }
 }
 ```
+
+**`history`** is every turn already answered, **oldest first**, each with the
+choice that closed it. The open turn is deliberately absent — it is returned as
+`turn`, and carrying it in both would make the client render it twice. Always
+present: `[]` for a session that has answered nothing.
+
+A reader resuming a moment they opened a week ago needs this; without it the
+narrative refers to decisions they cannot see.
 
 Three states, one remedy each:
 
