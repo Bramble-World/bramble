@@ -1,6 +1,7 @@
 import { db } from '@/index';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/utils/errors';
 import * as storylineReader from '../storylines/storylines.reader';
+import * as timelineReader from '../timeline/timeline.reader';
 import * as reader from './sessions.reader';
 import * as writer from './sessions.writer';
 import { NewChoice, PublicSession, TurnWithChoices } from './sessions.types';
@@ -8,21 +9,55 @@ import { NewChoice, PublicSession, TurnWithChoices } from './sessions.types';
 export const findIdleSessions = reader.findIdleSessions;
 export const listSessions = reader.listSessions;
 
-export async function startSession(userId: string, storylineId: string): Promise<PublicSession> {
+/**
+ * Begins a playthrough, optionally at a beat the reader picked.
+ *
+ * `fromEventId` is what makes the world screen's "play from here" work: the
+ * reader is shown twenty moments and starts a session at the one they chose.
+ * The session's playhead lands **on** that beat, so the story continues from it —
+ * the same relationship an ordinary new session has with the first beat.
+ *
+ * Starting a *new* session rather than moving an existing one is deliberate and
+ * is what keeps `raisePlayheadTo` monotonic. A reader who picked an earlier beat
+ * than they had reached would otherwise need the playhead walked backwards, and
+ * that guard exists so a retried `generateConsequences` cannot do exactly that.
+ * A fresh session has nowhere to walk back from.
+ */
+export async function startSession(
+  userId: string,
+  storylineId: string,
+  fromEventId?: string
+): Promise<PublicSession> {
   const storyline = await storylineReader.getStoryline(userId, storylineId);
   if (!storyline) throw new NotFoundError('Storyline', storylineId);
   if (storyline.status !== 'ready') {
     throw new ValidationError(`This storyline is not ready to play (status: ${storyline.status})`);
   }
 
+  // Resolved against *this* storyline, which is what stops an event id from one
+  // story positioning a session in another. The storyline was proved to be the
+  // reader's above, so pairing the two is the whole of the ownership check.
+  const startAt = fromEventId
+    ? await timelineReader.narrativeOrderOf(storylineId, fromEventId)
+    : null;
+  if (fromEventId && startAt === null) throw new NotFoundError('Event', fromEventId);
+
   // One transaction, because a session inserted at playhead 0 is a session that
   // would render no history at all — the two writes are one fact.
   return db.transaction(async (tx) => {
     const session = await writer.insertSession(tx, userId, storylineId);
-    // Lands on the first beat: a new session has nothing above 0 but the
-    // timeline itself, so the ordinary step does the initialising and there is
-    // no separate first-run branch to keep in sync.
-    await writer.advancePlayhead(tx, session.id);
+
+    if (startAt === null) {
+      // Lands on the first beat: a new session has nothing above 0 but the
+      // timeline itself, so the ordinary step does the initialising and there is
+      // no separate first-run branch to keep in sync.
+      await writer.advancePlayhead(tx, session.id);
+    } else {
+      // A raise rather than a set, and it is one here too: the session was just
+      // created at 0, so every real beat is above it.
+      await writer.raisePlayheadTo(tx, session.id, startAt);
+    }
+
     const started = await reader.getSessionIn(tx, userId, session.id);
     if (!started) throw new NotFoundError('Session', session.id);
     return started;
@@ -59,13 +94,17 @@ export async function currentSession(
 export async function resumeOrStart(
   userId: string,
   storylineId: string,
-  mode: 'resume' | 'new' = 'resume'
+  mode: 'resume' | 'new' = 'resume',
+  fromEventId?: string
 ): Promise<PublicSession> {
-  if (mode === 'resume') {
+  // Picking a moment is an instruction to begin there, so it overrides resuming.
+  // Returning someone's half-finished playthrough when they asked to start at a
+  // particular beat would silently ignore the only thing they said.
+  if (mode === 'resume' && !fromEventId) {
     const existing = await currentSession(userId, storylineId);
     if (existing) return existing;
   }
-  return startSession(userId, storylineId);
+  return startSession(userId, storylineId, fromEventId);
 }
 
 export async function getSession(userId: string, sessionId: string): Promise<PublicSession> {

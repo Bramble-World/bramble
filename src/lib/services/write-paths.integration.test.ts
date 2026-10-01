@@ -388,3 +388,137 @@ describe('idle sessions', () => {
     expect(future.map((s) => s.id)).toContain(fresh.id);
   });
 });
+
+/**
+ * Starting a playthrough at a beat the reader chose.
+ *
+ * The world screen offers twenty moments and tapping one plays from it. What
+ * makes that safe is that it starts a *new* session rather than moving an
+ * existing one: `raisePlayheadTo` only ever raises, deliberately, so a reader who
+ * picked a beat behind where they had got to would otherwise need the playhead
+ * walked backwards — which is precisely what that guard exists to prevent.
+ */
+describe('starting a session from a chosen beat', () => {
+  let beats: Array<{ id: string; narrativeOrder: number }>;
+  let storyId: string;
+
+  beforeEach(async () => {
+    const story = await storylines.createStoryline(ownerId, {
+      title: 'Pick A Moment',
+      sourceSurface: 'imessage',
+    });
+    storyId = story.id;
+    await storylines.markStatus(ownerId, storyId, 'ready');
+
+    beats = [];
+    for (const title of ['first', 'second', 'third', 'fourth']) {
+      beats.push(
+        await timeline.appendEvent(ownerId, storyId, {
+          origin: 'extracted',
+          title,
+          description: 'x',
+          participantCharacterIds: [],
+        })
+      );
+    }
+  });
+
+  it('lands the playhead on the beat that was picked', async () => {
+    const third = beats[2];
+
+    const session = await sessions.startSession(ownerId, storyId, third.id);
+
+    expect(session.playheadOrder).toBe(third.narrativeOrder);
+  });
+
+  // Without an id it still lands on the first beat, as every session always has.
+  it('lands on the first beat when no moment is named', async () => {
+    const session = await sessions.startSession(ownerId, storyId);
+
+    expect(session.playheadOrder).toBe(beats[0].narrativeOrder);
+  });
+
+  /**
+   * The id resolves against *this* storyline. `events` has no owner column —
+   * ownership runs through its storyline — so pairing the two ids is the whole
+   * of the check, and without it a beat from another story could position a
+   * session here.
+   */
+  it('refuses a beat belonging to a different storyline', async () => {
+    const elsewhere = await timeline.appendEvent(ownerId, storylineId, {
+      origin: 'extracted',
+      title: 'another story entirely',
+      description: 'x',
+      participantCharacterIds: [],
+    });
+
+    await expect(sessions.startSession(ownerId, storyId, elsewhere.id)).rejects.toBeInstanceOf(
+      NotFoundError
+    );
+  });
+
+  it('refuses a beat that does not exist', async () => {
+    await expect(
+      sessions.startSession(ownerId, storyId, '00000000-0000-4000-8000-000000000000')
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("refuses another reader's storyline before it looks at the beat", async () => {
+    await expect(sessions.startSession(otherId, storyId, beats[1].id)).rejects.toBeInstanceOf(
+      NotFoundError
+    );
+  });
+
+  /**
+   * Picking a moment is an instruction to begin there, so it overrides resuming.
+   * Handing back a half-finished playthrough would silently ignore the only thing
+   * the reader said.
+   */
+  it('starts a fresh playthrough even when one is already open', async () => {
+    const existing = await sessions.resumeOrStart(ownerId, storyId);
+
+    const picked = await sessions.resumeOrStart(ownerId, storyId, 'resume', beats[3].id);
+
+    expect(picked.id).not.toBe(existing.id);
+    expect(picked.playheadOrder).toBe(beats[3].narrativeOrder);
+  });
+
+  // The ordinary resume is untouched by any of this.
+  it('still resumes when no moment is named', async () => {
+    const first = await sessions.resumeOrStart(ownerId, storyId);
+    const again = await sessions.resumeOrStart(ownerId, storyId);
+
+    expect(again.id).toBe(first.id);
+  });
+
+  /**
+   * A beat behind where another playthrough reached is still a legal starting
+   * point, because this is a new session. The monotonic guard applies within a
+   * playthrough, not across them.
+   */
+  it('starts behind a playthrough that has already gone further', async () => {
+    const ahead = await sessions.startSession(ownerId, storyId, beats[3].id);
+
+    const behind = await sessions.startSession(ownerId, storyId, beats[0].id);
+
+    expect(ahead.playheadOrder).toBe(beats[3].narrativeOrder);
+    expect(behind.playheadOrder).toBe(beats[0].narrativeOrder);
+  });
+
+  it('refuses a storyline that is not ready to play', async () => {
+    const pending = await storylines.createStoryline(ownerId, {
+      title: 'Not Ready',
+      sourceSurface: 'imessage',
+    });
+    const beat = await timeline.appendEvent(ownerId, pending.id, {
+      origin: 'extracted',
+      title: 'x',
+      description: 'x',
+      participantCharacterIds: [],
+    });
+
+    await expect(sessions.startSession(ownerId, pending.id, beat.id)).rejects.toBeInstanceOf(
+      ValidationError
+    );
+  });
+});

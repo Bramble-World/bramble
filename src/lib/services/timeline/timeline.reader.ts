@@ -146,3 +146,30 @@ export async function charactersMetUpTo(
 
   return new Set(rows.map((r) => r.characterId));
 }
+
+/**
+ * Where a beat sits in its storyline, if it is in that storyline at all.
+ *
+ * Both halves matter. The order is what a session's playhead is set to; the
+ * storyline predicate is what stops an event id from one story positioning a
+ * session in another. `events` carries no owner column — ownership runs through
+ * its storyline — so pairing the two ids here is the whole of the check, and a
+ * caller that already proved the storyline is the reader's has thereby proved
+ * the event is too.
+ *
+ * Null means "no such beat in this storyline", which the caller turns into a 404
+ * rather than distinguishing from "no such beat anywhere". Telling those apart
+ * would confirm that someone else's event exists.
+ */
+export async function narrativeOrderOf(
+  storylineId: string,
+  eventId: string
+): Promise<number | null> {
+  const [row] = await db
+    .select({ narrativeOrder: events.narrativeOrder })
+    .from(events)
+    .where(and(eq(events.storylineId, storylineId), eq(events.id, eventId)))
+    .limit(1);
+
+  return row?.narrativeOrder ?? null;
+}

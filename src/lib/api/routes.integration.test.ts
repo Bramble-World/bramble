@@ -433,6 +433,98 @@ describe('POST /api/v1/storylines/:storylineId/sessions', () => {
 
     expect(response.status).toBe(404);
   });
+
+  /**
+   * The whole handoff the world screen exists for: read the twenty moments, pick
+   * one, play from it. Driven through both routes rather than asserted on the
+   * service, because the id the client sends is the one `/world` gave it and
+   * nothing else guarantees those are the same thing.
+   */
+  it('starts a playthrough at a moment taken from the world screen', async () => {
+    asOwner();
+
+    const world_ = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const picked = world_.events[0];
+
+    const response = await startRoute.POST(
+      post(`/api/v1/storylines/${picked.storylineId}/sessions`, { fromEventId: picked.eventId }),
+      ctx({ storylineId: picked.storylineId })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.session.storylineId).toBe(picked.storylineId);
+    expect(body.session.state).toBe('awaiting_turn');
+
+    // And the turn generated from there follows the chosen beat rather than the
+    // opening one — which is the only observable difference that matters.
+    const { turn } = await (
+      await turnRoute.POST(
+        post(`/api/v1/sessions/${body.session.id}/turn`),
+        ctx({ sessionId: body.session.id })
+      )
+    ).json();
+    expect(turn.choices.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('overrides resuming, so a picked moment is never silently ignored', async () => {
+    asOwner();
+
+    const first = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`),
+        ctx({ storylineId })
+      )
+    ).json();
+
+    const world_ = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const picked = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`, {
+          mode: 'resume',
+          fromEventId: world_.events[0].eventId,
+        }),
+        ctx({ storylineId })
+      )
+    ).json();
+
+    expect(picked.session.id).not.toBe(first.session.id);
+  });
+
+  it('answers 404 for a moment from a different storyline', async () => {
+    asOwner();
+    const other = await storylines.createStoryline(ownerId, {
+      title: 'Elsewhere',
+      sourceSurface: 'imessage',
+    });
+    await storylines.markStatus(ownerId, other.id, 'ready');
+    const elsewhere = await timeline.appendEvent(ownerId, other.id, {
+      origin: 'extracted',
+      title: 'not in this story',
+      description: 'x',
+      participantCharacterIds: [],
+      engagementScore: 5,
+    });
+
+    const response = await startRoute.POST(
+      post(`/api/v1/storylines/${storylineId}/sessions`, { fromEventId: elsewhere.id }),
+      ctx({ storylineId })
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it('answers 400 for a moment id that is not a uuid', async () => {
+    asOwner();
+
+    const response = await startRoute.POST(
+      post(`/api/v1/storylines/${storylineId}/sessions`, { fromEventId: 'not-a-uuid' }),
+      ctx({ storylineId })
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.fields).toHaveProperty('fromEventId');
+  });
 });
 
 describe('the play loop', () => {
