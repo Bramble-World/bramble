@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { StorylineContext } from '@/lib/services/generation/generation.types';
-import { renderTimeline } from './timeline';
+import { ENGAGEMENT_RUBRIC, renderTimeline } from './timeline';
 
 export type ConsequenceVars = {
   storyline: StorylineContext;
@@ -51,6 +51,12 @@ export const consequenceOutputSchema = z.object({
           .describe(
             'Why this beat follows from the choice. Your own reasoning — never quote the story text back.'
           ),
+        engagementScore: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .describe('How much this beat invites being played from. See the scale in the rules.'),
       })
     )
     .max(2)
@@ -126,6 +132,8 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       '- generationRationale is your own reasoning about why the beat follows. Never',
       '  quote or paraphrase the narration back into it.',
       '- Only reference character and relationship ids that appear below.',
+      '',
+      ENGAGEMENT_RUBRIC,
     ].join('\n'),
 
     prompt: [

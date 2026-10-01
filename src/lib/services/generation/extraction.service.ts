@@ -184,6 +184,7 @@ async function persist(
         participantCharacterIds: beat.participantNames
           .map((name) => characterIdByName.get(name))
           .filter((id): id is string => id !== undefined),
+        engagementScore: beat.engagementScore,
       });
     }
 

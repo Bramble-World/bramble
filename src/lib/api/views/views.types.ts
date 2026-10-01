@@ -32,36 +32,31 @@ export type PersonView = {
   isSelf: boolean;
 };
 
-/** One node of the world map. */
-export type WorldNodeView = {
-  personId: string;
-  name: string;
-  /**
-   * Whether this node is the reader.
-   *
-   * The map always contains them, so the client needs to know which one they
-   * are in order to draw it differently — and deriving that from `name` or from
-   * a null `relationshipType` would be a guess that breaks the moment two people
-   * share a name or a relationship goes unrecorded.
-   */
-  isSelf: boolean;
-  /** The structural fact only — "Roommates", "siblings". Null when unrecorded. */
-  relationshipType: string | null;
-  /** 0..1, normalised across this user's own nodes. See `world.service`. */
+/**
+ * One moment the reader can start playing from.
+ *
+ * The map of people this replaced showed no beats at all, which is why it needed
+ * no judgement about spoilers. This does: the list is mostly beats the reader has
+ * not reached, and naming them is the feature — you cannot offer "play from here"
+ * without saying where "here" is.
+ *
+ * What it still must not carry is the machinery. `stakes` is the lever the model
+ * writes with, literally what is at risk; `generationRationale` is the model
+ * explaining its own trick; `narrativeOrder` is an internal key, and the client
+ * starts a session from `eventId` so it never needs one.
+ */
+export type WorldEventView = {
+  eventId: string;
+  storylineId: string;
+  /** So twenty titles are not twenty orphans with no story to belong to. */
+  storylineTitle: string;
+  title: string;
+  /** When it happened, if the conversation said. ISO, or null. */
+  occurredAt: string | null;
+  /** 1-10, as the model wrote it. */
+  score: number;
+  /** 0..1, normalised across this response. See `world.service`. */
   weight: number;
-  /** The raw counts behind `weight`, so the client can change how it draws. */
-  unexploredBeats: number;
-  storylineCount: number;
-  /** False until they appear in a beat the reader has reached. */
-  met: boolean;
-  lastActivityAt: string | null;
-};
-
-export type WorldEdgeView = {
-  aPersonId: string;
-  bPersonId: string;
-  relationshipType: string | null;
-  sharedStorylines: number;
 };
 
 /** One playable storyline, as it appears in a list against a person. */

@@ -12,6 +12,7 @@ const columns = {
   title: events.title,
   description: events.description,
   stakes: events.stakes,
+  engagementScore: events.engagementScore,
   origin: events.origin,
   triggeredByTurnId: events.triggeredByTurnId,
   generationRationale: events.generationRationale,

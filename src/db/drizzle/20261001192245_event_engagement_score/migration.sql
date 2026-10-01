@@ -1,0 +1,2 @@
+ALTER TABLE "events" ADD COLUMN "engagement_score" integer;--> statement-breakpoint
+CREATE INDEX "idx_events_engagement" ON "events" ("storyline_id","engagement_score") WHERE "engagement_score" IS NOT NULL AND "origin" = 'extracted';

@@ -198,6 +198,7 @@ export async function generateConsequences(
       event.actorCharacterId && characterIds.has(event.actorCharacterId)
         ? event.actorCharacterId
         : undefined,
+    engagementScore: event.engagementScore,
   }));
 
   return db.transaction(async (tx) => {

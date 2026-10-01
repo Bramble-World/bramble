@@ -48,6 +48,15 @@ const SEED_EMAIL = 'seed@bramble.local';
  */
 const SUMMARY_COMPUTED_AT = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
+/**
+ * Scores the seeded beats cycle through, offset per scenario.
+ *
+ * Fixture data, not a judgement: the real numbers come from the model against the
+ * rubric in `prompts/timeline.ts`. These exist so the ranked read has something
+ * ordered to return in dev.
+ */
+const ENGAGEMENT_SPREAD = [4, 8, 3, 9, 6, 2, 7, 5];
+
 /** Pair tables carry CHECK (aId < bId); callers must sort before writing. */
 const pair = (x: string, y: string): [string, string] => (x < y ? [x, y] : [y, x]);
 
@@ -188,6 +197,16 @@ async function seed() {
             title: beat.title,
             description: beat.description,
             origin: 'extracted',
+            // Spread across the range, because the ranked read behind
+            // GET /api/v1/world excludes unscored beats — without these the
+            // seeded storylines would be invisible on the one screen the lab
+            // exists to exercise.
+            //
+            // Varied by scenario as well as by beat. Keyed on beat index alone,
+            // every scenario scored its second beat identically and the top of
+            // the ranked list was seven rows with the same title — which reads as
+            // a broken ranking rather than as fixture data.
+            engagementScore: ENGAGEMENT_SPREAD[(i + scenario.id.length) % ENGAGEMENT_SPREAD.length],
             generationRationale: 'Seeded from the prototype scenario metadata.',
           })
           .returning({ id: events.id });

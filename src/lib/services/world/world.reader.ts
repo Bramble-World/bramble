@@ -1,171 +1,79 @@
-import { sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/index';
-import { personRelationships, persons } from '@/db/schema/tables';
+import { events, storylines } from '@/db/schema/tables';
+import { WorldEvent } from './world.types';
 
 /**
- * The aggregates behind the world map.
+ * The read behind the moments a reader is offered.
  *
- * Computed in SQL rather than by loading rows and folding them in JS. This is
- * the one read that touches every event a user owns, on every cold start of the
- * client, so that is not a stylistic preference.
- *
- * Every query is anchored on a `userId` predicate, which is what makes the
- * service safe without per-id ownership checks: no identifier in these results
- * ever arrived in a request, so there is nothing to confuse with another
- * tenant's.
+ * Anchored on `storylines.userId`, which is what makes the service safe without a
+ * per-id ownership check: no identifier in these results ever arrived in a
+ * request, so there is nothing to confuse with another tenant's. `events` carries
+ * no owner column of its own — ownership runs through its storyline — so the join
+ * predicate is not a filter, it is the whole of the tenancy guarantee.
  */
-
-export type PersonRow = {
-  personId: string;
-  name: string;
-  isSelf: boolean;
-  relationshipType: string | null;
-};
-
-export type ExplorationRow = {
-  personId: string;
-  unexploredBeats: number;
-  storylineCount: number;
-  met: boolean;
-  lastActivityAt: Date | null;
-};
 
 /**
- * The reader's people, each with their relationship to the reader if recorded.
+ * The reader's highest-scoring beats, across every storyline they own.
  *
- * The pair columns are stored sorted (`CHECK (person_a_id < person_b_id)`), so
- * the reader can be on either side and both have to be checked.
+ * Two predicates, both load-bearing:
+ *
+ * - `origin = 'extracted'` — only beats from the imported conversation are entry
+ *   points. Starting "from" a beat the reader's own choice caused is incoherent,
+ *   and generated beats are most of what makes the list hundreds long. Same
+ *   predicate `scriptExhausted` uses, so the two agree about what is script.
+ * - `engagement_score IS NOT NULL` — an unscored beat is excluded rather than
+ *   ranked last. Null means nobody ever asked the model, which is not the same
+ *   claim as "the model judged this dull"; ordering nulls last would assert the
+ *   second while only knowing the first.
+ *
+ * The tiebreak is deterministic to the row id, so the twenty a reader sees do not
+ * reshuffle between launches when scores tie — which they will, since the scale
+ * is ten wide and the candidates are many.
  */
-export async function peopleFor(userId: string): Promise<PersonRow[]> {
-  const rows = await db.execute(sql`
-    with me as (
-      select id from ${persons}
-      where ${persons.userId} = ${userId} and ${persons.isSelf} = true
-      limit 1
+export async function topEventsFor(userId: string, limit: number): Promise<WorldEvent[]> {
+  return db
+    .select({
+      eventId: events.id,
+      storylineId: events.storylineId,
+      storylineTitle: storylines.title,
+      title: events.title,
+      occurredAt: events.occurredAt,
+      // Not-null by the predicate below, which the column type cannot express.
+      score: sql<number>`${events.engagementScore}`,
+    })
+    .from(events)
+    .innerJoin(storylines, eq(storylines.id, events.storylineId))
+    .where(
+      and(
+        eq(storylines.userId, userId),
+        eq(events.origin, 'extracted'),
+        isNotNull(events.engagementScore)
+      )
     )
-    select
-      p.id                      as "personId",
-      p.name                    as "name",
-      p.is_self                 as "isSelf",
-      (
-        select pr.relationship_type
-        from ${personRelationships} pr, me
-        where pr.user_id = ${userId}
-          and (
-            (pr.person_a_id = p.id and pr.person_b_id = me.id) or
-            (pr.person_b_id = p.id and pr.person_a_id = me.id)
-          )
-        limit 1
-      )                         as "relationshipType"
-    from ${persons} p
-    where p.user_id = ${userId}
-  `);
-
-  return rows.rows as unknown as PersonRow[];
+    .orderBy(desc(events.engagementScore), desc(events.occurredAt), asc(events.id))
+    .limit(limit);
 }
 
 /**
- * Per person: how much story is left, how many arcs, whether they have been met,
- * and when their stories were last touched.
+ * Whether more scored beats exist than were returned.
  *
- * `origin = 'extracted'` is the same predicate `scriptExhausted` uses to decide
- * whether script remains. Counting generated beats would mean playing a story
- * makes its node grow — the opposite of what "bigger = more to explore" says.
- *
- * "Reached" is the furthest playhead across the reader's sessions on a storyline,
- * or 0 when they have never played it, in which case every beat is unexplored.
- *
- * "Met" mirrors `metCharacterIds`: appearing in a beat at or below that reached
- * order. The reader themselves is handled by the caller, since being present at
- * your own story is not a fact about beats.
+ * A second query rather than fetching `limit + 1` and dropping one: the extra row
+ * would have to be carried through the service and the view only to be discarded,
+ * and this count is covered by the same partial index the ranked read uses.
  */
-export async function explorationFor(userId: string): Promise<ExplorationRow[]> {
-  const rows = await db.execute(sql`
-    with reached as (
-      select storyline_id, max(playhead_order) as reached
-      from storyline_sessions
-      where user_id = ${userId}
-      group by storyline_id
-    ),
-    cast_rows as (
-      select c.person_id, c.id as character_id, c.storyline_id,
-             coalesce(r.reached, 0) as reached
-      from characters c
-      join storylines s on s.id = c.storyline_id and s.user_id = ${userId}
-      left join reached r on r.storyline_id = c.storyline_id
-    )
-    select
-      cr.person_id as "personId",
-      count(distinct cr.storyline_id)::int as "storylineCount",
-      coalesce(sum(
-        (select count(*) from events e
-          where e.storyline_id = cr.storyline_id
-            and e.origin = 'extracted'
-            and e.narrative_order > cr.reached)
-      ), 0)::int as "unexploredBeats",
-      bool_or(exists(
-        select 1 from event_participants ep
-        join events e2 on e2.id = ep.event_id
-        where ep.character_id = cr.character_id
-          and e2.narrative_order <= cr.reached
-      )) as "met",
-      (select max(ses.last_active_at) from storyline_sessions ses
-        where ses.user_id = ${userId}
-          and ses.storyline_id in (
-            select storyline_id from cast_rows x where x.person_id = cr.person_id
-          )) as "lastActivityAt"
-    from cast_rows cr
-    group by cr.person_id
-  `);
+export async function countRankableFor(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(events)
+    .innerJoin(storylines, eq(storylines.id, events.storylineId))
+    .where(
+      and(
+        eq(storylines.userId, userId),
+        eq(events.origin, 'extracted'),
+        isNotNull(events.engagementScore)
+      )
+    );
 
-  return (rows.rows as unknown as ExplorationRow[]).map((r) => ({
-    ...r,
-    lastActivityAt: r.lastActivityAt ? new Date(r.lastActivityAt) : null,
-  }));
-}
-
-/**
- * Structural edges between the reader's people, with how much story they share.
- *
- * `sharedStorylines` counts the storylines both are cast in. It is what gives an
- * edge a thickness worth drawing — the relationship type alone is a label, and
- * a map where every line is the same weight says nothing about which of these
- * people actually appear together.
- *
- * Counted in SQL rather than by folding cast rows in JS, like everything else
- * here: this read runs on every cold start of the client.
- */
-export async function edgesFor(userId: string): Promise<
-  Array<{
-    aPersonId: string;
-    bPersonId: string;
-    relationshipType: string | null;
-    sharedStorylines: number;
-  }>
-> {
-  const rows = await db.execute(sql`
-    select
-      pr.person_a_id as "aPersonId",
-      pr.person_b_id as "bPersonId",
-      pr.relationship_type as "relationshipType",
-      (
-        select count(distinct ca.storyline_id)::int
-        from characters ca
-        join characters cb
-          on cb.storyline_id = ca.storyline_id
-         and cb.person_id = pr.person_b_id
-        join storylines s
-          on s.id = ca.storyline_id and s.user_id = ${userId}
-        where ca.person_id = pr.person_a_id
-      ) as "sharedStorylines"
-    from ${personRelationships} pr
-    where pr.user_id = ${userId}
-  `);
-
-  return rows.rows as unknown as Array<{
-    aPersonId: string;
-    bPersonId: string;
-    relationshipType: string | null;
-    sharedStorylines: number;
-  }>;
+  return row?.n ?? 0;
 }

@@ -1,51 +1,47 @@
 /**
- * The map of people a reader's stories are made of.
+ * The moments a reader can start playing from.
  *
- * Nodes are **people**, never characters. A `characters` row is a per-storyline
- * casting of a person; keying the client's model of a human on it would make the
- * same person four different objects on one map.
+ * "World" used to mean the graph of people a reader's stories are made of. It now
+ * means what there is to play: the beats the model judged most worth opening on,
+ * across every storyline the reader owns. The people graph was retired when the
+ * client stopped drawing it — recover it from git history (PRs #49, #52, #53)
+ * rather than rewriting it, since `explorationFor` held the only SQL expression
+ * of the playhead's "met" rule.
+ *
+ * Beats, not storylines: three imported conversations produce hundreds of beats,
+ * and the point of the score is that twenty of them are worth drawing.
  */
 
-export type WorldNode = {
-  personId: string;
-  name: string;
-  isSelf: boolean;
-  /** The structural fact only — "Roommates", "siblings". Null when unrecorded. */
-  relationshipType: string | null;
+export type WorldEvent = {
+  /** What the client starts a session from. The narrative order never ships. */
+  eventId: string;
+  storylineId: string;
+  /** So twenty titles are not twenty orphans with no story to belong to. */
+  storylineTitle: string;
+  title: string;
+  occurredAt: Date | null;
   /**
-   * Extracted beats in this person's storylines that the reader has not reached.
+   * 1-10, as the model wrote it.
    *
-   * The literal reading of "bigger = more to explore", and the only candidate
-   * that decays as you play. Storyline count barely varies; total beats would
-   * leave a fully-explored person permanently the largest node.
+   * Travels alongside the normalised weight rather than instead of it, so the
+   * client can change how engagement is drawn without a server release.
    */
-  unexploredBeats: number;
-  storylineCount: number;
-  /** Has the reader met them — appeared in a beat at or below the playhead. */
-  met: boolean;
-  lastActivityAt: Date | null;
-};
-
-export type WorldEdge = {
-  aPersonId: string;
-  bPersonId: string;
-  relationshipType: string | null;
-  /** How many of the reader's storylines both people are cast in. */
-  sharedStorylines: number;
+  score: number;
 };
 
 export type World = {
-  nodes: WorldNode[];
-  edges: WorldEdge[];
-  /** True when the node cap bit. Honest rather than silently short. */
+  events: WorldEvent[];
+  /** True when the cap bit. Honest rather than silently short. */
   truncated: boolean;
 };
 
 /**
- * Above this the map stops being a map.
+ * How many moments the reader is offered at once.
  *
- * A real 45,000-message export held 440 threads. `MIN_THREAD_MESSAGES` prunes
- * most of them, so realistic counts are in the tens — but the cap costs nothing
- * and the failure without it is a payload nobody can draw.
+ * The number exists because of what it prevents, not because twenty is special:
+ * three conversations extract up to twenty beats each and then accumulate a
+ * generated beat per decision, so an uncapped list is hundreds of rows and a
+ * screen nobody can choose from. Twenty is enough to fill a surface and few
+ * enough to read.
  */
-export const MAX_WORLD_NODES = 500;
+export const MAX_WORLD_EVENTS = 20;

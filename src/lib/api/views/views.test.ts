@@ -9,6 +9,7 @@ import {
   sessionView,
   storylineDetailView,
   turnView,
+  worldEventView,
 } from './index';
 
 /**
@@ -59,6 +60,15 @@ const turn: TurnWithChoices = {
   ],
 };
 
+const worldEvent = {
+  eventId: 'e1',
+  storylineId: 's1',
+  storylineTitle: 'The Unsent Apology',
+  title: 'The apology that landed wrong',
+  occurredAt: new Date('2026-04-02T18:00:00.000Z'),
+  score: 9,
+};
+
 describe('views', () => {
   it('reduces a person to what a reader may see', () => {
     expect(personView(person)).toStrictEqual({ id: 'p1', name: 'Maya', isSelf: false });
@@ -77,6 +87,27 @@ describe('views', () => {
 
   // Nullable, not empty-string — the turn schema's own words are "Null if the
   // label says enough". The Swift client models it as an optional.
+  /**
+   * The list names beats the reader has not reached, on purpose — that is what
+   * makes "play from here" possible. What it must not carry is the machinery the
+   * story is written with.
+   */
+  it('offers a moment by its title, its score and nothing else', () => {
+    expect(worldEventView(worldEvent, 1)).toStrictEqual({
+      eventId: 'e1',
+      storylineId: 's1',
+      storylineTitle: 'The Unsent Apology',
+      title: 'The apology that landed wrong',
+      occurredAt: '2026-04-02T18:00:00.000Z',
+      score: 9,
+      weight: 1,
+    });
+  });
+
+  it('keeps an undated moment null rather than inventing a date', () => {
+    expect(worldEventView({ ...worldEvent, occurredAt: null }, 0.5).occurredAt).toBeNull();
+  });
+
   it('keeps a missing choice description as null', () => {
     expect(turnView(turn).choices[1].description).toBeNull();
   });
@@ -175,6 +206,7 @@ describe('nothing internal escapes any view', () => {
     turnView(turn),
     arcView(storyline, 'supporting', new Date()),
     storylineDetailView(storyline, [person]),
+    worldEventView(worldEvent, 1),
     personDetailView({
       person,
       relationshipType: 'oldest friend',
