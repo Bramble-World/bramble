@@ -36,6 +36,15 @@ export type PersonView = {
 export type WorldNodeView = {
   personId: string;
   name: string;
+  /**
+   * Whether this node is the reader.
+   *
+   * The map always contains them, so the client needs to know which one they
+   * are in order to draw it differently — and deriving that from `name` or from
+   * a null `relationshipType` would be a guess that breaks the moment two people
+   * share a name or a relationship goes unrecorded.
+   */
+  isSelf: boolean;
   /** The structural fact only — "Roommates", "siblings". Null when unrecorded. */
   relationshipType: string | null;
   /** 0..1, normalised across this user's own nodes. See `world.service`. */

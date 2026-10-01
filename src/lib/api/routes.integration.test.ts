@@ -184,6 +184,27 @@ describe('GET /api/v1/world', () => {
     expect(maya.relationshipType).toBe('oldest friend');
   });
 
+  /**
+   * The map always contains the reader, so the client has to be able to pick
+   * them out to draw them differently. Deriving it from the name, or from a
+   * null relationship, is a guess that breaks on a namesake or an unrecorded
+   * relationship — so it travels as its own field.
+   */
+  it('marks exactly one node as the reader, and includes them', async () => {
+    asOwner();
+
+    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    const selves = body.nodes.filter((n: { isSelf: boolean }) => n.isSelf);
+
+    expect(selves).toHaveLength(1);
+    expect(selves[0].personId).toBe(selfPersonId);
+    // Everyone else is explicitly not the reader, rather than missing the field.
+    for (const node of body.nodes) {
+      expect(typeof node.isSelf).toBe('boolean');
+    }
+    expect(body.nodes.filter((n: { isSelf: boolean }) => !n.isSelf).length).toBeGreaterThan(0);
+  });
+
   it('is never cached by anything in front of it', async () => {
     asOwner();
     const response = await world.GET(get('/api/v1/world'), undefined);
