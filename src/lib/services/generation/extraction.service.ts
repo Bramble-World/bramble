@@ -6,6 +6,9 @@ import {
   extractionPrompt,
 } from '@/lib/ai/prompts/extraction.prompt';
 import * as persons from '../persons/persons.service';
+import * as personReader from '../persons/persons.reader';
+import * as personWriter from '../persons/persons.writer';
+import { hashContactHandle } from '../persons/persons.contact';
 import * as storylines from '../storylines/storylines.service';
 import * as storylineWriter from '../storylines/storylines.writer';
 import * as motifs from '../motifs/motifs.service';
@@ -82,7 +85,13 @@ export async function extractStoryline(
       { signal: deps.signal }
     );
 
-    return await persist(userId, storyline.id, value, new Set(user.persons.map((p) => p.id)));
+    return await persist(
+      userId,
+      storyline.id,
+      value,
+      new Set(user.persons.map((p) => p.id)),
+      transcript
+    );
   } catch (error) {
     // Status and reason are written together, through the one path that can
     // reach `failed` — invariants.md §4.
@@ -99,7 +108,8 @@ async function persist(
   userId: string,
   storylineId: string,
   output: ExtractionOutput,
-  knownPersonIds: Set<string>
+  knownPersonIds: Set<string>,
+  transcript: Transcript
 ): Promise<PublicStoryline> {
   await storylineWriter.setStorylineNarrative(userId, storylineId, {
     title: output.title,
@@ -112,6 +122,11 @@ async function persist(
   // they go through is itself idempotent.
   const personIdByName = new Map<string, string>();
 
+  // Built from the transcript rather than from the model's output, because the
+  // model reports display names and only the transcript knows which handle sent
+  // them. See `handlesBySender` for what "unambiguous" has to mean here.
+  const handleBySender = handlesBySender(transcript);
+
   // The protagonist is the account holder, so they resolve to the one `isSelf`
   // row rather than becoming a second person named after them. invariants.md §5
   // requires exactly one per user and nothing else creates it; without this, the
@@ -123,7 +138,7 @@ async function persist(
     const person =
       member === protagonist
         ? await persons.getOrCreateSelfPerson(userId, member.name)
-        : await resolvePerson(userId, member, knownPersonIds);
+        : await resolvePerson(userId, member, knownPersonIds, handleBySender);
     personIdByName.set(member.name, person.id);
   }
 
@@ -260,34 +275,112 @@ function parseOccurredAt(value: string | null): Date | undefined {
  *    contact reached two ways does not become two people.
  * 3. A name alone, for someone mentioned but never heard from.
  */
+/**
+ * Which transcript handle each sender name belongs to, where that is answerable.
+ *
+ * The map is deliberately incomplete. A name earns a handle only when the
+ * transcript is unambiguous about it, because the alternative to "no handle" is
+ * not "a guess" — it is two different people sharing one `persons` row, which
+ * looks like valid data forever and is a privacy failure rather than a bug.
+ *
+ * Three rules, each for a real input shape:
+ *
+ * - **One handle per name.** A name that appears under two handles is two people
+ *   the transcript happens to label the same, which is exactly the case that
+ *   caused this: two conversations each had a "Person A", and hashing the name
+ *   merged a Lauren and an Ollie.
+ * - **One name per handle.** A group thread that puts every message under the
+ *   thread's own id would otherwise give every participant the same hash and
+ *   collapse the whole cast into one person.
+ * - **No placeholders.** The dev lab imports CSVs where `handle` may be `them`,
+ *   `me` or empty. Those are not identities, and hashing them would make every
+ *   CSV-imported contact the same person.
+ */
+function handlesBySender(transcript: Transcript): Map<string, string> {
+  const PLACEHOLDERS = new Set(['me', 'them', '']);
+
+  const handlesForName = new Map<string, Set<string>>();
+  const namesForHandle = new Map<string, Set<string>>();
+
+  for (const message of transcript.messages) {
+    // The reader is resolved through `getOrCreateSelfPerson`, never by handle,
+    // so their messages say nothing about anyone in the cast.
+    if (message.isFromMe) continue;
+
+    const handle = message.handle?.trim().toLowerCase() ?? '';
+    const name = message.sender?.trim() ?? '';
+    if (!name || PLACEHOLDERS.has(handle)) continue;
+
+    handlesForName.set(name, (handlesForName.get(name) ?? new Set()).add(handle));
+    namesForHandle.set(handle, (namesForHandle.get(handle) ?? new Set()).add(name));
+  }
+
+  const resolved = new Map<string, string>();
+  for (const [name, handles] of handlesForName) {
+    if (handles.size !== 1) continue;
+    const [handle] = [...handles];
+    if (namesForHandle.get(handle)?.size !== 1) continue;
+    resolved.set(name, handle);
+  }
+  return resolved;
+}
+
+/**
+ * Finds or creates the `persons` row for one cast member.
+ *
+ * **Identity is the handle, never the name.** The model is asked for
+ * `sourceHandle` as "the exact name this person sent messages under", so what it
+ * returns is a display name — and hashing that merged two people who were each
+ * labelled "Person A" in separate conversations into one row. The name is now
+ * only a key into the transcript; the thing that gets hashed is the handle the
+ * client sent, which is a stable per-person pseudonym.
+ *
+ * The order of the checks is the fix. `existingPersonId` is the model's opinion
+ * and the handle is a fact, so when the two disagree the handle wins: a model
+ * that recognises the wrong person must not be able to merge two humans.
+ */
 async function resolvePerson(
   userId: string,
   member: ExtractionOutput['cast'][number],
-  knownPersonIds: Set<string>
+  knownPersonIds: Set<string>,
+  handleBySender: Map<string, string>
 ) {
+  const voiceProfile = member.voiceTone ? { tone: member.voiceTone } : undefined;
+  const handle = member.sourceHandle ? handleBySender.get(member.sourceHandle) : undefined;
+
+  if (handle) {
+    const ref = hashContactHandle(handle);
+
+    // (a) Known by their handle already. This is the identity that matters, and
+    // it outranks whatever the model thought: `existingPersonId` is ignored
+    // here precisely so a misrecognition cannot merge two different people.
+    const byHandle = await personReader.getPersonByContactRef(userId, ref);
+    if (byHandle) return persons.ensureVoiceProfile(userId, byHandle, voiceProfile);
+
+    // (b) Someone previously only mentioned, now heard from for the first time.
+    // They have a row and no handle, so this is the moment that row earns one —
+    // and claiming it is better than creating a second person for someone the
+    // model correctly recognised.
+    if (member.existingPersonId && knownPersonIds.has(member.existingPersonId)) {
+      const known = await persons.getPerson(userId, member.existingPersonId);
+      if (!known.isSelf) {
+        const claimed = await personWriter.setContactRefIfAbsent(userId, known.id, ref);
+        if (claimed) return persons.ensureVoiceProfile(userId, claimed, voiceProfile);
+      }
+    }
+
+    // (c) Nobody we know. The handle creates the row, so the next conversation
+    // this person appears in finds them.
+    return persons.getOrCreatePersonByHandle(userId, handle, member.name, voiceProfile);
+  }
+
+  // No usable handle: mentioned but never heard from, or a transcript too
+  // ambiguous to be trusted. Unchanged behaviour — the model's recognition is
+  // the only signal left, and a name-only row carries no ref to collide with.
   if (member.existingPersonId && knownPersonIds.has(member.existingPersonId)) {
-    // Same repair as the handle path below: a person the model recognised from
-    // an earlier storyline keeps their row, and would otherwise keep a missing
-    // voice with it.
     const known = await persons.getPerson(userId, member.existingPersonId);
-    return persons.ensureVoiceProfile(
-      userId,
-      known,
-      member.voiceTone ? { tone: member.voiceTone } : undefined
-    );
+    return persons.ensureVoiceProfile(userId, known, voiceProfile);
   }
 
-  if (member.sourceHandle) {
-    return persons.getOrCreatePersonByHandle(
-      userId,
-      member.sourceHandle,
-      member.name,
-      member.voiceTone ? { tone: member.voiceTone } : undefined
-    );
-  }
-
-  return persons.createPerson(userId, {
-    name: member.name,
-    voiceProfile: member.voiceTone ? { tone: member.voiceTone } : undefined,
-  });
+  return persons.createPerson(userId, { name: member.name, voiceProfile });
 }

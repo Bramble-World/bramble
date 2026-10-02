@@ -1,6 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/index';
 import { personRelationships, persons } from '@/db/schema/tables';
+import { ContactRef } from './persons.contact';
 import { NewPerson, PublicPerson, VoiceProfile } from './persons.types';
 
 const returned = {
@@ -82,4 +83,33 @@ export async function insertPersonRelationshipIfAbsent(input: {
     .returning({ id: personRelationships.id });
 
   return row ?? null;
+}
+
+/**
+ * Gives a person their contact handle, if they do not already have one.
+ *
+ * For someone who was previously only mentioned: they have a row, nobody had
+ * heard from them, and now a transcript shows them speaking. Claiming the
+ * existing row is better than creating a second person for a human the model
+ * correctly recognised.
+ *
+ * Guarded on the ref being null rather than overwriting, and that guard is the
+ * point: a person already identified by one handle must not be re-pointed at
+ * another, because that is how two humans become one row. Returns null when
+ * there was nothing to claim, so the caller can fall back rather than assume.
+ */
+export async function setContactRefIfAbsent(
+  userId: string,
+  personId: string,
+  sourceContactRef: ContactRef
+): Promise<PublicPerson | null> {
+  const [person] = await db
+    .update(persons)
+    .set({ sourceContactRef })
+    .where(
+      and(eq(persons.id, personId), eq(persons.userId, userId), isNull(persons.sourceContactRef))
+    )
+    .returning(returned);
+
+  return person ?? null;
 }

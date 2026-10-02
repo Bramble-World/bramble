@@ -376,6 +376,14 @@ Full rationale in `docs/import-api.md`. Three conversations per account, ever.
 
 - **`handle`** must be `"me"` or `c_` + 16 hex. An allow-list, not a
   "looks like a phone number" check — anything else is a 400.
+- **`handle` is the identity.** It must be _stable per person across imports_ —
+  the same human in two conversations needs the same `c_…` — and _distinct per
+  person within one_. It is what `persons.source_contact_ref` hashes, so it is
+  what makes someone the same row across storylines.
+- **`sender` is a label, not an identity.** Two conversations may both contain a
+  "Person A" without those being the same human; the backend never keys on it.
+  Names should still be unique within a transcript, since the model uses them to
+  refer to people.
 - At least 50 messages, at most 400,000 characters of text, oldest first.
 
 **202** when newly accepted and queued. **200** when an import for this

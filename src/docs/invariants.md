@@ -20,8 +20,22 @@ product's central claim, not an implementation detail.
 
 - `events.generationRationale` holds the model's _own reasoning_, never quoted
   source text.
-- `persons.sourceContactRef` is a **one-way hash** of a phone number or email.
-  Writing the raw value would look identical to the database.
+- `persons.sourceContactRef` is a **one-way hash** of whatever identifies a
+  contact: the client's per-person pseudonym (`c_…`) for Mac imports, and a raw
+  handle only for lab/CSV input. Writing the raw value would look identical to
+  the database.
+- **Identity is the handle, never the display name.** `sourceHandle` is described
+  to the model as "the exact name this person sent messages under", so what comes
+  back is a display name — and hashing it merged a Lauren and an Ollie, each
+  labelled "Person A" in a separate conversation, into one `persons` row. The
+  name is now only a key into the transcript; extraction maps it to a handle
+  itself, and only when the transcript is unambiguous (one handle per name, one
+  name per handle, no placeholders). A model's `existingPersonId` never outranks
+  a handle, because a misrecognition must not be able to merge two humans.
+- **Existing name-derived refs will not match new imports.** Nothing migrates
+  them — the old value was a hash of a name and the new one is a hash of a
+  pseudonym, and there is no way to recover which was which. Local test data
+  should be re-imported rather than repaired.
 - **The import path carries no real contact details at all.** The Mac replaces
   phone numbers and emails with keyed pseudonyms (`c_…`) before sending, and the
   API accepts only `me` or that shape — an allow-list, because a deny-list for

@@ -314,3 +314,292 @@ describe('character wants', () => {
     expect(character.person).not.toHaveProperty('want');
   });
 });
+
+/**
+ * Who a person *is*, across conversations.
+ *
+ * The bug this fixes merged two humans into one `persons` row: `sourceHandle` is
+ * described to the model as "the exact name this person sent messages under", so
+ * it returns a display name — and hashing that made a Lauren and an Ollie, each
+ * labelled "Person A" in a separate conversation, the same person. Nothing
+ * errors. Both rows read as valid, and the two then share a voice, a
+ * relationship history and every storyline either appears in.
+ *
+ * Identity is now the transcript's handle, which the client sends as a stable
+ * per-person pseudonym. The name is only a key into the transcript.
+ */
+describe('person identity across conversations', () => {
+  /** A transcript whose only other speaker has a given name and handle. */
+  const conversationWith = (sender: string, handle: string, surface = 'imessage') => ({
+    surface,
+    messages: Array.from({ length: 60 }, (_, i) => ({
+      isFromMe: i % 2 === 0,
+      handle: i % 2 === 0 ? 'me' : handle,
+      sender: i % 2 === 0 ? 'me' : sender,
+      text: `message ${i}`,
+      sentAt: new Date(Date.UTC(2026, 2, 1, 0, i)).toISOString(),
+    })),
+  });
+
+  /** Makes the fake name the other speaker exactly as the transcript does. */
+  function castAs(sender: string, existingPersonId: string | null = null) {
+    fake.register(extractionPrompt, ({ vars }) => ({
+      title: 'A Story',
+      tone: 'plain',
+      setting: null,
+      arcSummary: 'Something happened.',
+      cast: [
+        {
+          name: vars.user.self?.name ?? 'Blossom',
+          existingPersonId: vars.user.self?.id ?? null,
+          sourceHandle: null,
+          role: 'protagonist' as const,
+          description: null,
+          voiceTone: null,
+          want: 'to be understood',
+          avoids: null,
+        },
+        {
+          name: sender,
+          existingPersonId,
+          // What the model actually returns: the display name, not the handle.
+          sourceHandle: sender,
+          role: 'supporting' as const,
+          description: null,
+          voiceTone: null,
+          want: 'to be left alone',
+          avoids: null,
+        },
+      ],
+      relationships: [],
+      beats: [
+        {
+          title: 'One',
+          description: 'x',
+          stakes: null,
+          occurredAt: null,
+          participantNames: [vars.user.self?.name ?? 'Blossom', sender],
+          engagementScore: 5,
+        },
+      ],
+      background: [],
+      motifs: [],
+    }));
+  }
+
+  const castNames = async (storylineId: string) => {
+    const full = await db.query.storylines.findFirst({
+      where: { id: storylineId },
+      with: { characters: { with: { person: true } } },
+    });
+    return full!.characters.map((c) => c.person);
+  };
+
+  /**
+   * (a) The Lauren/Ollie regression. Two conversations, each with a "Person A",
+   * different handles — two people.
+   */
+  it('keeps two people apart when a transcript labels them the same', async () => {
+    castAs('Person A');
+    const lauren = await extractStoryline(
+      userId,
+      conversationWith('Person A', 'c_1111111111111111'),
+      { generator: fake }
+    );
+    castAs('Person A');
+    const ollie = await extractStoryline(
+      userId,
+      conversationWith('Person A', 'c_2222222222222222'),
+      { generator: fake }
+    );
+
+    const all = await persons.listPersons(userId);
+    const others = all.filter((p) => !p.isSelf);
+    expect(others).toHaveLength(2);
+
+    // And each storyline is cast with its own, not with the first one twice.
+    const first = (await castNames(lauren.id)).find((p) => !p.isSelf)!;
+    const second = (await castNames(ollie.id)).find((p) => !p.isSelf)!;
+    expect(second.id).not.toBe(first.id);
+  });
+
+  /** (b) The other half: one handle under two names is still one person. */
+  it('keeps one person when the same handle appears under different names', async () => {
+    castAs('Lauren');
+    await extractStoryline(userId, conversationWith('Lauren', 'c_3333333333333333'), {
+      generator: fake,
+    });
+    castAs('Lo');
+    const second = await extractStoryline(userId, conversationWith('Lo', 'c_3333333333333333'), {
+      generator: fake,
+    });
+
+    const others = (await persons.listPersons(userId)).filter((p) => !p.isSelf);
+    expect(others).toHaveLength(1);
+    expect((await castNames(second.id)).find((p) => !p.isSelf)!.id).toBe(others[0].id);
+  });
+
+  /**
+   * (c) The handle is a fact and `existingPersonId` is the model's opinion. When
+   * they disagree the handle wins, because a misrecognition must not be able to
+   * merge two humans.
+   */
+  it('ignores a recognition that contradicts the handle', async () => {
+    castAs('Lauren');
+    const first = await extractStoryline(userId, conversationWith('Lauren', 'c_4444444444444444'), {
+      generator: fake,
+    });
+    const lauren = (await castNames(first.id)).find((p) => !p.isSelf)!;
+
+    // The model insists this is Lauren. The handle says otherwise.
+    castAs('Ollie', lauren.id);
+    const second = await extractStoryline(userId, conversationWith('Ollie', 'c_5555555555555555'), {
+      generator: fake,
+    });
+
+    const ollie = (await castNames(second.id)).find((p) => !p.isSelf)!;
+    expect(ollie.id).not.toBe(lauren.id);
+    expect((await persons.listPersons(userId)).filter((p) => !p.isSelf)).toHaveLength(2);
+  });
+
+  /**
+   * (d) Someone previously only mentioned, now heard from. They have a row and
+   * no handle, so this is the moment it earns one — better than a second row for
+   * a person the model correctly recognised.
+   */
+  it('gives a mentioned-only person their handle the first time they speak', async () => {
+    const mentioned = await persons.createPerson(userId, { name: 'Ollie' });
+
+    castAs('Ollie', mentioned.id);
+    const storyline = await extractStoryline(
+      userId,
+      conversationWith('Ollie', 'c_6666666666666666'),
+      { generator: fake }
+    );
+
+    const cast = (await castNames(storyline.id)).find((p) => !p.isSelf)!;
+    expect(cast.id).toBe(mentioned.id);
+    expect((await persons.listPersons(userId)).filter((p) => !p.isSelf)).toHaveLength(1);
+
+    // And they are now findable by that handle, which is the point of claiming it.
+    castAs('Ollie');
+    const again = await extractStoryline(userId, conversationWith('Ollie', 'c_6666666666666666'), {
+      generator: fake,
+    });
+    expect((await castNames(again.id)).find((p) => !p.isSelf)!.id).toBe(mentioned.id);
+  });
+
+  /**
+   * The handle check has to come *first*, not merely exist. Someone already known
+   * by their handle speaks again, and the model points `existingPersonId` at a
+   * different person who has no handle yet. Resolving by recognition would claim
+   * that unrelated row for this handle — giving one human's pseudonym to another
+   * person's record, which is the merge in reverse.
+   */
+  it('matches on the handle before considering who the model recognised', async () => {
+    castAs('Lauren');
+    const first = await extractStoryline(userId, conversationWith('Lauren', 'c_8888888888888888'), {
+      generator: fake,
+    });
+    const lauren = (await castNames(first.id)).find((p) => !p.isSelf)!;
+
+    // Someone mentioned in passing, with no handle of their own.
+    const mentionedOnly = await persons.createPerson(userId, { name: 'Lo' });
+
+    // Lauren speaks again under her own handle; the model misrecognises her as Lo.
+    castAs('Lauren', mentionedOnly.id);
+    const second = await extractStoryline(
+      userId,
+      conversationWith('Lauren', 'c_8888888888888888'),
+      { generator: fake }
+    );
+
+    expect((await castNames(second.id)).find((p) => !p.isSelf)!.id).toBe(lauren.id);
+
+    // And Lo is untouched — still mentioned-only, not wearing Lauren's identity.
+    const lo = (await persons.listPersons(userId)).find((p) => p.id === mentionedOnly.id)!;
+    expect(lo.name).toBe('Lo');
+    expect((await persons.listPersons(userId)).filter((p) => !p.isSelf)).toHaveLength(2);
+  });
+
+  /**
+   * (e) The dev lab imports CSVs where `handle` is a placeholder. Hashing those
+   * would make every CSV-imported contact the same person.
+   */
+  it('never matches on a placeholder handle', async () => {
+    castAs('Lauren');
+    await extractStoryline(userId, conversationWith('Lauren', 'them'), { generator: fake });
+    castAs('Ollie');
+    await extractStoryline(userId, conversationWith('Ollie', 'them'), { generator: fake });
+
+    const others = (await persons.listPersons(userId)).filter((p) => !p.isSelf);
+    expect(others).toHaveLength(2);
+    expect(others.map((p) => p.name).sort()).toStrictEqual(['Lauren', 'Ollie']);
+  });
+
+  /**
+   * (f) A group thread where every message carries the thread's own id. Keying
+   * on that would give every participant the same hash and collapse the cast.
+   */
+  it('never merges a group chat that shares one handle', async () => {
+    const shared = 'c_7777777777777777';
+    const group = {
+      surface: 'imessage',
+      messages: Array.from({ length: 60 }, (_, i) => ({
+        isFromMe: i % 3 === 0,
+        handle: i % 3 === 0 ? 'me' : shared,
+        sender: i % 3 === 0 ? 'me' : i % 3 === 1 ? 'Lauren' : 'Ollie',
+        text: `message ${i}`,
+        sentAt: new Date(Date.UTC(2026, 2, 1, 0, i)).toISOString(),
+      })),
+    };
+
+    fake.register(extractionPrompt, ({ vars }) => ({
+      title: 'Three Of Us',
+      tone: 'plain',
+      setting: null,
+      arcSummary: 'Something happened.',
+      cast: [
+        {
+          name: vars.user.self?.name ?? 'Blossom',
+          existingPersonId: vars.user.self?.id ?? null,
+          sourceHandle: null,
+          role: 'protagonist' as const,
+          description: null,
+          voiceTone: null,
+          want: 'w',
+          avoids: null,
+        },
+        ...['Lauren', 'Ollie'].map((name) => ({
+          name,
+          existingPersonId: null,
+          sourceHandle: name,
+          role: 'supporting' as const,
+          description: null,
+          voiceTone: null,
+          want: 'w',
+          avoids: null,
+        })),
+      ],
+      relationships: [],
+      beats: [
+        {
+          title: 'One',
+          description: 'x',
+          stakes: null,
+          occurredAt: null,
+          participantNames: ['Lauren', 'Ollie'],
+          engagementScore: 5,
+        },
+      ],
+      background: [],
+      motifs: [],
+    }));
+
+    const storyline = await extractStoryline(userId, group, { generator: fake });
+
+    const cast = (await castNames(storyline.id)).filter((p) => !p.isSelf);
+    expect(cast).toHaveLength(2);
+    expect(new Set(cast.map((p) => p.id)).size).toBe(2);
+  });
+});
