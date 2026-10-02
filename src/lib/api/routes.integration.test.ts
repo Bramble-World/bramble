@@ -607,8 +607,11 @@ describe('the play loop', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(body.turn.headline).toEqual(expect.any(String));
     expect(body.turn.narrative).toEqual(expect.any(String));
     expect(body.turn.choices.length).toBeGreaterThanOrEqual(2);
+    // Always present — empty for a text-only beat, never absent.
+    expect(body.turn.surfaces).toEqual(expect.any(Array));
   });
 
   // Same URL is the loop, the resume and the retry. A second call must find the
@@ -871,6 +874,7 @@ describe('a moment you have already played', () => {
     );
     // Each history entry is a full turn, so the client can render what was asked.
     expect(body.session.history[0].turn.choices.length).toBeGreaterThanOrEqual(2);
+    expect(body.session.history[0].turn.surfaces).toEqual(expect.any(Array));
   });
 });
 

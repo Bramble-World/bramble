@@ -203,10 +203,12 @@ describe('getWorld', () => {
     await beat('from the conversation', 6);
 
     const session = await sessions.startSession(userId, storylineId);
-    const turn = await sessions.openTurn(userId, session.id, 'something happened', [
-      { label: 'a' },
-      { label: 'b' },
-    ]);
+    const turn = await sessions.openTurn(userId, session.id, {
+      headline: null,
+      narrativeContent: 'something happened',
+      choices: [{ label: 'a' }, { label: 'b' }],
+      surfaces: [],
+    });
     await timeline.appendEvent(userId, storylineId, {
       origin: 'conversation_generated',
       triggeredByTurnId: turn.id,

@@ -14,6 +14,7 @@ import { assembleSessionContext, assembleStorylineContext } from './context.read
 import { contextAsOf, scriptExhausted } from './playhead';
 import * as sessionWriter from '../sessions/sessions.writer';
 import { ConflictError, StorylineNotReadyError } from '@/lib/utils/errors';
+import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
 import * as storylineReader from '../storylines/storylines.reader';
 
 /** Injected so a test can supply the fake without touching process env. */
@@ -60,27 +61,30 @@ export async function generateTurn(
   // the generator is recorded as having been given and what it was actually
   // shown are the same thing. A render that quietly dropped beats would leave
   // the anti-leak test asserting against a context the model never saw.
+  const visible = contextAsOf(storyline, session.playheadOrder);
   const { value } = await generator.run(
     turnPrompt,
     {
-      storyline: contextAsOf(storyline, session.playheadOrder),
+      storyline: visible,
       session: sessionContext,
       beyondScript: scriptExhausted(storyline, session.playheadOrder),
     },
     { signal: deps.signal }
   );
 
-  return sessions.openTurn(
-    userId,
-    sessionId,
-    value.narrative,
-    value.choices.map((choice) => ({
+  return sessions.openTurn(userId, sessionId, {
+    headline: value.headline.trim() || null,
+    narrativeContent: value.narrative,
+    choices: value.choices.map((choice) => ({
       label: choice.label,
       // The schema says nullable because structured output has no absent; the
       // column wants undefined.
       description: choice.description ?? undefined,
-    }))
-  );
+    })),
+    // Senders are checked against the same cut the model was shown, so a text
+    // can only come from someone the reader has already met.
+    surfaces: surfacesFromModel(value, visible.characters),
+  });
 }
 
 /**
@@ -163,7 +167,9 @@ export async function generateConsequences(
     {
       storyline,
       decision: {
+        headline: turn.headline,
         narrativeContent: turn.narrativeContent,
+        surfaceLines: turn.surfaces.map(surfaceHistoryLine),
         chosenLabel: chosen.label,
         chosenDescription: chosen.description,
         rejectedLabels: turn.choices.filter((c) => c.id !== chosen.id).map((c) => c.label),

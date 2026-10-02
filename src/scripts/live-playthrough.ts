@@ -22,6 +22,7 @@ import {
 } from '@/lib/services/generation/turns.service';
 import * as sessions from '@/lib/services/sessions/sessions.service';
 import * as timeline from '@/lib/services/timeline/timeline.service';
+import { surfaceHistoryLine } from '@/lib/surfaces';
 
 const [match = 'Under One Roof', turnCount = '6'] = process.argv.slice(2);
 
@@ -159,6 +160,8 @@ async function main() {
     console.log(
       `── turn ${turn.turnOrder}  [playhead ${before.playheadOrder}, ${visible}/${beats.length} beats visible]`
     );
+    if (turn.headline) console.log(`   ${turn.headline}`);
+    turn.surfaces.forEach((surface) => console.log(`   ${surfaceHistoryLine(surface)}`));
     console.log(`   ${turn.narrativeContent}`);
     turn.choices.forEach((c, n) => console.log(`     ${n + 1}. ${c.label}`));
 
@@ -166,7 +169,10 @@ async function main() {
     // crude, but the failure it looks for was blatant — whole beats retold
     // almost verbatim, dates and all.
     const ahead = extracted.filter((b) => b.narrativeOrder > before.playheadOrder);
-    const said = keywords(turn.narrativeContent, castNames);
+    const said = keywords(
+      [turn.headline, ...turn.surfaces.map(surfaceHistoryLine), turn.narrativeContent].join(' '),
+      castNames
+    );
     for (const beat of ahead) {
       const beatWords = keywords(`${beat.title} ${beat.description}`, castNames);
       const shared = [...beatWords].filter((w) => said.has(w));

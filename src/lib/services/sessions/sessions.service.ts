@@ -1,11 +1,16 @@
 import { db } from '@/index';
-import { ConflictError, NotFoundError, ValidationError } from '@/lib/utils/errors';
+import {
+  ConflictError,
+  InternalServerError,
+  NotFoundError,
+  ValidationError,
+} from '@/lib/utils/errors';
 import * as storylineReader from '../storylines/storylines.reader';
 import * as timelineReader from '../timeline/timeline.reader';
 import * as reader from './sessions.reader';
 import * as writer from './sessions.writer';
 import { Executor } from '../executor';
-import { NewChoice, PublicSession, TurnWithChoices } from './sessions.types';
+import { NewTurn, PublicSession, TurnWithChoices } from './sessions.types';
 
 export const findIdleSessions = reader.findIdleSessions;
 export const listSessions = reader.listSessions;
@@ -179,8 +184,7 @@ export async function getOpenTurn(
 export async function openTurn(
   userId: string,
   sessionId: string,
-  narrativeContent: string,
-  choices: NewChoice[]
+  turn: NewTurn
 ): Promise<TurnWithChoices> {
   // A turn with nothing to choose is a dead end, and a dead end is what a
   // shipped client cannot recover from: a screen with no buttons and no next
@@ -192,7 +196,7 @@ export async function openTurn(
   // Zero, not `< 2`: one option is a degenerate turn but a renderable one, and
   // the minimum that makes a turn interesting belongs to the model's schema
   // rather than to the column's integrity.
-  if (choices.length === 0) {
+  if (turn.choices.length === 0) {
     throw new ValidationError('A turn must offer at least one choice');
   }
 
@@ -203,7 +207,13 @@ export async function openTurn(
     if (open) return open;
 
     const turnOrder = await reader.nextTurnOrder(tx, sessionId);
-    return writer.insertTurnWithChoices(tx, sessionId, turnOrder, narrativeContent, choices);
+    const turnId = await writer.insertTurn(tx, sessionId, turnOrder, turn);
+    // Read back rather than assembled here, so a fresh turn and a resumed one
+    // are the same shape by construction — surfaces resolved, choices ordered.
+    const written = await reader.getTurn(tx, turnId);
+    if (!written)
+      throw new InternalServerError(`Turn ${turnId} vanished inside its own transaction`);
+    return written;
   });
 }
 

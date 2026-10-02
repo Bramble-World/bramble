@@ -237,3 +237,60 @@ describe('wants', () => {
     expect(prompt).toContain('Wants: the spare key back before the weekend');
   });
 });
+
+/**
+ * Story surfaces: a beat can play out on the reader's phone.
+ *
+ * The model names senders by character id, so the cast has to carry ids; and
+ * what was on the phone has to come back in the history, or the next beat
+ * forgets the texts it is meant to be answering.
+ */
+describe('surfaces', () => {
+  const maya = {
+    id: 'c1',
+    personId: 'p1',
+    name: 'Maya',
+    role: 'supporting' as const,
+    description: null,
+    voice: null,
+    want: null,
+    avoids: null,
+    isSelf: false,
+  };
+
+  it('gives every cast member an id the model can name a sender by', () => {
+    const { prompt } = render({ storyline: storyline({ characters: [maya] }) });
+
+    expect(prompt).toContain('- Maya [c1] — supporting');
+  });
+
+  it('keeps phones for beats that really are texts, and the narrative off the screen', () => {
+    const { system } = render();
+
+    expect(system).toContain('set surfaceKind to imessage_notifications');
+    expect(system).toContain('Otherwise set surfaceKind to none');
+    expect(system).toContain('never repeats words that appear on a surface');
+  });
+
+  it('remembers what was on the phone, and the headline, in the history', () => {
+    const { prompt } = render({
+      session: {
+        ...session,
+        turns: [
+          {
+            turnOrder: 1,
+            headline: 'Maya just texted you.',
+            narrativeContent: 'You put the phone face down.',
+            surfaceLines: ['On your phone — Maya: "are you up"'],
+            choices: [],
+            selectedChoiceLabel: 'Leave it',
+          },
+        ],
+      },
+    });
+
+    expect(prompt).toContain(
+      '- Maya just texted you. You put the phone face down.\n  On your phone — Maya: "are you up"\n  You chose: Leave it'
+    );
+  });
+});

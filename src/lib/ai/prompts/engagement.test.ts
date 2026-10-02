@@ -37,7 +37,9 @@ const consequenceVars = {
     motifs: [],
   },
   decision: {
+    headline: null,
     narrativeContent: 'x',
+    surfaceLines: [],
     chosenLabel: 'y',
     chosenDescription: null,
     rejectedLabels: [],

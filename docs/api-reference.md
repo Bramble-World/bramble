@@ -267,18 +267,35 @@ reconstructing state locally.
     "turnsAnswered": 3,
     "turn": {
       "id": "uuid",
-      "narrative": "She answers before you have finished typing.",
+      "headline": "Maya just texted you at 1:47 AM.",
+      "narrative": "You read it with the sound off, twice.",
       "choices": [
         { "id": "uuid", "label": "Tell her the truth", "description": "It may not land." },
         { "id": "uuid", "label": "Change the subject", "description": null }
+      ],
+      "surfaces": [
+        {
+          "type": "imessage_notifications",
+          "clockTime": "1:47",
+          "dateLabel": "Saturday, June 14",
+          "notifications": [
+            {
+              "sender": { "id": "uuid", "name": "Maya", "isSelf": false },
+              "text": "i have to tell you something"
+            },
+            { "sender": { "id": "uuid", "name": "Maya", "isSelf": false }, "text": "are you up" }
+          ]
+        }
       ]
     },
     "history": [
       {
         "turn": {
           "id": "uuid",
+          "headline": null,
           "narrative": "The message sits there, unsent.",
-          "choices": [{ "id": "uuid", "label": "Say the true thing", "description": null }]
+          "choices": [{ "id": "uuid", "label": "Say the true thing", "description": null }],
+          "surfaces": []
         },
         "chosenChoiceId": "uuid"
       }
@@ -306,6 +323,33 @@ Three states, one remedy each:
 There is deliberately no state for "answered, consequences pending" — the remedy
 is the same call, and every state named here is a branch the client carries
 forever.
+
+### `TurnView` and story surfaces
+
+Every turn has three parts, whatever it is shown on:
+
+| Field       | What it is                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------ |
+| `headline`  | The hook: one sentence saying what just happened. **Null on turns from before headlines.** |
+| `narrative` | What you do or feel now. On a turn with no headline, the whole beat.                       |
+| `choices`   | 2–4 options, in display order.                                                             |
+
+**`surfaces`** is what the beat is _shown on_ — texts on a lock screen today, an
+email or a boarding pass later. Always present; `[]` for a text-only beat, which
+is most of them. Each entry is discriminated by `type` and carries only that
+type's fields; none of them repeats the headline or the narrative, and the
+narrative never repeats the words on a surface.
+
+**Skip any `type` you do not recognise** and render the rest of the turn. New
+types are added without a version bump.
+
+| `type`                   | Fields                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `imessage_notifications` | `clockTime` (`"1:47"` or null — show the real clock), `dateLabel` (`"Saturday, June 14"` or null), `notifications`: 1–3 `{ sender: PersonView, text }`, **newest first**, never empty |
+
+Senders are always people the reader has already met in this playthrough, and
+never the reader. A sender whose person has since been deleted is dropped, and a
+surface left with no notifications is dropped with it.
 
 ### `POST /api/v1/sessions/{sessionId}/turn`
 
@@ -418,7 +462,10 @@ Poll every ~5s while `queued` or `running`. One indexed row read, no Redis.
 - **`failure`** — `{ "code": "…", "retryable": true }` when failed. Re-send on
   retryable; stop and show the error otherwise.
 
-**No response ever carries message content.** The `imports` row holds none
+**No response ever carries message content.** Surface text is not an
+exception: a notification is generated fiction written for the story, in a met
+character's voice — the same kind of thing the narrative says about them — and
+never a message from the imported conversation. The `imports` row holds none
 either — the transcript lives encrypted in Redis for at most 30 minutes and in
 the memory of the worker reading it, and nowhere else.
 
@@ -428,16 +475,16 @@ the memory of the worker reading it, and nowhere else.
 
 Not oversights. Each is a field a client might expect and must not get.
 
-| Field                                                        | Why                                                                                                            |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `stakes`                                                     | What is at risk in a beat — the lever the model writes with, and most of every beat the reader has not reached |
-| `generationRationale`                                        | The model explaining its own trick                                                                             |
-| `arcSummary`                                                 | Describes the whole arc, including beats above the playhead                                                    |
-| `narrativeOrder`, `playheadOrder`                            | Internal ordering keys. Start sessions from `eventId`                                                          |
-| `voiceProfile` / `sampleTurns`                               | Model-authored imitation of a real person's messages                                                           |
-| `want` / `avoids`                                            | The authoring levers behind each character                                                                     |
-| `clerkId`, `userId`, `sourceContactRef`                      | Identity and contact join keys                                                                                 |
-| `durationMinutes`, `coverImageUrl`, any progress denominator | No honest backing — stories are endless, so "3 of 40" is both a lie and a spoiler                              |
+| Field                                                        | Why                                                                                                                                                                                                                    |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stakes`                                                     | What is at risk in a beat — the lever the model writes with, and most of every beat the reader has not reached                                                                                                         |
+| `generationRationale`                                        | The model explaining its own trick                                                                                                                                                                                     |
+| `arcSummary`                                                 | Describes the whole arc, including beats above the playhead                                                                                                                                                            |
+| `narrativeOrder`, `playheadOrder`                            | Internal ordering keys. Start sessions from `eventId`                                                                                                                                                                  |
+| `voiceProfile` / `sampleTurns`                               | Model-authored imitation of a real person's messages, learned from the conversation. (A surface's notification `text` is returned: it is a line of the story, like the narrative, not a sample of how someone writes.) |
+| `want` / `avoids`                                            | The authoring levers behind each character                                                                                                                                                                             |
+| `clerkId`, `userId`, `sourceContactRef`                      | Identity and contact join keys                                                                                                                                                                                         |
+| `durationMinutes`, `coverImageUrl`, any progress denominator | No honest backing — stories are endless, so "3 of 40" is both a lie and a spoiler                                                                                                                                      |
 
 A unit test stringifies every view and asserts none of these appear, so adding a
 field by spreading a database row fails the build rather than shipping.

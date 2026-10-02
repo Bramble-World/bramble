@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '@/index';
-import { users } from '@/db/schema/tables';
+import { storylineSessions, turnSurfaces, users } from '@/db/schema/tables';
 import {
   ConflictError,
   NotFoundError,
@@ -12,6 +12,7 @@ import * as sessionReader from '../sessions/sessions.reader';
 import { createFakeGenerator, FakeGenerator } from '@/lib/ai';
 import { registerFixtures } from '@/lib/ai/fixtures';
 import { consequencePrompt } from '@/lib/ai/prompts/consequence.prompt';
+import { turnPrompt, type TurnOutput } from '@/lib/ai/prompts/turn.prompt';
 import * as persons from '../persons/persons.service';
 import * as storylines from '../storylines/storylines.service';
 import * as sessions from '../sessions/sessions.service';
@@ -719,5 +720,131 @@ describe('advanceSession', () => {
     );
 
     await storylines.markStatus(userId, storylineId, 'ready');
+  });
+});
+
+/**
+ * Story surfaces, end to end: what the model puts on the reader's phone is
+ * validated against who they have met, stored apart from the turn, resolved to
+ * names on the way out, and remembered by the prompts that come after.
+ */
+describe('surfaces', () => {
+  async function castIds() {
+    const cast = await db.query.characters.findMany({
+      where: { storylineId },
+      with: { person: true },
+    });
+    const id = (name: string) => cast.find((c) => c.person.name === name)!.id;
+    return { blossom: id('Blossom'), maya: id('Maya') };
+  }
+
+  const phoneBeat = (notifications: TurnOutput['notifications']): TurnOutput => ({
+    headline: 'Maya just texted you at 1:47.',
+    narrative: 'You read it with the sound off.',
+    choices: [
+      { label: 'Reply', description: null },
+      { label: 'Leave it', description: null },
+    ],
+    surfaceKind: 'imessage_notifications',
+    clockTime: '1:47',
+    dateLabel: 'Saturday, June 14',
+    notifications,
+  });
+
+  it('stores the headline and the texts, and serves them with the sender named', async () => {
+    const { maya } = await castIds();
+    fake.register(turnPrompt, () =>
+      phoneBeat([
+        { senderCharacterId: maya, text: 'i have to tell you something' },
+        { senderCharacterId: maya, text: 'are you up' },
+      ])
+    );
+    const session = await freshSession();
+
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    expect(turn.headline).toBe('Maya just texted you at 1:47.');
+    expect(turn.narrativeContent).toBe('You read it with the sound off.');
+    expect(turn.surfaces).toStrictEqual([
+      {
+        type: 'imessage_notifications',
+        clockTime: '1:47',
+        dateLabel: 'Saturday, June 14',
+        notifications: [
+          {
+            sender: { id: expect.any(String), name: 'Maya', isSelf: false },
+            text: 'i have to tell you something',
+          },
+          {
+            sender: { id: expect.any(String), name: 'Maya', isSelf: false },
+            text: 'are you up',
+          },
+        ],
+      },
+    ]);
+    // A resumed turn reads the same as a fresh one.
+    expect(await sessionReader.getOpenTurn(db, session.id)).toStrictEqual(turn);
+  });
+
+  it('plays as text when every sender is someone the reader cannot get a text from', async () => {
+    const { blossom } = await castIds();
+    fake.register(turnPrompt, () =>
+      phoneBeat([
+        { senderCharacterId: blossom, text: 'a text from yourself' },
+        { senderCharacterId: '00000000-0000-0000-0000-000000000000', text: 'from nobody' },
+      ])
+    );
+    const session = await freshSession();
+
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    expect(turn.surfaces).toStrictEqual([]);
+    expect(turn.headline).toBe('Maya just texted you at 1:47.');
+    expect(turn.choices).toHaveLength(2);
+  });
+
+  it('remembers the texts in the next beat and in the consequences', async () => {
+    const { maya } = await castIds();
+    fake.register(turnPrompt, () => phoneBeat([{ senderCharacterId: maya, text: 'are you up' }]));
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+    expect(fake.calls.at(-1)!.prompt).toContain('On your phone — Maya: "are you up"');
+
+    await generateTurn(userId, session.id, { generator: fake });
+    const next = fake.calls.at(-1)!;
+    expect(next.promptName).toBe('turn.generate');
+    expect(next.prompt).toContain(
+      '- Maya just texted you at 1:47. You read it with the sound off.'
+    );
+    expect(next.prompt).toContain('  On your phone — Maya: "are you up"');
+  });
+
+  it('skips a stored surface this build cannot read, and keeps the turn', async () => {
+    const { maya } = await castIds();
+    fake.register(turnPrompt, () => phoneBeat([{ senderCharacterId: maya, text: 'are you up' }]));
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    await db.insert(turnSurfaces).values([
+      { turnId: turn.id, position: 1, type: 'boarding_pass', version: 1, payload: { gate: 'B12' } },
+      { turnId: turn.id, position: 2, type: 'imessage_notifications', version: 1, payload: {} },
+    ]);
+
+    const read = await sessionReader.getTurn(db, turn.id);
+    expect(read!.surfaces).toStrictEqual(turn.surfaces);
+  });
+
+  it('goes with its turn when the session is deleted', async () => {
+    const { maya } = await castIds();
+    fake.register(turnPrompt, () => phoneBeat([{ senderCharacterId: maya, text: 'are you up' }]));
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    await db.delete(storylineSessions).where(eq(storylineSessions.id, session.id));
+
+    expect(await db.query.turnSurfaces.findMany({ where: { turnId: turn.id } })).toStrictEqual([]);
   });
 });

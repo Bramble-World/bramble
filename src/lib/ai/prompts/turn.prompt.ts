@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { SessionContext, StorylineContext } from '@/lib/services/generation/generation.types';
 import { renderTimeline } from './timeline';
+import { SURFACE_KINDS } from '@/lib/surfaces';
+import { MAX_NOTIFICATIONS } from '@/lib/surfaces/imessage.surface';
 
 export type TurnVars = {
   storyline: StorylineContext;
@@ -25,10 +27,16 @@ export type TurnVars = {
  * silently never appears, so the schema says nullable and the caller normalises.
  */
 export const turnOutputSchema = z.object({
+  headline: z
+    .string()
+    .min(1)
+    .describe('The hook: one present-tense sentence to "you" saying what just happened.'),
   narrative: z
     .string()
     .min(1)
-    .describe('What happens next, in second person, 2-5 sentences. No dialogue attribution.'),
+    .describe(
+      'What you do or feel now, in second person, 1-3 sentences. Never repeats the headline or the words on a surface. No dialogue attribution.'
+    ),
   choices: z
     .array(
       z.object({
@@ -42,6 +50,32 @@ export const turnOutputSchema = z.object({
     .min(2)
     .max(4)
     .describe('Distinct options. No option may be a rephrasing of another.'),
+  // The surface, flattened into the turn rather than nested: nested optional
+  // structures are where structured output is least reliable (see the
+  // consequence prompt's `dynamic`). `surfaceKind` says which of the fields
+  // below mean anything; with `none` they are null and empty.
+  surfaceKind: z
+    .enum(SURFACE_KINDS)
+    .describe('Where this beat is shown. none unless the beat is texts arriving on your phone.'),
+  clockTime: z
+    .string()
+    .nullable()
+    .describe(
+      'The time on the lock screen, like "1:47". Null if the moment has no particular time.'
+    ),
+  dateLabel: z
+    .string()
+    .nullable()
+    .describe('The date under the clock, like "Saturday, June 14". Null if unknown.'),
+  notifications: z
+    .array(
+      z.object({
+        senderCharacterId: z.string().describe('The id of the cast member who sent it.'),
+        text: z.string().describe('The text itself, as they would type it.'),
+      })
+    )
+    .max(MAX_NOTIFICATIONS)
+    .describe('Newest first. Empty unless surfaceKind is imessage_notifications.'),
 });
 
 export type TurnOutput = z.infer<typeof turnOutputSchema>;
@@ -84,6 +118,21 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '  committing to something, or letting a moment pass. A turn where every option',
         '  is a question is a turn where nothing can happen.',
         '- Do not resolve the story. A beat ends on a decision, not a conclusion.',
+        '',
+        'Shape of a beat:',
+        '- headline is the hook, one sentence: what just happened, to "you".',
+        '- narrative is what you do or feel now. It never repeats the headline, and it',
+        '  never repeats words that appear on a surface.',
+        '',
+        'Surfaces:',
+        '- When this beat is someone texting the reader right now, show it on their',
+        '  phone: set surfaceKind to imessage_notifications and write the texts as',
+        `  notifications — 1 to ${MAX_NOTIFICATIONS}, newest first. Each comes from a cast member other`,
+        '  than you, named by the id in brackets, and is written in their own voice and',
+        '  texting register. The texts are the beat; the narrative is your reaction.',
+        '- Otherwise set surfaceKind to none, clockTime and dateLabel to null, and leave',
+        '  notifications empty. Most beats are not texts — do not reach for a phone to',
+        '  make a scene feel modern.',
         ...(beyondScript
           ? [
               '',
@@ -114,7 +163,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '## Cast',
         ...storyline.characters.map((character) =>
           [
-            `- ${character.name}${character.isSelf ? ' (you)' : ''} — ${character.role}`,
+            `- ${character.name}${character.isSelf ? ' (you)' : ''} [${character.id}] — ${character.role}`,
             character.description ? `  ${character.description}` : null,
             character.voice?.tone ? `  Voice: ${character.voice.tone}` : null,
             character.voice?.quirks?.length
@@ -176,9 +225,13 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
           ? [
               '## This playthrough so far',
               ...session.turns.map((turn) =>
-                turn.selectedChoiceLabel
-                  ? `- ${turn.narrativeContent}\n  You chose: ${turn.selectedChoiceLabel}`
-                  : `- ${turn.narrativeContent}\n  (unanswered)`
+                [
+                  `- ${turn.headline ? `${turn.headline} ` : ''}${turn.narrativeContent}`,
+                  ...turn.surfaceLines.map((line) => `  ${line}`),
+                  turn.selectedChoiceLabel
+                    ? `  You chose: ${turn.selectedChoiceLabel}`
+                    : '  (unanswered)',
+                ].join('\n')
               ),
               '',
             ]

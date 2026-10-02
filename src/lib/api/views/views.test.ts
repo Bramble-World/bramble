@@ -47,8 +47,10 @@ const turn: TurnWithChoices = {
   sessionId: 'sess1',
   turnOrder: 3,
   narrativeContent: 'She answers before you have finished typing.',
+  headline: null,
   selectedChoiceId: null,
   respondedAt: null,
+  surfaces: [],
   choices: [
     {
       id: 'c1',
@@ -58,6 +60,25 @@ const turn: TurnWithChoices = {
       orderIndex: 0,
     },
     { id: 'c2', turnId: 't1', label: 'Change the subject', description: null, orderIndex: 1 },
+  ],
+};
+
+/** A beat that plays out on the phone. Its texts avoid every FORBIDDEN word. */
+const phoneTurn: TurnWithChoices = {
+  ...turn,
+  id: 't2',
+  headline: 'Maya just texted you at 1:47.',
+  narrativeContent: 'You read it with the sound off.',
+  surfaces: [
+    {
+      type: 'imessage_notifications',
+      clockTime: '1:47',
+      dateLabel: 'Saturday, June 14',
+      notifications: [
+        { sender: { id: 'p1', name: 'Maya', isSelf: false }, text: 'are you awake' },
+        { sender: { id: 'p1', name: 'Maya', isSelf: false }, text: 'i saw the photos' },
+      ],
+    },
   ],
 };
 
@@ -81,15 +102,32 @@ describe('views', () => {
     expect(personView(person)).toStrictEqual({ id: 'p1', name: 'Maya', isSelf: false });
   });
 
-  it('renders a turn as narrative plus choices, and nothing else', () => {
+  it('renders a turn as headline, narrative, choices and surfaces, and nothing else', () => {
     expect(turnView(turn)).toStrictEqual({
       id: 't1',
+      headline: null,
       narrative: 'She answers before you have finished typing.',
       choices: [
         { id: 'c1', label: 'Tell her the truth', description: 'It may not land.' },
         { id: 'c2', label: 'Change the subject', description: null },
       ],
+      surfaces: [],
     });
+  });
+
+  it('renders a surface as its type and fields — no version, no character ids', () => {
+    expect(turnView(phoneTurn).surfaces).toStrictEqual([
+      {
+        type: 'imessage_notifications',
+        clockTime: '1:47',
+        dateLabel: 'Saturday, June 14',
+        notifications: [
+          { sender: { id: 'p1', name: 'Maya', isSelf: false }, text: 'are you awake' },
+          { sender: { id: 'p1', name: 'Maya', isSelf: false }, text: 'i saw the photos' },
+        ],
+      },
+    ]);
+    expect(turnView(phoneTurn).headline).toBe('Maya just texted you at 1:47.');
   });
 
   // Nullable, not empty-string — the turn schema's own words are "Null if the
@@ -298,6 +336,7 @@ describe('nothing internal escapes any view', () => {
   const everyView = () => [
     personView(person),
     turnView(turn),
+    turnView(phoneTurn),
     arcView(storyline, 'supporting', new Date()),
     storylineDetailView(storyline, [person]),
     worldEventView(worldEvent, 1),

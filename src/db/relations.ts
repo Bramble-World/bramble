@@ -234,6 +234,15 @@ export const relations = defineRelations(schema, (r) => ({
     }),
     triggeredEvents: r.many.events(),
     triggeredContextEntries: r.many.contextEntries(),
+    surfaces: r.many.turnSurfaces(),
+  },
+
+  turnSurfaces: {
+    turn: r.one.storyTurns({
+      from: r.turnSurfaces.turnId,
+      to: r.storyTurns.id,
+      optional: false,
+    }),
   },
 
   turnChoices: {

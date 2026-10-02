@@ -99,7 +99,10 @@ export type SessionContext = {
   storylineId: string;
   turns: Array<{
     turnOrder: number;
+    headline: string | null;
     narrativeContent: string;
+    /** One line per surface the turn was shown on, so the next beat remembers the texts. */
+    surfaceLines: string[];
     /** What was offered, and which was taken. Null while awaiting an answer. */
     choices: Array<{ id: string; label: string; description: string | null }>;
     selectedChoiceLabel: string | null;

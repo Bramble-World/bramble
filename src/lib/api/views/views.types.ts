@@ -120,10 +120,39 @@ export type ChoiceView = {
 
 export type TurnView = {
   id: string;
-  /** Screens 13 and 15 both render this. */
+  /** The one-sentence hook above everything else. Null on turns from before turns had one. */
+  headline: string | null;
+  /** What you do or feel now. On older turns, the whole beat. */
   narrative: string;
   choices: ChoiceView[];
+  /**
+   * What the beat is shown on — empty for a text-only beat. Discriminated by
+   * `type`; a client must skip types it does not know rather than fail, because
+   * new ones are added without a version bump.
+   */
+  surfaces: SurfaceView[];
 };
+
+/**
+ * Texts arriving on the reader's lock screen.
+ *
+ * The text is generated fiction in a met character's voice — the same kind of
+ * thing the narrative has always said about them — never a message from the
+ * imported conversation. That is the line between this and `voiceProfile`,
+ * which stays unreturned (see "What is never returned" in docs/api-reference.md).
+ */
+export type ImessageNotificationsView = {
+  type: 'imessage_notifications';
+  /** e.g. "1:47". Null when the moment has no particular time — show the real clock. */
+  clockTime: string | null;
+  /** e.g. "Saturday, June 14". Null likewise. */
+  dateLabel: string | null;
+  /** Newest first. Never empty. Senders are always people the reader has met, never the reader. */
+  notifications: Array<{ sender: PersonView; text: string }>;
+};
+
+/** Every surface the API serves. Grows one member per surface type. */
+export type SurfaceView = ImessageNotificationsView;
 
 /**
  * Where a playthrough is, as three states with one remedy each.

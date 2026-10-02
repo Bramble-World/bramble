@@ -25,6 +25,7 @@ import {
 import { summarizeArc } from '@/lib/services/generation/arc.service';
 import * as sessions from '@/lib/services/sessions/sessions.service';
 import { movingWeekend } from '@/lib/services/generation/__fixtures__/transcripts';
+import { surfaceHistoryLine } from '@/lib/surfaces';
 
 const FAKE_TELL = 'what began unsaid is now partly said';
 
@@ -103,6 +104,9 @@ async function main() {
     'choices are distinct',
     new Set(turn1.choices.map((c) => c.label)).size === turn1.choices.length
   );
+  check('a headline was written', (turn1.headline ?? '').trim().length > 0);
+  if (turn1.headline) console.log(`\n    ${turn1.headline}`);
+  turn1.surfaces.forEach((surface) => console.log(`    ${surfaceHistoryLine(surface)}`));
   console.log(
     `\n    "${turn1.narrativeContent.slice(0, 240)}${turn1.narrativeContent.length > 240 ? '…' : ''}"`
   );

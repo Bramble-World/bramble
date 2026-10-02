@@ -1,8 +1,51 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, max, sql } from 'drizzle-orm';
 import { db } from '@/index';
-import { storylines, storylineSessions, storyTurns, turnChoices } from '@/db/schema/tables';
+import {
+  persons,
+  storylines,
+  storylineSessions,
+  storyTurns,
+  turnChoices,
+} from '@/db/schema/tables';
+import {
+  resolveSurfaces,
+  surfacePersonIds,
+  type ResolvedSurface,
+  type StoredTurnSurface,
+  type SurfacePerson,
+} from '@/lib/surfaces';
 import { Executor } from '../executor';
 import { PublicSession, TurnWithChoices } from './sessions.types';
+
+/** How every turn read loads what travels with it. */
+const turnWith = {
+  choices: { orderBy: { orderIndex: 'asc' } },
+  surfaces: { orderBy: { position: 'asc' } },
+} as const;
+
+/**
+ * Swaps each turn's stored surfaces for resolved ones.
+ *
+ * Surfaces store people as ids, so a rename reaches old turns too; this is
+ * where the names are looked up, in one query for however many turns. Views
+ * cannot do it — they never touch the database — so a turn leaves the reader
+ * already resolved. Rows that cannot be read are dropped, never thrown.
+ */
+export async function resolveTurnSurfaces<T extends { surfaces: StoredTurnSurface[] }>(
+  tx: Executor,
+  turns: T[]
+): Promise<Array<Omit<T, 'surfaces'> & { surfaces: ResolvedSurface[] }>> {
+  const ids = surfacePersonIds(turns.flatMap((turn) => turn.surfaces));
+  const people = new Map<string, SurfacePerson>();
+  if (ids.length) {
+    const rows = await tx
+      .select({ id: persons.id, name: persons.name, isSelf: persons.isSelf })
+      .from(persons)
+      .where(inArray(persons.id, ids));
+    for (const person of rows) people.set(person.id, person);
+  }
+  return turns.map((turn) => ({ ...turn, surfaces: resolveSurfaces(turn.surfaces, people) }));
+}
 
 const sessionColumns = {
   id: storylineSessions.id,
@@ -57,17 +100,21 @@ export async function getOpenTurn(
 ): Promise<TurnWithChoices | null> {
   const turn = await tx.query.storyTurns.findFirst({
     where: { sessionId, selectedChoiceId: { isNull: true } },
-    with: { choices: { orderBy: { orderIndex: 'asc' } } },
+    with: turnWith,
   });
-  return turn ?? null;
+  if (!turn) return null;
+  const [resolved] = await resolveTurnSurfaces(tx, [turn]);
+  return resolved;
 }
 
 export async function getTurn(tx: Executor, turnId: string): Promise<TurnWithChoices | null> {
   const turn = await tx.query.storyTurns.findFirst({
     where: { id: turnId },
-    with: { choices: { orderBy: { orderIndex: 'asc' } } },
+    with: turnWith,
   });
-  return turn ?? null;
+  if (!turn) return null;
+  const [resolved] = await resolveTurnSurfaces(tx, [turn]);
+  return resolved;
 }
 
 /**
@@ -417,9 +464,10 @@ export async function listAnsweredTurns(
   tx: Executor,
   sessionId: string
 ): Promise<TurnWithChoices[]> {
-  return tx.query.storyTurns.findMany({
+  const turns = await tx.query.storyTurns.findMany({
     where: { sessionId, selectedChoiceId: { isNotNull: true } },
-    with: { choices: { orderBy: { orderIndex: 'asc' } } },
+    with: turnWith,
     orderBy: { turnOrder: 'asc' },
   });
+  return resolveTurnSurfaces(tx, turns);
 }

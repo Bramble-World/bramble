@@ -15,6 +15,9 @@ export const storyTurns = pgTable(
 
     turnOrder: integer('turn_order').notNull(),
     narrativeContent: text('narrative_content').notNull(), // what the LLM presented at this decision point
+    // The one-sentence hook shown above everything else. Null on turns written
+    // before turns had one; those render as narrative and choices alone.
+    headline: text(),
 
     // Filled in once the user answers; null while the turn is awaiting a response.
     //

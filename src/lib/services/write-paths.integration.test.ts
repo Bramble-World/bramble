@@ -60,10 +60,12 @@ describe('§5 creating a turn is two steps that commit as one', () => {
   });
 
   it('writes the turn and its options together', async () => {
-    const turn = await sessions.openTurn(ownerId, sessionId, 'Something happened.', [
-      { label: 'Answer honestly' },
-      { label: 'Change the subject' },
-    ]);
+    const turn = await sessions.openTurn(ownerId, sessionId, {
+      headline: null,
+      narrativeContent: 'Something happened.',
+      choices: [{ label: 'Answer honestly' }, { label: 'Change the subject' }],
+      surfaces: [],
+    });
 
     expect(turn.selectedChoiceId).toBeNull();
     expect(turn.choices.map((c) => c.label)).toStrictEqual([
@@ -78,8 +80,18 @@ describe('§5 creating a turn is two steps that commit as one', () => {
   // one. PR #23's partial unique index is what makes this a read rather than a
   // second insert.
   it('returns the open turn instead of opening a second', async () => {
-    const first = await sessions.openTurn(ownerId, sessionId, 'First beat.', [{ label: 'A' }]);
-    const second = await sessions.openTurn(ownerId, sessionId, 'Different beat.', [{ label: 'B' }]);
+    const first = await sessions.openTurn(ownerId, sessionId, {
+      headline: null,
+      narrativeContent: 'First beat.',
+      choices: [{ label: 'A' }],
+      surfaces: [],
+    });
+    const second = await sessions.openTurn(ownerId, sessionId, {
+      headline: null,
+      narrativeContent: 'Different beat.',
+      choices: [{ label: 'B' }],
+      surfaces: [],
+    });
 
     expect(second.id).toBe(first.id);
     expect(second.narrativeContent).toBe('First beat.');
@@ -87,9 +99,24 @@ describe('§5 creating a turn is two steps that commit as one', () => {
 
   it('opens exactly one turn under concurrent requests', async () => {
     const results = await Promise.allSettled([
-      sessions.openTurn(ownerId, sessionId, 'Beat.', [{ label: 'A' }]),
-      sessions.openTurn(ownerId, sessionId, 'Beat.', [{ label: 'A' }]),
-      sessions.openTurn(ownerId, sessionId, 'Beat.', [{ label: 'A' }]),
+      sessions.openTurn(ownerId, sessionId, {
+        headline: null,
+        narrativeContent: 'Beat.',
+        choices: [{ label: 'A' }],
+        surfaces: [],
+      }),
+      sessions.openTurn(ownerId, sessionId, {
+        headline: null,
+        narrativeContent: 'Beat.',
+        choices: [{ label: 'A' }],
+        surfaces: [],
+      }),
+      sessions.openTurn(ownerId, sessionId, {
+        headline: null,
+        narrativeContent: 'Beat.',
+        choices: [{ label: 'A' }],
+        surfaces: [],
+      }),
     ]);
 
     const open = await db.query.storyTurns.findMany({
@@ -105,9 +132,14 @@ describe('§5 creating a turn is two steps that commit as one', () => {
   // request to make — unrecoverable in a shipped client. The column tolerates
   // it and the seed still contains some; the write path no longer does.
   it('refuses a turn with nothing to choose', async () => {
-    await expect(sessions.openTurn(ownerId, sessionId, 'And that was that.', [])).rejects.toThrow(
-      /at least one choice/
-    );
+    await expect(
+      sessions.openTurn(ownerId, sessionId, {
+        headline: null,
+        narrativeContent: 'And that was that.',
+        choices: [],
+        surfaces: [],
+      })
+    ).rejects.toThrow(/at least one choice/);
   });
 });
 
@@ -117,10 +149,12 @@ describe('§5 answering a turn', () => {
 
   beforeEach(async () => {
     sessionId = (await sessions.startSession(ownerId, storylineId)).id;
-    turn = await sessions.openTurn(ownerId, sessionId, 'A decision.', [
-      { label: 'Say it' },
-      { label: 'Say nothing' },
-    ]);
+    turn = await sessions.openTurn(ownerId, sessionId, {
+      headline: null,
+      narrativeContent: 'A decision.',
+      choices: [{ label: 'Say it' }, { label: 'Say nothing' }],
+      surfaces: [],
+    });
   });
 
   // §4: an answered turn with no timestamp reads as valid. They are one fact and
@@ -156,9 +190,12 @@ describe('§5 answering a turn', () => {
   // the only one on the hot write path" — both ids arrive from the client.
   it('refuses a choice that was never offered on this turn', async () => {
     const otherSession = await sessions.startSession(ownerId, storylineId);
-    const otherTurn = await sessions.openTurn(ownerId, otherSession.id, 'Elsewhere.', [
-      { label: 'Not yours' },
-    ]);
+    const otherTurn = await sessions.openTurn(ownerId, otherSession.id, {
+      headline: null,
+      narrativeContent: 'Elsewhere.',
+      choices: [{ label: 'Not yours' }],
+      surfaces: [],
+    });
 
     await expect(
       sessions.answerTurn(ownerId, turn.id, otherTurn.choices[0].id)
@@ -233,7 +270,12 @@ describe('narrativeOrder allocation', () => {
     });
 
     const session = await sessions.startSession(ownerId, storylineId);
-    const turn = await sessions.openTurn(ownerId, session.id, 'Decide.', [{ label: 'A' }]);
+    const turn = await sessions.openTurn(ownerId, session.id, {
+      headline: null,
+      narrativeContent: 'Decide.',
+      choices: [{ label: 'A' }],
+      surfaces: [],
+    });
 
     const inserted = await timeline.insertEventAfter(ownerId, story.id, 1000, {
       origin: 'conversation_generated',
@@ -277,7 +319,12 @@ describe('narrativeOrder allocation', () => {
 describe('§4 conditional columns on events', () => {
   it('carries lineage on a generated beat and none on an extracted one', async () => {
     const session = await sessions.startSession(ownerId, storylineId);
-    const turn = await sessions.openTurn(ownerId, session.id, 'Decide.', [{ label: 'A' }]);
+    const turn = await sessions.openTurn(ownerId, session.id, {
+      headline: null,
+      narrativeContent: 'Decide.',
+      choices: [{ label: 'A' }],
+      surfaces: [],
+    });
     const story = await storylines.createStoryline(ownerId, {
       title: 'Lineage',
       sourceSurface: 'imessage',

@@ -2,6 +2,8 @@ import { and, eq, inArray, or } from 'drizzle-orm';
 import { db } from '@/index';
 import { personRelationships } from '@/db/schema/tables';
 import { NotFoundError } from '@/lib/utils/errors';
+import { surfaceHistoryLine } from '@/lib/surfaces';
+import { resolveTurnSurfaces } from '../sessions/sessions.reader';
 import {
   BeatContext,
   RelationshipContext,
@@ -199,19 +201,27 @@ export async function assembleSessionContext(
     with: {
       turns: {
         orderBy: { turnOrder: 'asc' },
-        with: { choices: { orderBy: { orderIndex: 'asc' } }, selectedChoice: true },
+        with: {
+          choices: { orderBy: { orderIndex: 'asc' } },
+          selectedChoice: true,
+          surfaces: { orderBy: { position: 'asc' } },
+        },
       },
     },
   });
 
   if (!session) throw new NotFoundError('Session', sessionId);
 
+  const turns = await resolveTurnSurfaces(db, session.turns);
+
   return {
     sessionId: session.id,
     storylineId: session.storylineId,
-    turns: session.turns.map((turn) => ({
+    turns: turns.map((turn) => ({
       turnOrder: turn.turnOrder,
+      headline: turn.headline,
       narrativeContent: turn.narrativeContent,
+      surfaceLines: turn.surfaces.map(surfaceHistoryLine),
       choices: turn.choices.map((choice) => ({
         id: choice.id,
         label: choice.label,
