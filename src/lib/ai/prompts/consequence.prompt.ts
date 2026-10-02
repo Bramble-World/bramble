@@ -7,7 +7,10 @@ export type ConsequenceVars = {
   storyline: StorylineContext;
   /** What the user was shown, and what they picked. */
   decision: {
+    headline: string | null;
     narrativeContent: string;
+    /** What was on screen with it — the texts the decision was a reply to. */
+    surfaceLines: string[];
     chosenLabel: string;
     chosenDescription: string | null;
     rejectedLabels: string[];
@@ -154,6 +157,8 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       ...renderTimeline(storyline.timeline),
       '',
       '## The decision',
+      decision.headline,
+      ...decision.surfaceLines,
       decision.narrativeContent,
       '',
       `They chose: ${decision.chosenLabel}${decision.chosenDescription ? ` (${decision.chosenDescription})` : ''}`,

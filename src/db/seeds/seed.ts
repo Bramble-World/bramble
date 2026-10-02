@@ -29,10 +29,12 @@ import {
   storyTurns,
   storylines,
   turnChoices,
+  turnSurfaces,
   users,
 } from '../schema/tables';
 import { MAIN_CHARACTER, SCENARIOS } from '../../lib/demo/scenarios';
 import { sequenceFor } from '../../lib/demo/story-beats';
+import { imessageFromModel } from '../../lib/surfaces/imessage.surface';
 
 const SEED_CLERK_ID = 'user_seed_demo';
 const SEED_EMAIL = 'seed@bramble.local';
@@ -147,11 +149,12 @@ async function seed() {
         .values({ storylineId: storyline.id, personId: self.id, role: 'protagonist' })
         .returning({ id: characters.id });
 
+      const counterpartPersonId = personByName.get(scenario.personaName)!;
       const [counterpart] = await tx
         .insert(characters)
         .values({
           storylineId: storyline.id,
-          personId: personByName.get(scenario.personaName)!,
+          personId: counterpartPersonId,
           role: 'supporting',
           description: scenario.relationship,
         })
@@ -264,17 +267,45 @@ async function seed() {
       const answeredTurnIds: string[] = [];
 
       for (const [i, beat] of script.entries()) {
+        // A text in a messages story is shown on the phone, through the same
+        // validation a generated one goes through. Anywhere else it stays in
+        // the narrative, as before — there is no email surface yet.
+        const surface =
+          scenario.surface === 'messages' && beat.incomingMessage
+            ? imessageFromModel(
+                {
+                  clockTime: null,
+                  dateLabel: null,
+                  notifications: [
+                    { senderCharacterId: counterpart.id, text: beat.incomingMessage },
+                  ],
+                },
+                [{ id: counterpart.id, personId: counterpartPersonId, isSelf: false }]
+              )
+            : null;
+
         // Two-step write: the turn cannot name its choice until the choices exist.
         const [turn] = await tx
           .insert(storyTurns)
           .values({
             sessionId: session.id,
             turnOrder: (i + 1) * 10,
-            narrativeContent: [beat.narration, beat.incomingMessage, beat.reaction]
+            headline: beat.narration,
+            narrativeContent: [surface ? null : beat.incomingMessage, beat.reaction]
               .filter(Boolean)
               .join('\n'),
           })
           .returning({ id: storyTurns.id });
+
+        if (surface) {
+          await tx.insert(turnSurfaces).values({
+            turnId: turn.id,
+            position: 0,
+            type: surface.type,
+            version: surface.version,
+            payload: surface.payload,
+          });
+        }
 
         // A beat can legitimately have no options — the closing beat of a
         // script, or the generic fallback. drizzle rejects an empty values().

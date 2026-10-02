@@ -1,7 +1,13 @@
 import { and, eq, exists, isNull, lt, sql } from 'drizzle-orm';
-import { events, storylineSessions, storyTurns, turnChoices } from '@/db/schema/tables';
+import {
+  events,
+  storylineSessions,
+  storyTurns,
+  turnChoices,
+  turnSurfaces,
+} from '@/db/schema/tables';
 import { Executor } from '../executor';
-import { NewChoice, PublicSession, TurnWithChoices } from './sessions.types';
+import { NewTurn, PublicSession } from './sessions.types';
 
 export async function insertSession(
   tx: Executor,
@@ -22,59 +28,62 @@ export async function insertSession(
 }
 
 /**
- * Writes a turn and the options offered on it.
+ * Writes a turn, the options offered on it, and the surfaces it plays out on.
  *
- * Two steps, because `story_turns.selected_choice_id` and `turn_choices.turn_id`
+ * Three steps, because `story_turns.selected_choice_id` and `turn_choices.turn_id`
  * reference each other and there is no single atomic row for a turn with its
  * choices (invariants.md §5). They still commit together: a turn visible without
  * its options is a decision point the user cannot answer, and the partial unique
- * index would then block any attempt to open a replacement.
+ * index would then block any attempt to open a replacement. A turn without the
+ * surface it was written around would read as a reaction to nothing.
  *
  * `selectedChoiceId` starts null by construction — that is what "open" means,
  * and it is the column the index keys on.
+ *
+ * Returns only the id. Surfaces are stored with people as ids, and resolving
+ * them is the reader's job, so the caller reads the turn back through it.
  */
-export async function insertTurnWithChoices(
+export async function insertTurn(
   tx: Executor,
   sessionId: string,
   turnOrder: number,
-  narrativeContent: string,
-  choices: NewChoice[]
-): Promise<TurnWithChoices> {
-  const [turn] = await tx
+  turn: NewTurn
+): Promise<string> {
+  const [written] = await tx
     .insert(storyTurns)
-    .values({ sessionId, turnOrder, narrativeContent })
-    .returning({
-      id: storyTurns.id,
-      sessionId: storyTurns.sessionId,
-      turnOrder: storyTurns.turnOrder,
-      narrativeContent: storyTurns.narrativeContent,
-      selectedChoiceId: storyTurns.selectedChoiceId,
-      respondedAt: storyTurns.respondedAt,
-    });
+    .values({
+      sessionId,
+      turnOrder,
+      narrativeContent: turn.narrativeContent,
+      headline: turn.headline,
+    })
+    .returning({ id: storyTurns.id });
 
   // A closing beat can legitimately offer nothing, and drizzle rejects an empty
-  // values().
-  const written = choices.length
-    ? await tx
-        .insert(turnChoices)
-        .values(
-          choices.map((choice, orderIndex) => ({
-            turnId: turn.id,
-            label: choice.label,
-            description: choice.description,
-            orderIndex,
-          }))
-        )
-        .returning({
-          id: turnChoices.id,
-          turnId: turnChoices.turnId,
-          label: turnChoices.label,
-          description: turnChoices.description,
-          orderIndex: turnChoices.orderIndex,
-        })
-    : [];
+  // values(). The same goes for a text-only beat and its surfaces.
+  if (turn.choices.length) {
+    await tx.insert(turnChoices).values(
+      turn.choices.map((choice, orderIndex) => ({
+        turnId: written.id,
+        label: choice.label,
+        description: choice.description,
+        orderIndex,
+      }))
+    );
+  }
+  if (turn.surfaces.length) {
+    await tx.insert(turnSurfaces).values(
+      turn.surfaces.map((surface, position) => ({
+        turnId: written.id,
+        position,
+        type: surface.type,
+        version: surface.version,
+        payload: surface.payload,
+      }))
+    );
+  }
 
-  return { ...turn, choices: written };
+  return written.id;
 }
 
 /**

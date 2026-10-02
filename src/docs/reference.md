@@ -107,15 +107,28 @@ Nothing marks a session as "already summarised." Deduplication happens at the st
 One **decision point**. Created when the LLM presents a beat and its options; updated in place once the user answers.
 
 - `turnOrder` — sequencing within a session.
-- `narrativeContent` — what the LLM presented at this decision point.
+- `headline` — the one-sentence hook shown above everything else. Nullable only because turns written before it existed have none.
+- `narrativeContent` — what you do or feel at this decision point. On turns without a headline, the whole beat.
 - `selectedChoiceId` — nullable; filled once the user picks. `null` means the turn is still awaiting a response. A partial unique index on `(sessionId) WHERE selected_choice_id IS NULL` allows **at most one open turn per session**, which makes "present the next beat" a get-or-create rather than a convention: a retried or duplicated request returns the turn already awaiting an answer instead of opening a second one.
 - `respondedAt` — when the user answered.
 
-Note: `storyTurns.selectedChoiceId` and `turnChoices.turnId` reference each other. In practice this means a two-step write: insert the turn (with `selectedChoiceId: null`), insert its `turnChoices`, then `UPDATE` the turn once the user picks — not a single atomic row.
+Note: `storyTurns.selectedChoiceId` and `turnChoices.turnId` reference each other. In practice this means a multi-step write: insert the turn (with `selectedChoiceId: null`), insert its `turnChoices` and `turnSurfaces` in the same transaction, then `UPDATE` the turn once the user picks — not a single atomic row.
 
 ### `turnChoices`
 
 The options attached to one `storyTurn` — `label`, `description`, `orderIndex`.
+
+### `turnSurfaces`
+
+The **story surfaces** a turn plays out on — texts arriving on a lock screen, an email, a boarding pass. A turn has none (text only), one, or several, ordered by `position`.
+
+- `type` — `'imessage_notifications'`, and later `'email'`, `'boarding_pass'`… Plain `text`, not an enum, for the same reason as `sourceSurface`: a new kind of surface is a code change, never a migration.
+- `version` — the version of that type's payload, so one type's fields can change without rewriting rows.
+- `payload` — `jsonb`, that type's own fields, validated by its schema in `src/lib/surfaces` on write **and** on read. A row this build cannot read is skipped, never thrown.
+
+A surface has no headline or narrative of its own: those belong to the turn, which has them whether or not anything is shown on a surface. People inside a payload are stored as ids (`personId`, `characterId`), never names, and resolved when the turn is read — so renames reach old turns, and a sender can only be someone in the cast.
+
+Distinct from `storylines.sourceSurface`, which records where the imported conversation came from. A storyline imported from iMessage can play a beat as an email.
 
 ---
 

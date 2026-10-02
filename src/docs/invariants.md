@@ -20,6 +20,11 @@ product's central claim, not an implementation detail.
 
 - `events.generationRationale` holds the model's _own reasoning_, never quoted
   source text.
+- **Surface text is generated, never imported.** A `turn_surfaces` notification
+  is a line the turn model wrote for the story, in a met character's voice — it
+  is shown to the reader, so it must never be a message lifted from the
+  transcript. The turn model never sees the transcript, which is what keeps this
+  true; anything that ever gave it raw messages would make it false silently.
 - `persons.sourceContactRef` is a **one-way hash** of whatever identifies a
   contact: the client's per-person pseudonym (`c_…`) for Mac imports, and a raw
   handle only for lab/CSV input. Writing the raw value would look identical to
@@ -107,15 +112,18 @@ derive the children, rather than accepting both ids from a caller.
 
 Nothing ties these columns to the state that makes them meaningful.
 
-| Column                             | Must be set when                    | Must be null when            |
-| ---------------------------------- | ----------------------------------- | ---------------------------- |
-| `storylines.failureReason`         | `status = 'failed'`                 | any other status             |
-| `events.triggeredByTurnId`         | `origin = 'conversation_generated'` | `origin = 'extracted'`       |
-| `contextEntries.triggeredByTurnId` | `source = 'conversation_generated'` | `inferred` / `user_provided` |
-| `storyTurns.respondedAt`           | `selectedChoiceId` is set           | `selectedChoiceId` is null   |
+| Column                             | Must be set when                               | Must be null when            |
+| ---------------------------------- | ---------------------------------------------- | ---------------------------- |
+| `storylines.failureReason`         | `status = 'failed'`                            | any other status             |
+| `events.triggeredByTurnId`         | `origin = 'conversation_generated'`            | `origin = 'extracted'`       |
+| `contextEntries.triggeredByTurnId` | `source = 'conversation_generated'`            | `inferred` / `user_provided` |
+| `storyTurns.respondedAt`           | `selectedChoiceId` is set                      | `selectedChoiceId` is null   |
+| `turnSurfaces.payload` fields      | per `type` + `version`, see `src/lib/surfaces` | —                            |
 
 **Fails:** silently. A `failed` storyline with no reason, or an answered turn
-with no timestamp, reads as valid.
+with no timestamp, reads as valid. A surface payload that no longer fits its
+type's schema is skipped on read, so the turn plays as text rather than failing
+— which also means nobody notices.
 
 These _could_ become CHECK constraints later — e.g.
 `CHECK ((status = 'failed') = (failure_reason IS NOT NULL))`. Worth doing if any
@@ -144,14 +152,21 @@ later turn is then generated against the same history, the reader never advances
 past the opening beat, and nothing errors — the story simply stops moving while
 continuing to produce plausible turns.
 
-**Creating a turn is two steps, because `storyTurns` and `turnChoices` reference
-each other:**
+**Creating a turn is several steps, because `storyTurns` and `turnChoices`
+reference each other:**
 
 1. insert the turn with `selectedChoiceId: null`
-2. insert its `turnChoices`
+2. insert its `turnChoices` and its `turnSurfaces`, in the same transaction
 3. later, `UPDATE` the turn when the user picks
 
-There is no single atomic row for a turn-with-choices.
+There is no single atomic row for a turn-with-choices. A turn committed without
+its surfaces reads as a reaction to nothing, so surfaces go through
+`sessions.writer.insertTurn` with the rest, never on their own.
+
+**A surface sender must be a met, non-self character.** The column holds any
+id; `surfacesFromModel` is what checks the model's sender against the cut cast
+the model was shown. Skip it and a text can arrive from someone the reader has
+not met yet — the same leak the playhead exists to stop.
 
 **Every user needs exactly one `isSelf` person.** The partial unique index stops
 a _second_ one, but nothing creates the first. Provision it when the user is

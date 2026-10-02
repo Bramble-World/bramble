@@ -29,7 +29,26 @@ export function registerFixtures(fake: FakeGenerator): void {
       `There is a pause long enough to notice. ${other} is waiting on you.`,
     ];
 
+    // Every other turn arrives as texts, from a met character other than you,
+    // so the surface path is exercised end to end. No one to text you, no phone.
+    const texter = others[seed % Math.max(others.length, 1)];
+    const onPhone = texter !== undefined && seed % 2 === 0;
+
     return {
+      headline: onPhone
+        ? `${texter.name} just texted you.`
+        : other === 'they'
+          ? 'Everything has gone quiet.'
+          : `${other} has gone quiet.`,
+      surfaceKind: onPhone ? ('imessage_notifications' as const) : ('none' as const),
+      clockTime: onPhone ? '1:47' : null,
+      dateLabel: onPhone ? 'Saturday, June 14' : null,
+      notifications: onPhone
+        ? [
+            { senderCharacterId: texter.id, text: 'are you up' },
+            { senderCharacterId: texter.id, text: 'i have to tell you something' },
+          ]
+        : [],
       narrative: [
         openings[seed % openings.length],
         beat ? `After ${beat.title.toLowerCase()}, nothing has quite settled.` : '',

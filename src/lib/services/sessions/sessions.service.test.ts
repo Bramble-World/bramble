@@ -22,7 +22,7 @@ vi.mock('./sessions.reader', () => ({
 }));
 vi.mock('./sessions.writer', () => ({
   insertSession: vi.fn(),
-  insertTurnWithChoices: vi.fn(),
+  insertTurn: vi.fn(),
   answerTurnGuarded: vi.fn(),
   touchSession: vi.fn(),
   advancePlayhead: vi.fn(),
@@ -47,9 +47,11 @@ describe('answerTurn', () => {
     sessionId: 'session-1',
     turnOrder: 1,
     narrativeContent: 'x',
+    headline: null,
     selectedChoiceId: CHOICE,
     respondedAt: new Date(),
     choices: [],
+    surfaces: [],
   };
 
   it('touches the session after a successful answer', async () => {
@@ -187,9 +189,11 @@ describe('openTurn', () => {
       sessionId: 'session-1',
       turnOrder: 1,
       narrativeContent: 'already here',
+      headline: null,
       selectedChoiceId: null,
       respondedAt: null,
       choices: [],
+      surfaces: [],
     };
     reader.getSession.mockResolvedValue({
       id: 'session-1',
@@ -198,9 +202,14 @@ describe('openTurn', () => {
     });
     reader.getOpenTurn.mockResolvedValue(open);
 
-    await expect(service.openTurn(USER, 'session-1', 'new beat', [{ label: 'x' }])).resolves.toBe(
-      open
-    );
-    expect(writer.insertTurnWithChoices).not.toHaveBeenCalled();
+    await expect(
+      service.openTurn(USER, 'session-1', {
+        headline: null,
+        narrativeContent: 'new beat',
+        choices: [{ label: 'x' }],
+        surfaces: [],
+      })
+    ).resolves.toBe(open);
+    expect(writer.insertTurn).not.toHaveBeenCalled();
   });
 });

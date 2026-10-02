@@ -1,6 +1,7 @@
 import type { PublicPerson } from '@/lib/services/persons/persons.types';
 import type { CharacterRole, PublicStoryline } from '@/lib/services/storylines/storylines.types';
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
+import type { ResolvedSurface } from '@/lib/surfaces';
 import type { PublicImport } from '@/lib/services/imports/imports.types';
 import type { WorldEvent } from '@/lib/services/world/world.types';
 import { failureIsRetryable } from '@/lib/services/imports/imports.types';
@@ -15,6 +16,7 @@ import type {
   WorldEventView,
   SessionView,
   StorylineDetailView,
+  SurfaceView,
   TurnView,
 } from './views.types';
 
@@ -53,11 +55,34 @@ export function choiceView(choice: TurnWithChoices['choices'][number]): ChoiceVi
   // client that sorts by one and renders the other.
 }
 
+export function surfaceView(surface: ResolvedSurface): SurfaceView {
+  switch (surface.type) {
+    case 'imessage_notifications':
+      return {
+        type: surface.type,
+        clockTime: surface.clockTime,
+        dateLabel: surface.dateLabel,
+        notifications: surface.notifications.map((notification) => ({
+          sender: {
+            id: notification.sender.id,
+            name: notification.sender.name,
+            isSelf: notification.sender.isSelf,
+          },
+          text: notification.text,
+        })),
+      };
+  }
+  // No version and no character ids: the version is a storage concern, and a
+  // character id is a per-storyline casting the client has no use for.
+}
+
 export function turnView(turn: TurnWithChoices): TurnView {
   return {
     id: turn.id,
+    headline: turn.headline,
     narrative: turn.narrativeContent,
     choices: turn.choices.map(choiceView),
+    surfaces: turn.surfaces.map(surfaceView),
   };
   // No selectedChoiceId or respondedAt: an open turn has neither by definition,
   // and including them would invite null-branching on the client for a state

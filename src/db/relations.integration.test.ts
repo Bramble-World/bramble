@@ -99,9 +99,11 @@ describe('relational graph', () => {
             selectedChoice: true,
             triggeredEvents: true,
             triggeredContextEntries: true,
+            surfaces: true,
           },
         }),
       turnChoices: () => db.query.turnChoices.findFirst({ with: { turn: true } }),
+      turnSurfaces: () => db.query.turnSurfaces.findFirst({ with: { turn: true } }),
       motifs: () =>
         db.query.motifs.findFirst({ with: { user: true, persons: true, occurrences: true } }),
       motifOccurrences: () =>

@@ -7,6 +7,7 @@ import * as timeline from '@/lib/services/timeline/timeline.service';
 import { db } from '@/index';
 import { ActionButton } from '@/components/lab/action-button';
 import { chooseAction, generateTurnAction, startSessionAction } from '../actions';
+import { surfaceHistoryLine } from '@/lib/surfaces';
 
 export const dynamic = 'force-dynamic';
 
@@ -190,6 +191,12 @@ export default async function PlayPage({
 
         {storyline.status === 'ready' && current && openTurn && !sessionEnded && (
           <div className="flex flex-col gap-4">
+            {openTurn.headline && <p className="text-sm font-medium">{openTurn.headline}</p>}
+            {openTurn.surfaces.map((surface, index) => (
+              <p key={index} className="bg-muted rounded px-2 py-1 font-mono text-xs">
+                {surfaceHistoryLine(surface)}
+              </p>
+            ))}
             <p className="text-sm leading-relaxed">{openTurn.narrativeContent}</p>
             <ul className="flex flex-col gap-2">
               {openTurn.choices.map((choice) => (
