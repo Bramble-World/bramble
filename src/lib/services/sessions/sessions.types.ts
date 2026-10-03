@@ -6,6 +6,8 @@ export type PublicSession = {
   lastActiveAt: Date;
   /** The highest `events.narrativeOrder` this playthrough has reached. 0 = before everything. */
   playheadOrder: number;
+  /** The beat this playthrough was opened at, or null when begun from the top. */
+  startedFromEventId: string | null;
 };
 
 export type PublicChoice = {

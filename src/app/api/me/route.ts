@@ -9,7 +9,9 @@ export async function GET(request: Request) {
   try {
     const user = await requireCurrentUser(request);
     // clerkId is an internal join key and is deliberately not returned.
-    return NextResponse.json({ id: user.id, email: user.email });
+    // shareUsage rides along so the Mac's settings toggle has a value to render
+    // without a second request. Changed through PUT /api/v1/me/preferences.
+    return NextResponse.json({ id: user.id, email: user.email, shareUsage: user.shareUsage });
   } catch (error) {
     return handleError(error);
   }

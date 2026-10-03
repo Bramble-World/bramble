@@ -121,9 +121,11 @@ export async function lockAccount(tx: Executor, userId: string): Promise<void> {
  * gone the job cannot succeed, so anything still in flight past that point is
  * waiting for something that no longer exists.
  */
-export async function findStalled(olderThan: Date): Promise<Array<{ id: string }>> {
+export async function findStalled(
+  olderThan: Date
+): Promise<Array<{ id: string; userId: string; createdAt: Date }>> {
   return db
-    .select({ id: imports.id })
+    .select({ id: imports.id, userId: imports.userId, createdAt: imports.createdAt })
     .from(imports)
     .where(and(inArray(imports.status, ['queued', 'running']), lt(imports.createdAt, olderThan)));
 }

@@ -19,11 +19,12 @@ import { expect, test } from '@playwright/test';
  */
 const ID = '00000000-0000-4000-8000-000000000000';
 
-const PATHS: Array<{ method: 'GET' | 'POST'; path: string }> = [
+const PATHS: Array<{ method: 'GET' | 'POST' | 'PUT'; path: string }> = [
   { method: 'GET', path: '/api/v1/world' },
   { method: 'GET', path: `/api/v1/people/${ID}` },
   { method: 'GET', path: `/api/v1/storylines/${ID}` },
   { method: 'POST', path: `/api/v1/storylines/${ID}/sessions` },
+  { method: 'PUT', path: '/api/v1/me/preferences' },
   { method: 'GET', path: '/api/v1/imports' },
   { method: 'POST', path: '/api/v1/imports' },
   { method: 'GET', path: `/api/v1/imports/${ID}` },
@@ -36,7 +37,7 @@ const UNAUTHORIZED = { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } 
 
 for (const { method, path } of PATHS) {
   test(`${method} ${path} rejects an anonymous request with 401 JSON`, async ({ request }) => {
-    const res = await request.fetch(path, { method, data: method === 'POST' ? {} : undefined });
+    const res = await request.fetch(path, { method, data: method === 'GET' ? undefined : {} });
 
     expect(res.status()).toBe(401);
     expect(res.headers()['content-type']).toContain('application/json');
@@ -46,7 +47,7 @@ for (const { method, path } of PATHS) {
   test(`${method} ${path} answers with 401, never a redirect`, async ({ request }) => {
     const res = await request.fetch(path, {
       method,
-      data: method === 'POST' ? {} : undefined,
+      data: method === 'GET' ? undefined : {},
       maxRedirects: 0,
     });
 
@@ -56,7 +57,7 @@ for (const { method, path } of PATHS) {
   test(`${method} ${path} rejects a forged bearer token`, async ({ request }) => {
     const res = await request.fetch(path, {
       method,
-      data: method === 'POST' ? {} : undefined,
+      data: method === 'GET' ? undefined : {},
       // Structurally a JWT, alg:none — the security-relevant shape.
       headers: {
         Authorization: 'Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ1c2VyXzEyMyJ9.',
@@ -81,9 +82,7 @@ test('a malformed id still answers 401, not 400', async ({ request }) => {
 test('every v1 rejection is byte-identical, so nothing acts as an oracle', async ({ request }) => {
   const bodies = await Promise.all(
     PATHS.map(({ method, path }) =>
-      request
-        .fetch(path, { method, data: method === 'POST' ? {} : undefined })
-        .then((r) => r.text())
+      request.fetch(path, { method, data: method === 'GET' ? undefined : {} }).then((r) => r.text())
     )
   );
 
