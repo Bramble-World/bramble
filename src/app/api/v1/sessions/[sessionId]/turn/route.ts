@@ -1,8 +1,9 @@
 import { withUser } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { uuidParam } from '@/lib/api/params';
-import { turnView } from '@/lib/api/views';
+import { energyView, turnView } from '@/lib/api/views';
 import { advanceSession } from '@/lib/services/generation/turns.service';
+import { energyFor } from '@/lib/services/sessions/energy.service';
 import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
 
 type Params = { params: Promise<{ sessionId: string }> };
@@ -46,5 +47,8 @@ export const POST = withUser(async (user, request, { params }: Params) => {
     request.signal
   );
 
-  return json({ turn: turnView(turn) });
+  // Read after the turn is written, so the balance in this response already
+  // reflects the point this request just spent. A client that rendered a stale
+  // balance here would show a reader energy they no longer have.
+  return json({ turn: turnView(turn), energy: energyView(await energyFor(user.id)) });
 });

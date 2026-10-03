@@ -3,12 +3,14 @@ import type { CharacterRole, PublicStoryline } from '@/lib/services/storylines/s
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
 import type { ResolvedSurface } from '@/lib/surfaces';
 import type { PublicImport } from '@/lib/services/imports/imports.types';
+import type { Energy } from '@/lib/services/sessions/energy.service';
 import type { WorldEvent } from '@/lib/services/world/world.types';
 import { failureIsRetryable } from '@/lib/services/imports/imports.types';
 import type {
   AnsweredTurnView,
   ArcView,
   ChoiceView,
+  EnergyView,
   ImportView,
   PersonDetailView,
   PersonView,
@@ -209,6 +211,14 @@ export function answeredTurnView(turn: TurnWithChoices): AnsweredTurnView {
   };
   // respondedAt is absent: the client renders history as a transcript, not a
   // log, and a timestamp per decision invites a timeline nobody asked for.
+}
+
+export function energyView(energy: Energy): EnergyView {
+  return {
+    remaining: energy.remaining,
+    limit: energy.limit,
+    resetsAt: iso(energy.resetsAt),
+  };
 }
 
 export function sessionView(input: {

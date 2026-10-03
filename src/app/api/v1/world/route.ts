@@ -1,8 +1,9 @@
 import { withUser } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { getWorld, weightsFor } from '@/lib/services/world/world.service';
+import { energyFor } from '@/lib/services/sessions/energy.service';
 import { MAX_WORLD_EVENTS } from '@/lib/services/world/world.types';
-import { worldEventView } from '@/lib/api/views';
+import { energyView, worldEventView } from '@/lib/api/views';
 import type { WorldEventView } from '@/lib/api/views';
 
 /**
@@ -41,5 +42,8 @@ export const GET = withUser(async (user, request) => {
 
   // An object, never a bare array: `truncated` could not have been added later to
   // a top-level array without breaking a shipped decoder.
-  return json({ events, truncated: world.truncated });
+  // Account state, beside the resource rather than inside it — the same shape
+  // `GET /api/v1/imports` uses for its allowance. The home screen is where a
+  // reader decides whether to play, so it is where the balance is worth having.
+  return json({ events, truncated: world.truncated, energy: energyView(await energyFor(user.id)) });
 });

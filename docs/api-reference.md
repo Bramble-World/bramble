@@ -70,7 +70,7 @@ One envelope, every failure:
 | 409    | `GENERATION_IN_PROGRESS` | Another generation holds this session                                            |
 | 410    | `TRANSCRIPT_EXPIRED`     | Transcript gone before the worker read it. Re-send                               |
 | 413    | `TRANSCRIPT_TOO_LARGE`   | Over 400,000 characters                                                          |
-| 429    | `RATE_LIMITED`           | Our quota. Stop and tell the reader                                              |
+| 429    | `RATE_LIMITED`           | Out of energy. Wait for `Retry-After`, then play again                           |
 | 429    | `UPSTREAM_BUSY`          | The model provider throttled us. Clears on its own                               |
 | 500    | `GENERATION_UNUSABLE`    | Model output did not match the schema. Retrying burns money for the same failure |
 | 500    | `INTERNAL_SERVER_ERROR`  | Unexpected                                                                       |
@@ -488,3 +488,55 @@ Not oversights. Each is a field a client might expect and must not get.
 
 A unit test stringifies every view and asserts none of these appear, so adding a
 field by spreading a database row fails the build rather than shipping.
+
+---
+
+## Energy
+
+Playing a turn costs one point from a daily allowance. Imports have their own
+separate limit — three per account, ever.
+
+```json
+"energy": { "remaining": 14, "limit": 20, "resetsAt": "2026-10-03T09:12:04.000Z" }
+```
+
+It rides as a **top-level sibling key**, never inside a resource, because it is
+account state rather than session state:
+
+| Route                             | Where                                                                   |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `GET /api/v1/world`               | the home screen, where a reader decides whether to play                 |
+| `GET /api/v1/sessions/{id}`       | the resume probe                                                        |
+| `POST /api/v1/sessions/{id}/turn` | read _after_ the turn, so it already shows the point this request spent |
+
+- **`remaining`** — turns the reader may start right now, 0..`limit`.
+- **`resetsAt`** — when the next point returns, or `null` at a full balance.
+
+**A sliding window, not a daily reset.** Each point returns exactly 24 hours
+after it was spent, so energy trickles back through the day rather than arriving
+in a lump at midnight — and there is no timezone to get wrong.
+
+### What costs a point
+
+Only **generating a new turn**. Specifically:
+
+- **Resuming is free.** `POST .../turn` on a session with an unanswered turn
+  returns it with no model call and no charge, even at zero energy. Being out of
+  energy never hides the decision already in front of the reader.
+- **Consequences are free.** They are owed work from a turn already paid for, so
+  one point buys "settle what is owed, then give me the next beat". A reader
+  whose consequence failed and retried is not charged twice.
+- **A failed generation costs nothing.** The balance is counted from turns that
+  were actually written, so there is nothing to refund.
+
+### When it runs out
+
+**429** with `Retry-After` in seconds and the same value in the body:
+
+```json
+{ "error": { "code": "RATE_LIMITED", "message": "Rate limit exceeded", "retryAfter": 3041 } }
+```
+
+Treat it as expected, not exceptional: show the balance, show when it returns,
+and re-enable play then. The reader can still read their open turn and browse
+everything else.
