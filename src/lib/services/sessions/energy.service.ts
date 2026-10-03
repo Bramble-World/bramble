@@ -1,5 +1,6 @@
 import { RateLimitError } from '@/lib/utils/errors';
 import * as reader from './sessions.reader';
+import { track } from '@/lib/analytics/analytics';
 
 /**
  * How much a reader may play, and when more becomes available.
@@ -85,6 +86,13 @@ export async function assertEnergy(userId: string): Promise<Energy> {
   const seconds = energy.resetsAt
     ? Math.max(1, Math.ceil((energy.resetsAt.getTime() - Date.now()) / 1000))
     : 1;
+
+  // Awaited so a serverless handler cannot exit before it is sent — the throw is
+  // immediately after, and the response goes out with it.
+  await track(userId, {
+    name: 'energy_depleted',
+    properties: { limit: energy.limit, retry_after_s: seconds },
+  });
 
   throw new RateLimitError(seconds);
 }
