@@ -71,9 +71,16 @@ afterAll(async () => {
   await db.delete(users).where(eq(users.clerkId, CLERK));
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   fake = createFakeGenerator();
   registerFixtures(fake);
+
+  // Playthroughs are cleared between tests, and turns cascade with them. Without
+  // this the suite shares one account across ~25 tests that each play a turn,
+  // which is past the daily energy allowance — so later tests would fail on a
+  // 429 that has nothing to do with what they are asserting. Every test makes
+  // its own session anyway; the storyline, cast and timeline fixture survives.
+  await db.delete(storylineSessions).where(eq(storylineSessions.userId, userId));
 });
 
 async function freshSession() {

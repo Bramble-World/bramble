@@ -4,6 +4,7 @@ import type { PublicStoryline } from '@/lib/services/storylines/storylines.types
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
 import {
   answeredTurnView,
+  energyView,
   arcView,
   personDetailView,
   personView,
@@ -238,6 +239,25 @@ describe('views', () => {
         history: [],
       }).history
     ).toStrictEqual([]);
+  });
+
+  /**
+   * A denominator this file otherwise refuses — and the exception is the point.
+   * Progress denominators are banned because endless stories make them a lie;
+   * twenty is a real number the server enforces.
+   */
+  it('reports a balance with the ceiling it is measured against', () => {
+    expect(
+      energyView({
+        remaining: 7,
+        limit: 20,
+        resetsAt: new Date('2026-10-03T09:00:00.000Z'),
+      })
+    ).toStrictEqual({ remaining: 7, limit: 20, resetsAt: '2026-10-03T09:00:00.000Z' });
+  });
+
+  it('says null rather than inventing a reset when nothing is spent', () => {
+    expect(energyView({ remaining: 20, limit: 20, resetsAt: null }).resetsAt).toBeNull();
   });
 
   it('keeps a missing choice description as null', () => {

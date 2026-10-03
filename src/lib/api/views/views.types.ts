@@ -197,6 +197,29 @@ export type AnsweredTurnView = {
   chosenChoiceId: string | null;
 };
 
+/**
+ * What the reader has left to play with today.
+ *
+ * A denominator, which this file otherwise refuses — and the exception is worth
+ * stating so nobody thinks the rule was broken. Progress denominators are banned
+ * because endless stories make "3 of 40" a lie: there is no 40. This is the
+ * opposite case. Twenty is a real number the server enforces, and withholding it
+ * would leave the client guessing when to grey out the button, or discovering
+ * the limit only by being refused.
+ */
+export type EnergyView = {
+  /** 0..limit. Turns the reader may still start right now. */
+  remaining: number;
+  limit: number;
+  /**
+   * When the next point returns, ISO, or null at a full balance.
+   *
+   * A sliding window: each turn's point comes back 24 hours after it was spent,
+   * so this is the oldest spent point ageing out rather than a daily reset.
+   */
+  resetsAt: string | null;
+};
+
 export type SessionView = {
   id: string;
   storylineId: string;

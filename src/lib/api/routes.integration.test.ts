@@ -163,7 +163,10 @@ describe('GET /api/v1/world', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toStrictEqual({ events: [], truncated: false });
+    expect(body.events).toStrictEqual([]);
+    expect(body.truncated).toBe(false);
+    // A reader with nothing has spent nothing, so a full balance and no reset.
+    expect(body.energy).toStrictEqual({ remaining: 20, limit: 20, resetsAt: null });
   });
 
   it('never serves one reader another reader moments', async () => {
@@ -247,6 +250,17 @@ describe('GET /api/v1/world', () => {
     expect(raw).not.toContain('narrativeOrder');
     expect(raw).not.toContain('$300,000');
     expect(raw).not.toContain('rooftop');
+  });
+
+  // The home screen is where a reader decides whether to play, so it is where
+  // the balance belongs. Account state beside the resource, never inside it.
+  it('carries the energy balance', async () => {
+    asOwner();
+
+    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
+
+    expect(body.energy).toMatchObject({ limit: 20 });
+    expect(body.energy.remaining).toBeLessThanOrEqual(20);
   });
 
   it('is never cached by anything in front of it', async () => {
@@ -637,6 +651,25 @@ describe('the play loop', () => {
     expect(body.session.state).toBe('awaiting_answer');
     expect(body.session.turn.choices.length).toBeGreaterThanOrEqual(2);
     expect(body.session.turnsAnswered).toBe(0);
+  });
+
+  /**
+   * The balance is read after the turn is written, so the response that spent a
+   * point already shows it gone. A stale balance here would show a reader energy
+   * they no longer have.
+   */
+  it('returns the balance the turn just spent from', async () => {
+    const before = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+    ).json();
+
+    const body = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+
+    expect(body.energy.remaining).toBe(before.energy.remaining - 1);
+    expect(body.energy.limit).toBe(20);
+    expect(typeof body.energy.resetsAt).toBe('string');
   });
 
   it('records an answer and moves the session on', async () => {

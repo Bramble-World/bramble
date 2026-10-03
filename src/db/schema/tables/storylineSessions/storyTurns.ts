@@ -84,6 +84,11 @@ export const storyTurns = pgTable(
     index('idx_story_turns_session').on(table.sessionId),
     index('idx_story_turns_session_order').on(table.sessionId, table.turnOrder),
     index('idx_story_turns_selected_choice').on(table.selectedChoiceId),
+    // Backs the energy count: how many turns this reader has created in the last
+    // 24 hours. The count joins through `storyline_sessions.user_id`, since turns
+    // carry no owner of their own, and without a `created_at` here the window
+    // predicate is a filter over every turn in every session they own.
+    index('idx_story_turns_session_created').on(table.sessionId, table.createdAt),
     // Finds the turns that still owe consequences — answered, unresolved, and
     // not given up on — which is the retry question and otherwise a full scan.
     //

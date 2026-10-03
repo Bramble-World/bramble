@@ -1,4 +1,17 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, max, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  max,
+  sql,
+} from 'drizzle-orm';
 import { db } from '@/index';
 import {
   persons,
@@ -470,4 +483,35 @@ export async function listAnsweredTurns(
     orderBy: { turnOrder: 'asc' },
   });
   return resolveTurnSurfaces(tx, turns);
+}
+
+/**
+ * How many turns this reader has created since a point in time, and the oldest
+ * of them.
+ *
+ * The two halves of an energy balance in one query: the count is what has been
+ * spent, and the oldest is when the first point comes back. Asking separately
+ * would read the same rows twice and could straddle a turn being written.
+ *
+ * `story_turns` carries no owner — ownership runs through
+ * `storyline_sessions.user_id` — so the join predicate is not a filter but the
+ * whole of the tenancy guarantee. A plain join rather than a correlated
+ * subquery, deliberately: drizzle renders column helpers unqualified, and inside
+ * a subquery they bind to the inner table, which is how `turnsAnswered` once
+ * silently counted zero (see `playthroughsForEvents`).
+ */
+export async function turnsCreatedSince(
+  userId: string,
+  since: Date
+): Promise<{ used: number; oldest: Date | null }> {
+  const [row] = await db
+    .select({
+      used: sql<number>`count(*)::int`,
+      oldest: sql<Date | null>`min(${storyTurns.createdAt})`,
+    })
+    .from(storyTurns)
+    .innerJoin(storylineSessions, eq(storylineSessions.id, storyTurns.sessionId))
+    .where(and(eq(storylineSessions.userId, userId), gte(storyTurns.createdAt, since)));
+
+  return { used: row?.used ?? 0, oldest: row?.oldest ? new Date(row.oldest) : null };
 }

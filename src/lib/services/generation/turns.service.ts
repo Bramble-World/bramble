@@ -13,6 +13,7 @@ import { NewEvent } from '../timeline/timeline.types';
 import { assembleSessionContext, assembleStorylineContext } from './context.reader';
 import { contextAsOf, scriptExhausted } from './playhead';
 import * as sessionWriter from '../sessions/sessions.writer';
+import { assertEnergy } from '../sessions/energy.service';
 import { ConflictError, StorylineNotReadyError } from '@/lib/utils/errors';
 import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
 import * as storylineReader from '../storylines/storylines.reader';
@@ -50,6 +51,12 @@ export async function generateTurn(
 
   const open = await sessionReader.getOpenTurn(db, sessionId);
   if (open) return open;
+
+  // Charged here and nowhere earlier, because here is where a model call becomes
+  // necessary. A reader out of energy still gets the turn above for free — being
+  // out of energy should not hide the decision already in front of them — and a
+  // retry or a concurrent loser, both of which produce nothing, cost nothing.
+  await assertEnergy(userId);
 
   const [storyline, sessionContext] = await Promise.all([
     assembleStorylineContext(userId, session.storylineId),
@@ -341,6 +348,20 @@ export async function advanceSession(
   const storyline = await storylineReader.getStoryline(userId, session.storylineId);
   if (!storyline) throw new NotFoundError('Storyline', session.storylineId);
   if (storyline.status !== 'ready') throw new StorylineNotReadyError(storyline.status);
+
+  // Asked before settling, and only when a new turn is actually needed. Settling
+  // a consequence costs a model call, so discovering the reader is out of energy
+  // afterwards would spend money and then refuse them. `generateTurn` checks
+  // again and is the authority; this only moves the refusal in front of the
+  // spend.
+  //
+  // Consequences themselves are free. They are owed work from a turn already
+  // paid for, so one point buys "settle what is owed, then give me the next
+  // beat" — which is what this function means. Charging again would bill a
+  // reader twice for one beat because their first attempt failed.
+  if (!(await sessionReader.getOpenTurn(db, sessionId))) {
+    await assertEnergy(userId);
+  }
 
   // Oldest first. Each one's beats are canon for the turn after it, so settling
   // them out of order would build later beats on earlier gaps.

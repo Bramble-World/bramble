@@ -1,8 +1,9 @@
 import { withUser } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { uuidParam } from '@/lib/api/params';
-import { sessionView } from '@/lib/api/views';
+import { energyView, sessionView } from '@/lib/api/views';
 import * as sessions from '@/lib/services/sessions/sessions.service';
+import { energyFor } from '@/lib/services/sessions/energy.service';
 
 type Params = { params: Promise<{ sessionId: string }> };
 
@@ -25,6 +26,7 @@ export const GET = withUser(async (user, _request, { params }: Params) => {
   const snapshot = await sessions.sessionSnapshot(user.id, sessionId);
 
   return json({
+    energy: energyView(await energyFor(user.id)),
     session: sessionView({
       id: snapshot.session.id,
       storylineId: snapshot.session.storylineId,
