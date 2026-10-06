@@ -23,6 +23,7 @@ export async function insertSession(
       storylineId: storylineSessions.storylineId,
       lastActiveAt: storylineSessions.lastActiveAt,
       playheadOrder: storylineSessions.playheadOrder,
+      startedFromEventId: storylineSessions.startedFromEventId,
     });
   return session;
 }

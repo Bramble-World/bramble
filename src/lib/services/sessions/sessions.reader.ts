@@ -65,6 +65,7 @@ const sessionColumns = {
   storylineId: storylineSessions.storylineId,
   lastActiveAt: storylineSessions.lastActiveAt,
   playheadOrder: storylineSessions.playheadOrder,
+  startedFromEventId: storylineSessions.startedFromEventId,
 };
 
 export async function getSession(userId: string, sessionId: string): Promise<PublicSession | null> {
