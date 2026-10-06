@@ -1,6 +1,7 @@
 import { requireCurrentUser } from '@/lib/services/auth/auth.service';
 import { PublicUser } from '@/lib/services/users/users.types';
 import { handleError } from '@/lib/utils/api.handler-errors';
+import { assertClientSupported } from './client-version';
 
 /**
  * The authenticate-then-handle wrapper every protected route uses.
@@ -23,6 +24,12 @@ export function withUser<Context = unknown>(
 ) {
   return async (request: Request, context: Context): Promise<Response> => {
     try {
+      // Before authentication: an old client with an expired token should be
+      // told to update, not to sign in. Only a client that identified itself as
+      // a macOS build we no longer serve can fail here; everything else — the
+      // web, curl, a build from before the header existed — passes through.
+      assertClientSupported(request);
+
       return await handler(await requireCurrentUser(request), request, context);
     } catch (error) {
       return handleError(error);

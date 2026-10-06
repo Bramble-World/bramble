@@ -41,6 +41,35 @@ formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
 Getting this wrong surfaces as a decode failure that looks like a server bug.
 
+### Client identification
+
+The macOS app sends its build on every request:
+
+```
+X-Bramble-Client: macos/1.2 (57)
+```
+
+The server may refuse builds older than a configured minimum
+(`MIN_MACOS_BUILD`), answering **426 Upgrade Required**:
+
+```json
+{
+  "error": {
+    "code": "CLIENT_TOO_OLD",
+    "message": "This version of Bramble is too old. Please update."
+  }
+}
+```
+
+Treat 426 as terminal and show the message — retrying cannot help, and it is the
+one error whose remedy the reader performs themselves.
+
+**Only a client that identifies itself can be refused.** A missing header, an
+unparseable one, or a platform other than `macos` is served normally — the web
+app sends no header, nor does curl, nor does any Mac build from before the header
+existed. The gate is off by default, and `GET /api/health` is never subject to
+it, so an uptime probe keeps working even when every client is locked out.
+
 ### Errors
 
 One envelope, every failure:

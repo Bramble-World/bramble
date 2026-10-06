@@ -180,3 +180,20 @@ export class TranscriptExpiredError extends AppError {
     super('That transcript is no longer being held.', 'TRANSCRIPT_EXPIRED', 410);
   }
 }
+
+/**
+ * The client is older than this server supports.
+ *
+ * 426 Upgrade Required, which is the one status that means exactly this. A 400
+ * would read as "you sent something malformed" and a 403 as "you are not
+ * allowed" — both send a reader looking in the wrong place, and the client
+ * cannot act on either.
+ *
+ * The message is written to be shown to a person, because it is the one error
+ * here whose remedy the reader performs themselves.
+ */
+export class ClientTooOldError extends AppError {
+  constructor() {
+    super('This version of Bramble is too old. Please update.', 'CLIENT_TOO_OLD', 426);
+  }
+}
