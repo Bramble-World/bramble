@@ -48,6 +48,18 @@ export const env = createEnv({
      * key stored beside the credentials that reach it would buy nothing at all.
      */
     IMPORT_MASTER_KEY: z.string().optional(),
+    /**
+     * The oldest macOS build this server will serve, or 0 to serve any.
+     *
+     * A number rather than a version string: builds are monotonic and directly
+     * comparable, where "1.10" against "1.9" needs a parser and an argument
+     * about semantics.
+     *
+     * Defaults to 0, so the gate is off everywhere that has not set it. A
+     * misconfiguration here locks out every client at once, so the failure mode
+     * has to be "serve everyone" rather than "serve nobody".
+     */
+    MIN_MACOS_BUILD: z.coerce.number().int().min(0).default(0),
   },
 
   /**
@@ -74,6 +86,7 @@ export const env = createEnv({
     BRAMBLE_AI_MODE: process.env.BRAMBLE_AI_MODE,
     REDIS_URL: process.env.REDIS_URL,
     IMPORT_MASTER_KEY: process.env.IMPORT_MASTER_KEY,
+    MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },

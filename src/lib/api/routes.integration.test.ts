@@ -150,6 +150,83 @@ beforeEach(async () => {
   });
 });
 
+/**
+ * The version gate, through real handlers.
+ *
+ * `MIN_MACOS_BUILD` is read at module load, so these reload the modules under a
+ * mocked env rather than trying to change it in place.
+ */
+describe('the minimum client version', () => {
+  const withClient = (path: string, header?: string) =>
+    new Request(`http://api.test${path}`, {
+      headers: header ? { 'x-bramble-client': header } : {},
+    });
+
+  async function routesWithMinimum(MIN_MACOS_BUILD: number) {
+    vi.resetModules();
+    vi.doMock('@/env', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@/env')>();
+      return { env: { ...actual.env, BRAMBLE_AI_MODE: 'fake', MIN_MACOS_BUILD } };
+    });
+    vi.doMock('@/lib/services/auth/auth.service', () => ({
+      requireCurrentUser: vi.fn().mockResolvedValue({ id: ownerId, clerkId: OWNER, email: 'x' }),
+    }));
+    return {
+      world: await import('@/app/api/v1/world/route'),
+      health: await import('@/app/api/health/route'),
+    };
+  }
+
+  it('refuses an old build with 426 before it ever reaches the handler', async () => {
+    const { world } = await routesWithMinimum(57);
+
+    const response = await world.GET(withClient('/api/v1/world', 'macos/1.1 (56)'), undefined);
+
+    expect(response.status).toBe(426);
+    expect((await response.json()).error.code).toBe('CLIENT_TOO_OLD');
+  });
+
+  it('serves a current build', async () => {
+    const { world } = await routesWithMinimum(57);
+
+    const response = await world.GET(withClient('/api/v1/world', 'macos/1.2 (57)'), undefined);
+
+    expect(response.status).toBe(200);
+  });
+
+  it.each([
+    ['no header', undefined],
+    ['an unparseable header', 'curl/8.4.0'],
+  ])('serves a request with %s', async (_label, header) => {
+    const { world } = await routesWithMinimum(57);
+
+    expect((await world.GET(withClient('/api/v1/world', header), undefined)).status).toBe(200);
+  });
+
+  /**
+   * Health is exempt by construction, not by a path check: it is hand-written
+   * and does not go through `withUser`, so the gate cannot reach it. An uptime
+   * probe therefore keeps working when every client is locked out — which is
+   * exactly when you most want to know the server is up.
+   */
+  it('never gates the health check, even for a build it would refuse', async () => {
+    const { health } = await routesWithMinimum(57);
+
+    const response = await health.GET();
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toStrictEqual({ status: 'ok' });
+  });
+
+  it('serves everything when the gate is unset', async () => {
+    const { world } = await routesWithMinimum(0);
+
+    expect((await world.GET(withClient('/api/v1/world', 'macos/0.1 (1)'), undefined)).status).toBe(
+      200
+    );
+  });
+});
+
 describe('GET /api/v1/world', () => {
   /**
    * "Not enough context yet" is an invitation, not a failure. A 404 would make the
