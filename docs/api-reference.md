@@ -124,8 +124,33 @@ No auth.
 ### `GET /api/me`
 
 ```json
-{ "id": "uuid", "email": "great@brambleworld.com" }
+{ "id": "uuid", "email": "great@brambleworld.com", "shareUsage": true }
 ```
+
+**`id` is the analytics identity.** The Mac identifies the person in PostHog as
+this uuid, lowercased, and the server sends its own events under exactly the
+same value — so one human is one PostHog person. If the two ever disagree, every
+funnel silently splits in half.
+
+**`shareUsage`** is the analytics opt-out, so the settings toggle has a value to
+render without a second request. Change it with `PUT /api/v1/me/preferences`.
+
+### `PUT /api/v1/me/preferences`
+
+```json
+{ "shareUsage": false }   →   200 { "shareUsage": false }
+```
+
+`PUT` rather than `PATCH`: the body is the whole of the resource, so sending it
+twice gives the same answer.
+
+**Honoured server-side, not just in the app.** Every server event checks this
+before it is sent, so turning it off stops the events rather than hiding the
+toggle. Defaults to `true` for a reader who has never chosen — the events are
+counts, durations and enums about the app's own behaviour, never anything the
+reader wrote.
+
+A non-boolean is a **400** with `fields.shareUsage`.
 
 ---
 

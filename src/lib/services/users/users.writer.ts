@@ -43,7 +43,12 @@ export async function insertUserIfAbsent(input: NewUser): Promise<PublicUser | n
       emailVerifiedAt: input.verified ? new Date() : null,
     })
     .onConflictDoNothing()
-    .returning({ id: users.id, clerkId: users.clerkId, email: users.email });
+    .returning({
+      id: users.id,
+      clerkId: users.clerkId,
+      email: users.email,
+      shareUsage: users.shareUsage,
+    });
 
   return user ?? null;
 }
@@ -69,13 +74,22 @@ export async function updateUserByClerkId(
     if (patch.verified !== undefined) set.emailVerifiedAt = verifiedAt(email, patch.verified);
   }
 
+  // Independent of the email branch: a preference change carries no address and
+  // must not be silently dropped for want of one.
+  if (patch.shareUsage !== undefined) set.shareUsage = patch.shareUsage;
+
   if (Object.keys(set).length === 0) return null;
 
   const [user] = await db
     .update(users)
     .set(set)
     .where(and(eq(users.clerkId, clerkId), isNull(users.deletedAt)))
-    .returning({ id: users.id, clerkId: users.clerkId, email: users.email });
+    .returning({
+      id: users.id,
+      clerkId: users.clerkId,
+      email: users.email,
+      shareUsage: users.shareUsage,
+    });
 
   return user ?? null;
 }
@@ -90,7 +104,12 @@ export async function softDeleteUserByClerkId(clerkId: string): Promise<PublicUs
     .update(users)
     .set({ deletedAt: new Date() })
     .where(and(eq(users.clerkId, clerkId), isNull(users.deletedAt)))
-    .returning({ id: users.id, clerkId: users.clerkId, email: users.email });
+    .returning({
+      id: users.id,
+      clerkId: users.clerkId,
+      email: users.email,
+      shareUsage: users.shareUsage,
+    });
 
   return user ?? null;
 }

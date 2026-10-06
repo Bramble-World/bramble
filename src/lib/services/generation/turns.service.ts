@@ -14,6 +14,7 @@ import { assembleSessionContext, assembleStorylineContext } from './context.read
 import { contextAsOf, scriptExhausted } from './playhead';
 import * as sessionWriter from '../sessions/sessions.writer';
 import { assertEnergy } from '../sessions/energy.service';
+import { track } from '@/lib/analytics/analytics';
 import { ConflictError, StorylineNotReadyError } from '@/lib/utils/errors';
 import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
 import * as storylineReader from '../storylines/storylines.reader';
@@ -69,29 +70,54 @@ export async function generateTurn(
   // shown are the same thing. A render that quietly dropped beats would leave
   // the anti-leak test asserting against a context the model never saw.
   const visible = contextAsOf(storyline, session.playheadOrder);
-  const { value } = await generator.run(
+  const beyondScript = scriptExhausted(storyline, session.playheadOrder);
+  const { value, meta } = await generator.run(
     turnPrompt,
     {
       storyline: visible,
       session: sessionContext,
-      beyondScript: scriptExhausted(storyline, session.playheadOrder),
+      beyondScript,
     },
     { signal: deps.signal }
   );
 
-  return sessions.openTurn(userId, sessionId, {
-    headline: value.headline.trim() || null,
-    narrativeContent: value.narrative,
-    choices: value.choices.map((choice) => ({
-      label: choice.label,
-      // The schema says nullable because structured output has no absent; the
-      // column wants undefined.
-      description: choice.description ?? undefined,
-    })),
-    // Senders are checked against the same cut the model was shown, so a text
-    // can only come from someone the reader has already met.
-    surfaces: surfacesFromModel(value, visible.characters),
-  });
+  // Senders are checked against the same cut the model was shown, so a text can
+  // only come from someone the reader has already met.
+  const surfaces = surfacesFromModel(value, visible.characters);
+
+  return sessions.openTurn(
+    userId,
+    sessionId,
+    {
+      headline: value.headline.trim() || null,
+      narrativeContent: value.narrative,
+      choices: value.choices.map((choice) => ({
+        label: choice.label,
+        // The schema says nullable because structured output has no absent; the
+        // column wants undefined.
+        description: choice.description ?? undefined,
+      })),
+      surfaces,
+    },
+    {
+      // Only when this call wrote the turn. Get-or-create returns a perfectly
+      // good turn on the resumed branch and to a race loser, and counting those
+      // would inflate every figure derived from beats played.
+      onCreated: (written) =>
+        track(userId, {
+          name: 'beat_played',
+          properties: {
+            turn_order: written.turnOrder,
+            // Types only. A surface payload holds notification text and the
+            // names of real people, which is exactly what may never leave here.
+            surfaces: surfaces.map((surface) => surface.type),
+            beyond_script: beyondScript,
+            started_from_event: session.startedFromEventId !== null,
+            generation_ms: meta.durationMs,
+          },
+        }),
+    }
+  );
 }
 
 /**

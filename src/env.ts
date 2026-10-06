@@ -60,6 +60,42 @@ export const env = createEnv({
      * has to be "serve everyone" rather than "serve nobody".
      */
     MIN_MACOS_BUILD: z.coerce.number().int().min(0).default(0),
+    /**
+     * The shared code beta testers type to reach the macOS download.
+     *
+     * Optional so a checkout builds without it, and the page says the beta is
+     * not open yet rather than 500ing. Compared server-side only: a code the
+     * browser could see is not a gate.
+     *
+     * One code for everyone, which bounds what it can be worth — see
+     * `src/app/download/actions.ts` for what this does and does not protect.
+     */
+    BETA_ACCESS_CODE: z.string().min(6).optional(),
+    /**
+     * Where the signed macOS build lives.
+     *
+     * Deliberately server-side (no `NEXT_PUBLIC_`), so it is never inlined into
+     * the client bundle. It reaches the browser only after a correct code, which
+     * is the only reason the code means anything.
+     */
+    MACOS_DOWNLOAD_URL: z.url().optional(),
+    /** Shown beside the download, e.g. "0.3.1 (beta)". Cosmetic. */
+    MACOS_BUILD_LABEL: z.string().optional(),
+    /**
+     * PostHog, for server-side product events.
+     *
+     * Optional, and absent is the normal case: local development, the test
+     * suites and CI all run without it and send nothing, because the analytics
+     * module picks a no-op sink when there is no token. Nothing anywhere has to
+     * remember to disable it.
+     *
+     * Deliberately not `NEXT_PUBLIC_` — this is the server's own client, separate
+     * from the browser's `NEXT_PUBLIC_POSTHOG_KEY`. Server events exist because
+     * they cannot be blocked by an ad blocker or a firewall and they happen at
+     * the moment the thing happens.
+     */
+    POSTHOG_PROJECT_TOKEN: z.string().optional(),
+    POSTHOG_HOST: z.url().optional(),
   },
 
   /**
@@ -87,6 +123,11 @@ export const env = createEnv({
     REDIS_URL: process.env.REDIS_URL,
     IMPORT_MASTER_KEY: process.env.IMPORT_MASTER_KEY,
     MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
+    BETA_ACCESS_CODE: process.env.BETA_ACCESS_CODE,
+    MACOS_DOWNLOAD_URL: process.env.MACOS_DOWNLOAD_URL,
+    MACOS_BUILD_LABEL: process.env.MACOS_BUILD_LABEL,
+    POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,
+    POSTHOG_HOST: process.env.POSTHOG_HOST,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },

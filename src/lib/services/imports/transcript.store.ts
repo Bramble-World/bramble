@@ -1,6 +1,4 @@
-import Redis from 'ioredis';
-import { env } from '@/env';
-import { InternalServerError } from '@/lib/utils/errors';
+import { redis as redisClient, resetRedis } from '@/lib/redis/client';
 import { Transcript } from '../generation/extraction.service';
 import { decryptTranscript, encryptTranscript } from './transcript.crypto';
 
@@ -33,42 +31,9 @@ export const TRANSCRIPT_TTL_SECONDS = 1800;
 
 const key = (importId: string) => `import:${importId}`;
 
-let client: Redis | null = null;
-
-/**
- * The shared connection.
- *
- * Memoised because both a route handler and a long-lived worker reach it, and a
- * connection per call would exhaust the server's client limit under exactly the
- * load this feature is for.
- */
-function redis(): Redis {
-  if (client) return client;
-
-  const url = env.REDIS_URL;
-  if (!url) {
-    throw new InternalServerError('REDIS_URL is not set, so transcripts cannot be held.');
-  }
-
-  client = new Redis(url, {
-    // Bounded rather than disabled. A request that cannot reach Redis must fail
-    // and be retried by the client rather than waiting on a promise that may
-    // never settle — but turning the offline queue off achieves that by failing
-    // every command issued while the connection is still being established,
-    // which means the first import after a cold start always fails. Timeouts
-    // give the same guarantee without punishing the first caller.
-    connectTimeout: 5_000,
-    commandTimeout: 5_000,
-    maxRetriesPerRequest: 2,
-  });
-
-  return client;
-}
-
 /** Test seam: drops the memoised connection so a fake can replace it. */
 export function resetTranscriptStore(): void {
-  client?.disconnect();
-  client = null;
+  resetRedis();
 }
 
 /**
@@ -84,7 +49,12 @@ export async function putTranscript(
   transcript: Transcript
 ): Promise<void> {
   const envelope = encryptTranscript(transcript, importId, userId);
-  await redis().set(key(importId), JSON.stringify(envelope), 'EX', TRANSCRIPT_TTL_SECONDS);
+  await redisClient('transcripts cannot be held').set(
+    key(importId),
+    JSON.stringify(envelope),
+    'EX',
+    TRANSCRIPT_TTL_SECONDS
+  );
 }
 
 /**
@@ -99,7 +69,7 @@ export async function putTranscript(
  * Deletion is explicit, at the end of the job, whichever way it went.
  */
 export async function readTranscript(importId: string, userId: string): Promise<Transcript | null> {
-  const raw = await redis().get(key(importId));
+  const raw = await redisClient('transcripts cannot be held').get(key(importId));
   if (raw === null) return null;
 
   return decryptTranscript<Transcript>(JSON.parse(raw), importId, userId);
@@ -115,7 +85,7 @@ export async function readTranscript(importId: string, userId: string): Promise<
  */
 export async function dropTranscript(importId: string): Promise<void> {
   try {
-    await redis().del(key(importId));
+    await redisClient('transcripts cannot be held').del(key(importId));
   } catch {
     // Intentionally swallowed. See above.
   }

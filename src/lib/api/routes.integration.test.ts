@@ -30,6 +30,9 @@ const sessions = await import('@/lib/services/sessions/sessions.service');
 const timeline = await import('@/lib/services/timeline/timeline.service');
 
 const world = await import('@/app/api/v1/world/route');
+const preferencesRoute = await import('@/app/api/v1/me/preferences/route');
+const userReader = await import('@/lib/services/users/users.reader');
+const meRoute = await import('@/app/api/me/route');
 const personRoute = await import('@/app/api/v1/people/[personId]/route');
 const storylineRoute = await import('@/app/api/v1/storylines/[storylineId]/route');
 const startRoute = await import('@/app/api/v1/storylines/[storylineId]/sessions/route');
@@ -44,7 +47,6 @@ const OWNER = 'user_api_owner';
 const STRANGER = 'user_api_stranger';
 
 let ownerId: string;
-let strangerId: string;
 let storylineId: string;
 let mayaPersonId: string;
 
@@ -59,8 +61,23 @@ const post = (path: string, body?: unknown) =>
 /** Every handler takes `{ params }` and Next 16 makes that a promise. */
 const ctx = <T extends object>(params: T) => ({ params: Promise.resolve(params) });
 
-const asOwner = () => auth.requireCurrentUser.mockResolvedValue({ id: ownerId } as never);
-const asStranger = () => auth.requireCurrentUser.mockResolvedValue({ id: strangerId } as never);
+/**
+ * Resolves the real row rather than a literal `{ id }`.
+ *
+ * Handlers read more than the id off `PublicUser` — `clerkId` to address a
+ * write, `shareUsage` to render a preference — and a static stub makes those
+ * undefined, which surfaces as a 500 far from the cause. Reading the row also
+ * means a response reflects a change a previous request made.
+ */
+const resolveAs = (clerkId: string) =>
+  auth.requireCurrentUser.mockImplementation(async () => {
+    const user = await userReader.getUserByClerkId(clerkId);
+    if (!user) throw new Error(`test fixture: no user for ${clerkId}`);
+    return user;
+  });
+
+const asOwner = () => resolveAs(OWNER);
+const asStranger = () => resolveAs(STRANGER);
 
 async function seedUser(clerkId: string): Promise<string> {
   const [user] = await db
@@ -88,7 +105,7 @@ beforeEach(async () => {
     await db.delete(users).where(eq(users.clerkId, clerkId));
   }
   ownerId = await seedUser(OWNER);
-  strangerId = await seedUser(STRANGER);
+  await seedUser(STRANGER);
 
   const storyline = await storylines.createStoryline(ownerId, {
     title: 'The Unsent Apology',
@@ -224,6 +241,63 @@ describe('the minimum client version', () => {
     expect((await world.GET(withClient('/api/v1/world', 'macos/0.1 (1)'), undefined)).status).toBe(
       200
     );
+  });
+});
+
+describe('PUT /api/v1/me/preferences', () => {
+  const put = (body: unknown) =>
+    new Request('http://api.test/api/v1/me/preferences', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('round-trips the analytics opt-out', async () => {
+    asOwner();
+
+    const off = await preferencesRoute.PUT(put({ shareUsage: false }), undefined);
+    expect(off.status).toBe(200);
+    expect(await off.json()).toStrictEqual({ shareUsage: false });
+
+    const on = await preferencesRoute.PUT(put({ shareUsage: true }), undefined);
+    expect(await on.json()).toStrictEqual({ shareUsage: true });
+  });
+
+  // The Mac reads the current value here rather than making a second request.
+  it('is reflected by GET /api/me', async () => {
+    asOwner();
+    await preferencesRoute.PUT(put({ shareUsage: false }), undefined);
+
+    const me = await (await meRoute.GET(get('/api/me'))).json();
+
+    expect(me).toMatchObject({ id: ownerId, shareUsage: false });
+    // clerkId is an internal join key and never ships.
+    expect(me).not.toHaveProperty('clerkId');
+  });
+
+  it('defaults to sharing for a reader who has never chosen', async () => {
+    asOwner();
+
+    expect((await (await meRoute.GET(get('/api/me'))).json()).shareUsage).toBe(true);
+  });
+
+  it('answers 400 for a body that is not a boolean', async () => {
+    asOwner();
+
+    const response = await preferencesRoute.PUT(put({ shareUsage: 'yes' }), undefined);
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.fields).toHaveProperty('shareUsage');
+  });
+
+  it('never changes another reader preference', async () => {
+    asOwner();
+    await preferencesRoute.PUT(put({ shareUsage: false }), undefined);
+
+    asStranger();
+    const theirs = await (await meRoute.GET(get('/api/me'))).json();
+
+    expect(theirs.shareUsage).toBe(true);
   });
 });
 

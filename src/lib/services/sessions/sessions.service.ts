@@ -181,10 +181,27 @@ export async function getOpenTurn(
  * The check and the write share a transaction so two concurrent callers cannot
  * both find nothing open and both insert; the loser hits the unique index.
  */
+export type OpenTurnDeps = {
+  /**
+   * Called only when this call actually wrote the turn.
+   *
+   * Get-or-create hides which branch ran, and a caller cannot tell from the
+   * result — `PublicTurn` does not even carry `createdAt`. That matters for
+   * anything counting beats: the resumed branch and the race loser both return
+   * a perfectly good turn that this call did not produce, and counting those
+   * would inflate every figure derived from them.
+   *
+   * Mirrors `onStorylineCreated` in `extractStoryline`, which exists for the
+   * same reason. Awaited, and whatever it does must not throw.
+   */
+  onCreated?: (turn: TurnWithChoices) => Promise<void>;
+};
+
 export async function openTurn(
   userId: string,
   sessionId: string,
-  turn: NewTurn
+  turn: NewTurn,
+  deps: OpenTurnDeps = {}
 ): Promise<TurnWithChoices> {
   // A turn with nothing to choose is a dead end, and a dead end is what a
   // shipped client cannot recover from: a screen with no buttons and no next
@@ -213,6 +230,12 @@ export async function openTurn(
     const written = await reader.getTurn(tx, turnId);
     if (!written)
       throw new InternalServerError(`Turn ${turnId} vanished inside its own transaction`);
+
+    // Inside the transaction, so a turn that is rolled back is never counted as
+    // played. The hook is documented as non-throwing; `track` swallows its own
+    // failures precisely so a telemetry problem cannot roll back a reader's turn.
+    await deps.onCreated?.(written);
+
     return written;
   });
 }
