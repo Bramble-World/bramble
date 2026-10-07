@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { env } from './env';
 import { relations } from './db/relations';
-import { postgresSsl } from './db/ssl';
+import { postgresConnection } from './db/ssl';
 
 // Fall back to a placeholder URL rather than passing undefined. `drizzle(undefined)`
 // throws a TypeError during module evaluation, which would take down any route that
@@ -12,12 +12,8 @@ import { postgresSsl } from './db/ssl';
 //
 // `relations` is what gives this instance `db.query.*`. Without it the property
 // exists but is empty, and every nested read has to be hand-joined.
-const connectionString = env.DATABASE_URL ?? 'postgresql://database-url-is-not-set';
+// The URL is split rather than passed through: `sslmode` left in it makes the
+// driver build its own ssl config and discard ours, CA and all. See db/ssl.ts.
+const connection = postgresConnection(env.DATABASE_URL ?? 'postgresql://database-url-is-not-set');
 
-export const db = drizzle({
-  // `ssl` has to be passed here rather than left to `sslmode` in the URL:
-  // node-postgres reads that itself and answers `require` with
-  // `rejectUnauthorized: false`, which encrypts without verifying anything.
-  connection: { connectionString, ssl: postgresSsl(env.DATABASE_URL) },
-  relations,
-});
+export const db = drizzle({ connection, relations });

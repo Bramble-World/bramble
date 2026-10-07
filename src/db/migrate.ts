@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { postgresSsl } from './ssl';
+import { postgresConnection } from './ssl';
 
 /**
  * Applies pending migrations, then exits.
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   // session and takes an advisory lock, so a pool buys nothing and a second
   // connection sitting idle only delays the exit.
   const db = drizzle({
-    connection: { connectionString, ssl: postgresSsl(connectionString), max: 1 },
+    connection: { ...postgresConnection(connectionString), max: 1 },
   });
 
   const migrationsFolder = resolve(import.meta.dirname, 'drizzle');

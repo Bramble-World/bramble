@@ -172,14 +172,49 @@ the seed variables are development-only.
 the AWS RDS global CA bundle is vendored at `certs/rds-global-bundle.pem` and
 copied into the image at `/etc/ssl/certs/rds-global-bundle.pem`.
 
-The subtlety worth knowing, because it is a trap: node-postgres reads `sslmode`
-out of the connection string itself, and for `sslmode=require` it sets
-`rejectUnauthorized: false` — because that is what libpq's `require` means
-(encrypt, but do not check who you are talking to). That is an encrypted
-connection to anyone who can answer on the port. `src/db/ssl.ts` therefore passes
-an explicit `ssl` object, which overrides it, and **throws rather than falling
-back** when the CA cannot be read. A process that will not start is the right
-answer to being unable to verify the database it is about to talk to.
+The trap is worth stating precisely, because the obvious reading of it is wrong
+and the wrong version fails at `predeploy`.
+
+**`pg-connection-string` builds its own `ssl` config whenever the URL contains
+`sslmode`** — or `sslrootcert`, `sslcert`, `sslkey` — and that _replaces_ any
+`ssl` passed alongside the connection string. So this silently discards the CA:
+
+```ts
+// WRONG: the ca is thrown away, and the handshake fails with
+// "unable to verify the first certificate".
+drizzle({ connection: { connectionString: '…?sslmode=require', ssl: { ca } } });
+```
+
+Separately, libpq's `sslmode=require` means "encrypt, but do not check who you are
+talking to" — an encrypted connection to anyone who can answer on the port — and
+older `pg` implemented exactly that with `rejectUnauthorized: false`. Newer
+versions are mid-migration toward libpq-compatible semantics and warn about every
+mode but `verify-full`.
+
+`src/db/ssl.ts` therefore does neither. `postgresConnection(url)` **strips the ssl
+parameters out of the URL** and returns the config itself, so the driver gets a
+plain URL and an explicit `ssl` object — the one shape whose behaviour does not
+change between versions:
+
+```ts
+const connection = postgresConnection(env.DATABASE_URL ?? placeholder);
+export const db = drizzle({ connection, relations });
+```
+
+It **throws rather than falling back** when the CA cannot be read. A process that
+will not start is the right answer to being unable to verify the database it is
+about to talk to; the tempting fallback would turn a missing file into a silently
+unverified production database.
+
+Verified against a real TLS Postgres (pg 8.23.0, pg-connection-string 2.14.0),
+with the second case proving verification is actually active rather than cosmetic:
+
+|                                                               |                                             |
+| ------------------------------------------------------------- | ------------------------------------------- |
+| correct CA                                                    | connects, TLS 1.3, `pg_stat_ssl.ssl = true` |
+| **wrong CA** (the real RDS bundle against a different server) | **rejected**                                |
+| CA file missing                                               | refuses before opening a socket             |
+| `sslmode=disable`                                             | plaintext, for a local database             |
 
 The bundle is vendored rather than fetched during the build so that neither a
 build nor a CI run depends on `truststore.pki.rds.amazonaws.com` being reachable.
@@ -189,6 +224,10 @@ Its roots run to 2061; refreshing it is a commit:
 curl -fsS -o certs/rds-global-bundle.pem \
   https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 ```
+
+`DATABASE_CA_PATH` overrides the path for a Postgres that is not on RDS. An empty
+value falls back to the bundled path, since a blank variable is what a templated
+env group produces rather than a request to read `''`.
 
 ## Redis
 
