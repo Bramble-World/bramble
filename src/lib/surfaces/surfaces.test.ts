@@ -144,3 +144,78 @@ describe('surfaces read back', () => {
     );
   });
 });
+
+/**
+ * A notification is one bubble on a lock screen, and a bubble with newlines in
+ * it is drawn as one bubble that gets cut off — the reader has no way to see the
+ * rest. The prompt asks for one message per notification; this repairs a slip
+ * rather than trusting it will not happen.
+ */
+describe('a text the model packed into one notification', () => {
+  const notificationsFrom = (fields: SurfaceModelFields, castMembers = cast) => {
+    const [surface] = surfacesFromModel(fields, castMembers);
+    return (surface.payload as { notifications: Array<{ text: string }> }).notifications;
+  };
+
+  it('becomes one notification per line', () => {
+    const got = notificationsFrom(
+      texts([{ senderCharacterId: 'c1', text: 'are you up\ni have to tell you something' }])
+    );
+
+    expect(got).toHaveLength(2);
+    expect(got.every((n) => n.text === n.text.trim())).toBe(true);
+  });
+
+  /**
+   * Newest first, which the whole array is. Lines inside one block are written
+   * the way anyone types them — oldest at the top — so the last line is the most
+   * recent message and belongs at the front.
+   */
+  it('puts the last line first, because the list is newest first', () => {
+    const got = notificationsFrom(
+      texts([{ senderCharacterId: 'c1', text: 'are you up\ni have to tell you something' }])
+    );
+
+    expect(got.map((n) => n.text)).toStrictEqual(['i have to tell you something', 'are you up']);
+  });
+
+  it('keeps the sender on every line it split out', () => {
+    const got = notificationsFrom(texts([{ senderCharacterId: 'c2', text: 'one\ntwo' }]));
+
+    expect(got.every((n) => n.characterId === 'c2' && n.personId === 'p2')).toBe(true);
+  });
+
+  it.each([
+    ['windows line endings', 'one\r\ntwo'],
+    ['a blank line between them', 'one\n\ntwo'],
+    ['trailing whitespace', 'one \n two \n'],
+  ])('handles %s', (_label, text) => {
+    expect(
+      notificationsFrom(texts([{ senderCharacterId: 'c1', text }])).map((n) => n.text)
+    ).toStrictEqual(['two', 'one']);
+  });
+
+  // The cap applies after splitting, or a model that packed four messages into
+  // one line would get more than three through the back door.
+  it('still never shows more than three', () => {
+    const got = notificationsFrom(
+      texts([{ senderCharacterId: 'c1', text: 'one\ntwo\nthree\nfour\nfive' }])
+    );
+
+    expect(got).toHaveLength(3);
+    // The newest three, not the first three off the top of the block.
+    expect(got.map((n) => n.text)).toStrictEqual(['five', 'four', 'three']);
+  });
+
+  it('leaves a single-line text exactly as it was', () => {
+    expect(
+      notificationsFrom(texts([{ senderCharacterId: 'c1', text: 'are you up' }]))
+    ).toStrictEqual([{ characterId: 'c1', personId: 'p1', text: 'are you up' }]);
+  });
+
+  it('drops a notification that was only whitespace and newlines', () => {
+    expect(
+      surfacesFromModel(texts([{ senderCharacterId: 'c1', text: ' \n \n ' }]), cast)
+    ).toStrictEqual([]);
+  });
+});

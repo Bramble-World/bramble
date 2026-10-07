@@ -12,6 +12,16 @@ export const IMESSAGE_VERSION = 1;
 /** A lock screen shows a handful at most, and the newest is the one that matters. */
 export const MAX_NOTIFICATIONS = 3;
 const MAX_TEXT = 240;
+
+/**
+ * What one message should read like, and what the prompt asks for.
+ *
+ * Advisory rather than enforced: a text a little over this still renders, and
+ * dropping a beat's only notification over a character count would be a worse
+ * outcome than a slightly long line. `MAX_TEXT` is the hard ceiling the column
+ * enforces; this is the shape we ask for.
+ */
+export const MAX_NOTIFICATION_CHARS = 90;
 const MAX_CLOCK = 16;
 const MAX_DATE = 40;
 
@@ -60,8 +70,12 @@ export function imessageFromModel(
   const senders = new Map(cast.filter((c) => !c.isSelf).map((c) => [c.id, c]));
 
   const notifications = fields.notifications
-    .map((n) => ({ sender: senders.get(n.senderCharacterId), text: n.text.trim() }))
+    .flatMap((n) =>
+      asSeparateMessages(n.text).map((text) => ({ sender: senders.get(n.senderCharacterId), text }))
+    )
     .filter((n) => n.sender && n.text.length > 0 && n.text.length <= MAX_TEXT)
+    // After splitting, so a model that packed three messages into one line does
+    // not get more than three through the back door.
     .slice(0, MAX_NOTIFICATIONS)
     .map((n) => ({ characterId: n.sender!.id, personId: n.sender!.personId, text: n.text }));
 
@@ -73,6 +87,29 @@ export function imessageFromModel(
     notifications,
   };
   return { type: IMESSAGE_TYPE, version: IMESSAGE_VERSION, payload };
+}
+
+/**
+ * One notification per message, however the model packed them.
+ *
+ * The prompt asks for one message per notification, and a lock screen renders
+ * it that way — a single notification is one bubble, and a text with newlines in
+ * it is drawn as one bubble that gets cut off. So a slip is repaired here rather
+ * than trusted not to happen: the card is the thing the reader sees, and it has
+ * no way to show the rest.
+ *
+ * **Reversed, because the array is newest first.** Lines inside one block are
+ * written the way anyone types them — oldest at the top — so the last line is
+ * the most recent message and belongs at the front of a newest-first list. A
+ * single-line text is unaffected.
+ */
+function asSeparateMessages(text: string): string[] {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  return lines.reverse();
 }
 
 export function imessagePersonIds(payload: ImessagePayload): string[] {

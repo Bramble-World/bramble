@@ -3,7 +3,7 @@ import { PromptSpec } from '../prompt';
 import { SessionContext, StorylineContext } from '@/lib/services/generation/generation.types';
 import { renderTimeline } from './timeline';
 import { SURFACE_KINDS } from '@/lib/surfaces';
-import { MAX_NOTIFICATIONS } from '@/lib/surfaces/imessage.surface';
+import { MAX_NOTIFICATION_CHARS, MAX_NOTIFICATIONS } from '@/lib/surfaces/imessage.surface';
 
 export type TurnVars = {
   storyline: StorylineContext;
@@ -71,7 +71,11 @@ export const turnOutputSchema = z.object({
     .array(
       z.object({
         senderCharacterId: z.string().describe('The id of the cast member who sent it.'),
-        text: z.string().describe('The text itself, as they would type it.'),
+        text: z
+          .string()
+          .describe(
+            'One message, as they would type it. No line breaks — several thoughts are several notifications.'
+          ),
       })
     )
     .max(MAX_NOTIFICATIONS)
@@ -130,6 +134,12 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         `  notifications — 1 to ${MAX_NOTIFICATIONS}, newest first. Each comes from a cast member other`,
         '  than you, named by the id in brackets, and is written in their own voice and',
         '  texting register. The texts are the beat; the narrative is your reaction.',
+        `- One notification is ONE message: no line breaks, and under ${MAX_NOTIFICATION_CHARS}`,
+        '  characters — the way a single text reads on a lock screen. Someone sending',
+        '  three thoughts sends three messages, so write three notifications, not one',
+        '  with three lines in it.',
+        `- Usually 1 or 2. Use ${MAX_NOTIFICATIONS} only when they are arriving in a burst, one`,
+        '  after another, because that is what a burst looks like and what it means.',
         '- Otherwise set surfaceKind to none, clockTime and dateLabel to null, and leave',
         '  notifications empty. Most beats are not texts — do not reach for a phone to',
         '  make a scene feel modern.',
