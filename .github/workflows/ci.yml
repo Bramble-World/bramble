@@ -206,6 +206,45 @@ jobs:
       github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main' ||
       github.base_ref == 'staging' || github.base_ref == 'main'
     needs: [build]
+    # The lab specs drive the real pipeline against a real database — importing a
+    # transcript, generating a beat, committing a choice. Without these the four
+    # of them cannot pass at all: /lab needs a seeded account to act as, and the
+    # import needs somewhere to hold the ciphertext. The job ran green for months
+    # on the two landing-page specs alone because it never ran: it is gated on
+    # staging and main, and nothing had been promoted.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bramble_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bramble_e2e
+      REDIS_URL: redis://localhost:6379
+      # Throwaway, and deliberately so — the same values the Database job uses.
+      # What these specs assert does not depend on which key encrypts the
+      # transcript, only that one does. The real keys live in Doppler.
+      IMPORT_MASTER_KEY: Y2ktbm90LWEtc2VjcmV0LWltcG9ydC1tYXN0ZXItayE=
+      CONTACT_HASH_SECRET: ci-not-a-secret-contact-hash-key-32-chars
+      # No OPENAI_API_KEY, so the generator would fall back to the fake anyway.
+      # Stated rather than relied on: playwright.config.ts pins it too, so the
+      # suite behaves the same here and on a developer's machine.
+      BRAMBLE_AI_MODE: fake
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -215,6 +254,13 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      # The runtime migrator, as the deploy runs it and as the Database job does.
+      - name: Apply migrations
+        run: pnpm exec tsx src/db/migrate.ts
+      # /lab acts as the seeded account, so without this every lab spec fails on
+      # a missing user rather than on anything it meant to test.
+      - name: Seed
+        run: pnpm exec tsx src/db/seeds/seed.ts
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
