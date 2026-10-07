@@ -1,27 +1,23 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { like } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 
 /**
  * The import endpoints over their real handlers.
  *
- * `tasks.trigger` is stubbed because there is no queue in a test run and the
- * route's contract is that it enqueues *something* carrying only an id — which
- * is asserted here rather than taken on trust, since a payload is a store too
- * and a transcript in one would outlive the ciphertext's thirty minutes.
+ * There is no queue to stub. The route's contract is that it leaves a claimable
+ * `imports` row and nothing else, so the row itself is what gets asserted —
+ * including that nothing from the transcript is on it, which used to be a claim
+ * about a job payload and is now a claim about Postgres.
  */
 vi.mock('@/env', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/env')>();
   return { env: { ...actual.env, BRAMBLE_AI_MODE: 'fake' } };
 });
 vi.mock('@/lib/services/auth/auth.service', () => ({ requireCurrentUser: vi.fn() }));
-vi.mock('@trigger.dev/sdk', () => ({
-  tasks: { trigger: vi.fn().mockResolvedValue({ id: 'run_1' }) },
-}));
 
 const { db } = await import('@/index');
-const { users } = await import('@/db/schema/tables');
+const { imports, users } = await import('@/db/schema/tables');
 const auth = vi.mocked(await import('@/lib/services/auth/auth.service'));
-const { tasks } = vi.mocked(await import('@trigger.dev/sdk'));
 const importsRoute = await import('@/app/api/v1/imports/route');
 const importRoute = await import('@/app/api/v1/imports/[importId]/route');
 const { IMPORT_LIMIT } = await import('@/lib/services/imports/imports.types');
@@ -43,6 +39,9 @@ const post = (path: string, body: unknown) =>
 const ctx = <T extends object>(params: T) => ({ params: Promise.resolve(params) });
 const asOwner = () => auth.requireCurrentUser.mockResolvedValue({ id: ownerId } as never);
 const asStranger = () => auth.requireCurrentUser.mockResolvedValue({ id: strangerId } as never);
+
+/** Every import row this account holds, whole, so a leak has nowhere to hide. */
+const rowsFor = (userId: string) => db.select().from(imports).where(eq(imports.userId, userId));
 
 const body = (key: string, count = 60) => ({
   conversationKey: key,
@@ -77,14 +76,13 @@ afterAll(wipe);
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  tasks.trigger.mockResolvedValue({ id: 'run_1' } as never);
   await wipe();
   ownerId = await seed(OWNER);
   strangerId = await seed(STRANGER);
 });
 
 describe('POST /api/v1/imports', () => {
-  it('accepts a conversation with 202 and queues exactly one job', async () => {
+  it('accepts a conversation with 202 and leaves exactly one claimable row', async () => {
     asOwner();
 
     const response = await importsRoute.POST(post('/api/v1/imports', body('conv_a')), undefined);
@@ -98,24 +96,25 @@ describe('POST /api/v1/imports', () => {
       storylineId: null,
       failure: null,
     });
-    expect(tasks.trigger).toHaveBeenCalledTimes(1);
+    // The row is the queue, so one accepted conversation is one claimable row.
+    const rows = await rowsFor(ownerId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'queued', attempts: 0, nextAttemptAt: null });
   });
 
   /**
-   * The payload is the contract's sharpest privacy line. A queue stores its
-   * payloads, shows them in a dashboard and writes them to run logs — a
-   * transcript in there would outlive by a long way the thirty minutes the
-   * ciphertext in Redis gets.
+   * The sharpest privacy line in the whole contract. The row is what a worker is
+   * handed, and it is the one copy of this import that has no TTL — the
+   * ciphertext in Redis expires in thirty minutes, Postgres keeps this forever.
    */
-  it('puts nothing but an id on the queue', async () => {
+  it('keeps nothing from the transcript on the row', async () => {
     asOwner();
     await importsRoute.POST(post('/api/v1/imports', body('conv_a')), undefined);
 
-    const [, payload] = tasks.trigger.mock.calls[0];
+    const [row] = await rowsFor(ownerId);
 
-    expect(Object.keys(payload as object)).toStrictEqual(['importId']);
-    expect(JSON.stringify(payload)).not.toContain(NEEDLE);
-    expect(JSON.stringify(payload)).not.toContain('Maya');
+    expect(JSON.stringify(row)).not.toContain(NEEDLE);
+    expect(JSON.stringify(row)).not.toContain('Maya');
   });
 
   // A re-send is the normal path, not an exceptional one: the Mac holds the
@@ -127,7 +126,7 @@ describe('POST /api/v1/imports', () => {
     const again = await importsRoute.POST(post('/api/v1/imports', body('conv_a')), undefined);
 
     expect(again.status).toBe(200);
-    expect(tasks.trigger).toHaveBeenCalledTimes(1);
+    expect(await rowsFor(ownerId)).toHaveLength(1);
   });
 
   it('answers 409 once the allowance is spent', async () => {
@@ -181,7 +180,7 @@ describe('POST /api/v1/imports', () => {
     const response = await importsRoute.POST(post('/api/v1/imports', leaky), undefined);
 
     expect(response.status).toBe(400);
-    expect(tasks.trigger).not.toHaveBeenCalled();
+    expect(await rowsFor(ownerId)).toHaveLength(0);
   });
 });
 

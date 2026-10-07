@@ -238,11 +238,7 @@ describe('energy_depleted', () => {
 
 describe('import_completed', () => {
   it('fires once when an import reaches ready, with a message count', async () => {
-    const { import: row } = await imports.requestImport(
-      userId,
-      transcript('conv_a'),
-      async () => {}
-    );
+    const { import: row } = await imports.requestImport(userId, transcript('conv_a'));
     captured.length = 0;
 
     await runImport(row.id);
@@ -261,27 +257,20 @@ describe('import_completed', () => {
    * failure rate a measurement of the retry policy.
    */
   it('fires with a code when an import fails terminally', async () => {
-    const { import: row } = await imports.requestImport(
-      userId,
-      transcript('conv_b'),
-      async () => {}
-    );
+    const { import: row } = await imports.requestImport(userId, transcript('conv_b'));
     const { dropTranscript } = await import('@/lib/services/imports/transcript.store');
     await dropTranscript(row.id);
     captured.length = 0;
 
-    // TRANSCRIPT_EXPIRED is retryable, so it rethrows and is deliberately silent.
-    await runImport(row.id).catch(() => undefined);
+    // TRANSCRIPT_EXPIRED is retryable, so the first attempt requeues rather than
+    // finishing. Nothing is reported until the budget runs out.
+    expect(await runImport(row.id)).toStrictEqual({ status: 'retrying' });
 
     expect(only('import_completed')).toHaveLength(0);
   });
 
   it('fires nothing for a reader who opted out', async () => {
-    const { import: row } = await imports.requestImport(
-      userId,
-      transcript('conv_c'),
-      async () => {}
-    );
+    const { import: row } = await imports.requestImport(userId, transcript('conv_c'));
     await optOut();
     captured.length = 0;
 
@@ -306,11 +295,7 @@ describe('nothing but ids, counts, durations and enums', () => {
       const turn = await advanceSession(userId, session.id, { generator: fake });
       await commitChoice(userId, turn.id, turn.choices[0].id);
     }
-    const { import: row } = await imports.requestImport(
-      userId,
-      transcript('conv_d'),
-      async () => {}
-    );
+    const { import: row } = await imports.requestImport(userId, transcript('conv_d'));
     await runImport(row.id);
 
     expect(captured.length).toBeGreaterThan(1);

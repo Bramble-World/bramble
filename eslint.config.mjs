@@ -17,10 +17,9 @@ const eslintConfig = defineConfig([
     'next-env.d.ts',
     // Drizzle-generated migrations:
     'src/db/drizzle/**',
-    // Trigger.dev CLI scratch space. Bundled vendor code, regenerated on every
-    // `trigger.dev dev` run, and it drowns the report — nearly 500 errors that
-    // are not ours and cannot be fixed.
-    '.trigger/**',
+    // Bundled output. Generated on every build, and minified vendor code drowns
+    // the report with errors that are not ours and cannot be fixed.
+    'dist/**',
   ]),
 ]);
 

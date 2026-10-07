@@ -9,9 +9,12 @@
   "scripts": {
     "dev": "next dev",
     "dev:doppler": "doppler run -- next dev",
-    "dev:trigger": "concurrently --kill-others --names \"next,trigger\" --prefix-colors \"yellow,blue\" \"pnpm dev:doppler\" \"pnpm trigger:dev\"",
-    "trigger:dev": "doppler run -- npx trigger.dev@4.4.2 dev --profile bramble",
+    "worker": "doppler run -- tsx watch src/worker/main.ts",
+    "dev:all": "concurrently --kill-others --names \"next,worker\" --prefix-colors \"yellow,blue\" \"pnpm dev:doppler\" \"pnpm worker\"",
+    "sweep:arc": "doppler run -- tsx src/sweeps/arc-sweep.ts",
+    "sweep:imports": "doppler run -- tsx src/sweeps/import-sweep.ts",
     "build": "next build",
+    "build:server": "node scripts/build-server.mjs",
     "build:doppler": "doppler run --preserve-env=NODE_ENV -- next build",
     "build:migrate": "drizzle-kit migrate && next build",
     "start": "next start",
@@ -40,7 +43,7 @@
     "db:seed": "doppler run -- tsx src/db/seeds/seed.ts"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx}": [
+    "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}": [
       "eslint --fix",
       "prettier --write"
     ],
@@ -58,7 +61,6 @@
     "@sentry/nextjs": "^10.38.0",
     "@t3-oss/env-nextjs": "^0.13.10",
     "@tailwindcss/typography": "^0.5.19",
-    "@trigger.dev/sdk": "4.4.2",
     "ai": "^6.0.96",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -99,6 +101,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "concurrently": "^9.2.1",
     "drizzle-kit": "1.0.0-beta.15-859cf75",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "eslint-config-prettier": "^10.1.8",

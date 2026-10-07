@@ -23,6 +23,9 @@ export function redis(purpose: string): Redis {
     throw new InternalServerError(`REDIS_URL is not set, so ${purpose}.`);
   }
 
+  // `rediss://` is handled by ioredis itself: it turns the scheme into TLS
+  // against the system trust store, which is what ElastiCache in-transit
+  // encryption needs — its certificates come from a public CA, unlike RDS.
   client = new Redis(url, {
     // Bounded rather than disabled. A request that cannot reach Redis must fail
     // and be retried rather than waiting on a promise that may never settle —
@@ -33,6 +36,21 @@ export function redis(purpose: string): Redis {
     connectTimeout: 5_000,
     commandTimeout: 5_000,
     maxRetriesPerRequest: 2,
+    /**
+     * Reconnect forever, with a ceiling.
+     *
+     * ioredis gives up after twenty attempts by default, and a client that has
+     * given up never comes back — every import after a Redis failover would fail
+     * on a dead connection until the process was restarted. Capped at two
+     * seconds so a long outage does not back off into minutes.
+     */
+    retryStrategy: (times) => Math.min(times * 200, 2_000),
+    /**
+     * Reconnect on the errors a failover produces rather than treating them as
+     * fatal to the connection. ElastiCache promotes a replica by making the old
+     * primary read-only, and `READONLY` on a write is the first sign of it.
+     */
+    reconnectOnError: (error) => error.message.includes('READONLY'),
   });
 
   return client;

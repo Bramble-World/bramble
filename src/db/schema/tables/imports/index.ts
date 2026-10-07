@@ -1,4 +1,13 @@
-import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
 import { storylines } from '../storylines';
@@ -68,6 +77,29 @@ export const imports = pgTable(
      */
     startedAt: timestamp('started_at', { withTimezone: true }),
 
+    /**
+     * How many times a worker has claimed this import.
+     *
+     * The retry budget, kept on the row because the worker that gives up may not
+     * be the worker that started. Held in memory it would reset every deploy and
+     * every crash — which is precisely when retries matter.
+     *
+     * Incremented by the claim itself rather than by the run, so an attempt that
+     * dies without reporting anything still counts. Otherwise a crash loop
+     * retries forever at full cost.
+     */
+    attempts: integer().notNull().default(0),
+
+    /**
+     * Earliest time a worker may claim this row, or null for "now".
+     *
+     * Backoff between retries. Without it the three attempts burn in the time it
+     * takes to make three failing calls, which is the opposite of what retrying
+     * a busy upstream is for — the queued row is re-claimable the instant it is
+     * requeued, so the gap has to live somewhere the claim can see.
+     */
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
+
     ...timestamps,
   },
   (table) => [
@@ -79,5 +111,9 @@ export const imports = pgTable(
     // The allowance query — how many of this reader's imports are ready or
     // still in flight — and the sweep's scan for stalled ones.
     index('idx_imports_user_status').on(table.userId, table.status),
+    // The worker's claim: the oldest queued import still inside its retry
+    // budget. Without it every poll — one every two seconds, per worker —
+    // scans every import ever made.
+    index('idx_imports_claimable').on(table.status, table.nextAttemptAt, table.createdAt),
   ]
 );

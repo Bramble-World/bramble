@@ -47,3 +47,27 @@ const RETRYABLE_FAILURES = new Set([
 export function failureIsRetryable(code: string): boolean {
   return RETRYABLE_FAILURES.has(code);
 }
+
+/**
+ * How many times one import may be run before it is given up on.
+ *
+ * Counted on the row rather than in the worker, because the attempt that gives
+ * up is rarely the attempt that started: a pod can be rescheduled mid-run, and a
+ * budget held in memory would reset exactly when it matters. Three matches what
+ * the queue used to be configured for, and every attempt has to fit inside the
+ * thirty minutes the ciphertext is held — after that there is nothing to retry
+ * against, so the stall sweep ends it regardless of attempts left.
+ */
+export const MAX_IMPORT_ATTEMPTS = 3;
+
+/**
+ * How long a failed import waits before a worker may take it again.
+ *
+ * Doubling from five seconds, which is what the queue's retry policy did. The
+ * delay is the entire point of retrying an upstream that is busy or
+ * rate-limited: a requeued row is claimable the instant it is written, so
+ * without a gap the three attempts are spent as fast as three calls can fail.
+ */
+export function retryDelayMs(attempts: number): number {
+  return 5_000 * 2 ** Math.max(0, attempts - 1);
+}

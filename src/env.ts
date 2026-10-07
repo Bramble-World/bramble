@@ -13,7 +13,18 @@ export const env = createEnv({
    * These are not exposed to the client.
    */
   server: {
-    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    /**
+     * Defaults to `production`, which is the only safe default rather than the
+     * obvious one.
+     *
+     * `next dev` sets `development` itself and the test setup forces `test`, so
+     * this default applies to exactly one case: a process started with NODE_ENV
+     * unset — which is a standalone `node server.js` in a container. Defaulting
+     * to `development` there would open `/lab`, whose only guard is this value,
+     * as an unauthenticated and billed write surface. The Dockerfile pins
+     * `production` as well; the default should not depend on it remembering to.
+     */
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
     DATABASE_URL: z.string().optional(),
     // Clerk. Optional so a bare checkout still builds; the auth service turns
     // "absent" into a 401 rather than letting Clerk throw a raw 500.
@@ -48,6 +59,16 @@ export const env = createEnv({
      * key stored beside the credentials that reach it would buy nothing at all.
      */
     IMPORT_MASTER_KEY: z.string().optional(),
+    /**
+     * How many imports one worker process extracts at once.
+     *
+     * Each one is mostly waiting on a model call, so the ceiling is upstream
+     * rate limits and the connection pool rather than CPU. Two is deliberately
+     * timid: the account limit is three conversations ever, so queue depth comes
+     * from many accounts arriving together, and that is answered better by
+     * another replica than by one process holding more work it could lose.
+     */
+    IMPORT_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
     /**
      * The oldest macOS build this server will serve, or 0 to serve any.
      *
@@ -122,6 +143,7 @@ export const env = createEnv({
     BRAMBLE_AI_MODE: process.env.BRAMBLE_AI_MODE,
     REDIS_URL: process.env.REDIS_URL,
     IMPORT_MASTER_KEY: process.env.IMPORT_MASTER_KEY,
+    IMPORT_WORKER_CONCURRENCY: process.env.IMPORT_WORKER_CONCURRENCY,
     MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
     BETA_ACCESS_CODE: process.env.BETA_ACCESS_CODE,
     MACOS_DOWNLOAD_URL: process.env.MACOS_DOWNLOAD_URL,
