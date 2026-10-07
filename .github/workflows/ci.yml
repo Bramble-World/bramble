@@ -126,10 +126,15 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      # Called directly, not via pnpm db:migrate / db:seed — those wrappers
-      # shell out to Doppler, which CI doesn't need for a throwaway database.
+      # The runtime migrator rather than drizzle-kit, because it is what the
+      # deploy runs: Porter's predeploy step is `node dist/db/migrate.js`, and a
+      # CI gate that proves a *different* migrator works proves nothing about the
+      # release. drizzle-kit is a dev dependency and is not in the image at all.
+      #
+      # Called directly rather than via pnpm db:migrate, which shells out to
+      # Doppler — not something CI needs for a throwaway database.
       - name: Apply migrations
-        run: pnpm exec drizzle-kit migrate
+        run: pnpm exec tsx src/db/migrate.ts
       # The seed is the only thing that exercises the schema through real
       # inserts, so it catches what a migration cannot: a constraint the writes
       # violate, a column the seed forgot, a relation that drifted. It also stops
@@ -146,6 +151,33 @@ jobs:
       # the two steps above just built.
       - name: Relational query tests
         run: pnpm test:integration
+
+  # ── The image: it has to build, on every branch ───────────────────────────
+  #
+  # Built and thrown away. Nothing is pushed and no registry credentials are
+  # involved — the point is that a broken Dockerfile fails the pull request
+  # rather than the deploy, which is the one failure that is both easy to
+  # introduce and invisible until it is expensive.
+  image:
+    name: Docker Image
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # No build args and no secrets, deliberately. Every NEXT_PUBLIC_* value is
+      # optional, so this also asserts the property the Dockerfile claims: a
+      # build with nothing configured still succeeds. CI has no secrets to give
+      # it, so if that ever stopped being true this job would be the first to know.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          # Layer cache in the Actions cache, so a source-only change does not
+          # reinstall every dependency from scratch on every pull request.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ── API tests: every branch. No browser, so they stay fast ────────────────
   api:

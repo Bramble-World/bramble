@@ -56,17 +56,17 @@ export async function getImportForUser(userId: string, importId: string): Promis
  * re-sends whenever it is unsure, and a second POST must not cost a second slot
  * or start a second extraction.
  *
- * Ordered deliberately. The row commits first, so nothing is enqueued that has
- * no record; the transcript is written next, because a job that starts before
- * its ciphertext exists fails on a race rather than on anything real; the job is
- * enqueued last. A failure at either later step marks the import failed with a
- * retryable code rather than leaving it queued for the sweep to find in half an
- * hour.
+ * Ordered deliberately, and the order is why there is no queue. The row commits
+ * first and the transcript is written second, which means a worker can only ever
+ * claim a row whose ciphertext is already there — a broker would have to be told
+ * about the row separately, and that message is the thing that gets lost. The
+ * queued row *is* the queue. A failure writing the transcript marks the import
+ * failed with a retryable code rather than leaving it claimable against a
+ * transcript that does not exist.
  */
 export async function requestImport(
   userId: string,
-  request: ImportRequest,
-  enqueue: (importId: string) => Promise<unknown>
+  request: ImportRequest
 ): Promise<{ import: PublicImport; accepted: boolean }> {
   assertTranscriptIsUsable(request);
 
@@ -116,10 +116,10 @@ export async function requestImport(
 
   try {
     await putTranscript(claimed.import.id, userId, request.transcript);
-    await enqueue(claimed.import.id);
   } catch (error) {
-    // The row exists and nothing will ever run against it, so say so now rather
-    // than leaving the reader watching a spinner until the stall sweep notices.
+    // The row is claimable and there is nothing for a worker to read, so say so
+    // now rather than leaving the reader watching a spinner until the stall
+    // sweep notices.
     // Retryable: the client still holds the transcript.
     await writer.markFailed(db, claimed.import.id, 'TRANSCRIPT_EXPIRED');
     throw error;

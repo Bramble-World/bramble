@@ -2,6 +2,15 @@ import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
+  /**
+   * Emits `.next/standalone`: the server plus only the `node_modules` it actually
+   * reached, with its own `server.js`.
+   *
+   * What the container runs. Without it the runtime image needs the full
+   * dependency tree installed — which for this project is most of a gigabyte, the
+   * majority of it build tooling that cannot be reached from a request.
+   */
+  output: 'standalone',
   experimental: {
     serverActions: {
       // A Server Action body is capped at 1MB by default, which a real message

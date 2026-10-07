@@ -1,0 +1,249 @@
+# Deploying the Bramble API
+
+The backend runs on Porter (AWS EKS) as **one image started four ways**: the web
+server, the import worker, and two scheduled sweeps. `porter.yaml` is the whole
+deployment; this document is the part that cannot live in it, namely where each
+secret comes from and which ones are needed before the image is even built.
+
+|               |                                                                |
+| ------------- | -------------------------------------------------------------- |
+| **Image**     | `Dockerfile`, multi-stage, Node 22 Alpine, non-root, port 3000 |
+| **Manifest**  | `porter.yaml`                                                  |
+| **Env group** | `bramble-prd`, filled from the Doppler `prd` config            |
+| **Domain**    | `api.brambleworld.com`                                         |
+| **Database**  | RDS Postgres 16, TLS verified against the bundled AWS CA       |
+| **Cache**     | ElastiCache Redis, `rediss://`                                 |
+
+## The four processes
+
+| Process    | Command                                  | Notes                                                       |
+| ---------- | ---------------------------------------- | ----------------------------------------------------------- |
+| Web        | `node server.js`                         | 2 replicas. Liveness `/api/health`, readiness `/api/ready`. |
+| Worker     | `node dist/worker/import-worker.js`      | 1 replica. No port — it polls the `imports` table.          |
+| Migrations | `node dist/db/migrate.js`                | Porter `predeploy`. Non-zero exit blocks the release.       |
+| Sweeps     | `node dist/sweeps/{arc,import}-sweep.js` | Cron jobs, hourly and every ten minutes.                    |
+
+One image rather than four, so the worker cannot be running different code from
+the server that queued its work. The worker and the sweeps are bundled with
+esbuild into `dist/` (`scripts/build-server.mjs`) precisely so the runtime image
+needs no dev dependencies: without that, running a `.ts` entrypoint would mean
+shipping `tsx` and `typescript` to production so that four files can be read.
+
+### There is no job queue
+
+The `imports` row **is** the queue. A worker claims the oldest claimable row with
+`UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED LIMIT 1)`, which is what
+lets replicas be added without them fighting over the head of the queue.
+
+This is a privacy decision as much as an architectural one. A queue stores its
+payloads, shows them in a dashboard and writes them to run logs — and the one
+thing this system must not do is keep a transcript anywhere but the encrypted
+Redis store it has a TTL on. Removing the broker removes a store.
+
+Retries live on the row: `imports.attempts` (budget of 3) and
+`imports.next_attempt_at` (backoff, 5s then 10s). Both are columns rather than
+worker state because the attempt that gives up is rarely the attempt that
+started.
+
+## Build-time vs runtime
+
+This distinction is the one that causes real confusion, so it is worth being
+blunt about: **`NEXT_PUBLIC_*` values are compiled into the JavaScript.** Setting
+them on a running container does nothing, because the code was already built
+without them. They are Docker build arguments, and changing one means a rebuild.
+
+### Build arguments
+
+All optional. **A build with none of them set must succeed** — that is what lets
+CI build this image with no secrets at all, which is the only way a broken
+Dockerfile gets caught before a deploy.
+
+| Build arg                           | Source                             | Purpose                                                                   |
+| ----------------------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`               | — (`https://api.brambleworld.com`) | Absolute URLs in responses and emails.                                    |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk prod                         | Clerk's client key. Public by design.                                     |
+| `NEXT_PUBLIC_SENTRY_DSN`            | Sentry                             | Enables Sentry. Also gates the build plugin — no DSN, no source-map step. |
+
+### Build secret
+
+| Secret              | Source | Purpose              |
+| ------------------- | ------ | -------------------- |
+| `SENTRY_AUTH_TOKEN` | Sentry | Uploads source maps. |
+
+Mounted with `--mount=type=secret`, **never as a build arg**. An `ARG` is recorded
+in the image's build history and readable with `docker history` by anyone who can
+pull the image; a secret mount exists only for the duration of one `RUN` and is
+never written to a layer. Builds succeed without it — a release without source
+maps is still a release.
+
+```bash
+docker build \
+  --build-arg NEXT_PUBLIC_APP_URL=https://api.brambleworld.com \
+  --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$CLERK_PK" \
+  --build-arg NEXT_PUBLIC_SENTRY_DSN="$SENTRY_DSN" \
+  --secret id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
+  -t bramble:local .
+```
+
+## Runtime environment
+
+Set on the `bramble-prd` environment group, which every process shares. Shared
+rather than per-service on purpose: the worker and the web process need almost the
+same set, and a variable that exists for one and not the other shows up as an
+import failing in a way no request does.
+
+Each row says which processes actually read it, so a variable can be removed with
+confidence rather than left in place forever because nobody is sure.
+
+### Required
+
+| Variable                       | Read by                | Source                   | Purpose                                                                                                                                                                                                                            |
+| ------------------------------ | ---------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | all                    | AWS RDS                  | Postgres. **Must end `?sslmode=require`** — see TLS below.                                                                                                                                                                         |
+| `REDIS_URL`                    | web, worker, sweeps    | AWS ElastiCache          | `rediss://…` Where encrypted transcripts wait between the import request and the worker.                                                                                                                                           |
+| `IMPORT_MASTER_KEY`            | web, worker            | generated, Doppler `prd` | Base64, 32 bytes. Wraps every per-import data key. Deliberately a different secret from `REDIS_URL`: envelope encryption is pointless if the key sits beside the credentials that reach the ciphertext. `openssl rand -base64 32`. |
+| `CONTACT_HASH_SECRET`          | web, worker            | generated, Doppler `prd` | ≥32 chars. HMAC key for `persons.source_contact_ref`. Hashing throws without it rather than falling back to an unkeyed digest. **Rotating it orphans every existing person row.**                                                  |
+| `CLERK_SECRET_KEY`             | web                    | Clerk prod               | `sk_live_…`. Verifies bearer tokens. Without it every request is a 401.                                                                                                                                                            |
+| `CLERK_WEBHOOK_SIGNING_SECRET` | web                    | Clerk prod → Webhooks    | `whsec_…`. Verifies the Clerk webhook. Without it the route rejects everything, which is the correct closed default. See _Clerk webhook_ below.                                                                                    |
+| `OPENAI_API_KEY`               | web, worker, arc-sweep | OpenAI                   | `sk-…`. The model. Without it the generator falls back to a deterministic fake — which is worse than failing, because it is invisible.                                                                                             |
+| `BRAMBLE_AI_MODE`              | web, worker, arc-sweep | set to `live`            | **Set this explicitly.** It forces the fake when set to `fake`; `live` in production states the intent rather than relying on a key being present.                                                                                 |
+
+### Expected, with defaults worth setting explicitly
+
+| Variable                    | Default      | Set to       | Purpose                                                                                                                                          |
+| --------------------------- | ------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_ENV`                  | `production` | `production` | Pinned in the Dockerfile too. Its only other job is gating `/lab`, which must never be reachable in production — hence the default.              |
+| `MIN_MACOS_BUILD`           | `0`          | `0`          | Oldest macOS build served. `0` serves every client. A wrong value locks out every client at once, so raise it only with a release ready.         |
+| `IMPORT_WORKER_CONCURRENCY` | `2`          | leave unset  | Imports extracted per worker at once. Queue depth is better answered with another replica than with one process holding more work it could lose. |
+
+### Optional
+
+| Variable                | Read by     | Source          | Purpose                                                                                                                           |
+| ----------------------- | ----------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTHOG_PROJECT_TOKEN` | web, worker | PostHog         | Product analytics. Absent means analytics are off, which is a supported state.                                                    |
+| `POSTHOG_HOST`          | web, worker | PostHog         | Region host, e.g. `https://us.i.posthog.com`.                                                                                     |
+| `CLERK_JWT_KEY`         | web         | Clerk prod      | PEM public key. Verifies session JWTs in-process instead of fetching JWKS per request. A latency optimisation, not a requirement. |
+| `BETA_ACCESS_CODE`      | web         | chosen          | ≥6 chars. Gates the macOS download page.                                                                                          |
+| `MACOS_DOWNLOAD_URL`    | web         | release hosting | Where the signed `.dmg` lives.                                                                                                    |
+| `MACOS_BUILD_LABEL`     | web         | release         | Human-readable build on the download page.                                                                                        |
+
+### Never set in production
+
+`DATABASE_CA_PATH` only needs setting for a Postgres that is not RDS. `LAB_*` and
+the seed variables are development-only.
+
+## Postgres TLS
+
+`DATABASE_URL` must carry `?sslmode=require`, and the certificate is **verified**:
+the AWS RDS global CA bundle is vendored at `certs/rds-global-bundle.pem` and
+copied into the image at `/etc/ssl/certs/rds-global-bundle.pem`.
+
+The subtlety worth knowing, because it is a trap: node-postgres reads `sslmode`
+out of the connection string itself, and for `sslmode=require` it sets
+`rejectUnauthorized: false` — because that is what libpq's `require` means
+(encrypt, but do not check who you are talking to). That is an encrypted
+connection to anyone who can answer on the port. `src/db/ssl.ts` therefore passes
+an explicit `ssl` object, which overrides it, and **throws rather than falling
+back** when the CA cannot be read. A process that will not start is the right
+answer to being unable to verify the database it is about to talk to.
+
+The bundle is vendored rather than fetched during the build so that neither a
+build nor a CI run depends on `truststore.pki.rds.amazonaws.com` being reachable.
+Its roots run to 2061; refreshing it is a commit:
+
+```bash
+curl -fsS -o certs/rds-global-bundle.pem \
+  https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+```
+
+## Redis
+
+ElastiCache with in-transit encryption, so `rediss://`. ioredis turns the scheme
+into TLS against the system trust store, which is correct here because ElastiCache
+certificates come from a public CA — unlike RDS, which is why only Postgres needs
+a bundle.
+
+The client (`src/lib/redis/client.ts`) reconnects indefinitely with a two-second
+ceiling, rather than ioredis's default of giving up after twenty attempts. A
+client that has given up never comes back, so every import after a failover would
+fail on a dead connection until the process was restarted. `READONLY` triggers a
+reconnect, since that is the first sign ElastiCache has promoted a replica.
+
+Non-cluster mode is assumed — one primary endpoint. Cluster mode would need
+`Redis.Cluster`.
+
+## Clerk webhook
+
+Point the Clerk **production** instance at:
+
+```
+https://api.brambleworld.com/api/webhooks/clerk
+```
+
+Copy the generated signing secret into `CLERK_WEBHOOK_SIGNING_SECRET`. The route
+verifies every delivery and rejects unsigned requests, so an absent secret means
+nothing gets through — closed by default, and silent. If user records stop
+appearing, check this first.
+
+## Health checks
+
+| Endpoint      | Answers                           | Checks                                                    |
+| ------------- | --------------------------------- | --------------------------------------------------------- |
+| `/api/health` | should this process be restarted? | nothing outside the process                               |
+| `/api/ready`  | should traffic come here?         | Postgres `SELECT 1` + Redis `PING`, 2s budget, 200 or 503 |
+
+They are deliberately different. A dependency check wired to liveness restarts
+every replica the moment Postgres blips, turning a brief outage into a cold start
+under load. Readiness takes one replica out of rotation instead. `/api/ready`
+names the failed dependency (`{"status":"unavailable","failed":["redis"]}`) and
+never the error behind it, because both clients put connection strings — and
+therefore credentials — into their messages.
+
+## Graceful shutdown
+
+`terminationGracePeriodSeconds: 960` on the worker is **load-bearing, not
+padding**. On SIGTERM the worker stops claiming and lets in-flight extractions
+finish. If the platform kills it first, that promise is decoration: a paid-for
+model call is wasted and the row waits out its fifteen-minute reclaim window
+before another worker picks it up. Keep it above `IMPORT_TIMEOUT_MS` in
+`src/worker/import-worker.ts`.
+
+The web service gets 180s for the same reason at a smaller scale — a turn is a
+model call, and killing one mid-flight bills for nothing.
+
+## First deploy
+
+1. Create the RDS instance and the ElastiCache cluster. Note both endpoints.
+2. Generate `IMPORT_MASTER_KEY` and `CONTACT_HASH_SECRET`, and put them in Doppler
+   `prd` along with everything else in _Runtime environment_ above. The `prd`
+   config starts empty.
+3. Create the `bramble-prd` environment group in Porter from the Doppler `prd`
+   config.
+4. Set the three `NEXT_PUBLIC_*` build arguments and the `SENTRY_AUTH_TOKEN`
+   secret in Porter's build settings.
+5. Deploy. `predeploy` applies the migrations against an empty database and the
+   deploy fails if they do not apply.
+6. Point `api.brambleworld.com` at the web service, then configure the Clerk
+   production webhook (above) — it needs the domain to exist first.
+7. Check `/api/health` and `/api/ready`. A 503 from `/api/ready` names the
+   dependency that is not wired up.
+
+## Verifying a change locally
+
+```bash
+# Builds with nothing configured — the property CI relies on.
+docker build -t bramble:local .
+
+# Web, against a local Postgres and Redis.
+docker run --rm -p 3000:3000 --env-file .env.local bramble:local
+curl localhost:3000/api/health && curl localhost:3000/api/ready
+
+# The same image, started the other three ways.
+docker run --rm --env-file .env.local bramble:local node dist/db/migrate.js
+docker run --rm --env-file .env.local bramble:local node dist/worker/import-worker.js
+docker run --rm --env-file .env.local bramble:local node dist/sweeps/import-sweep.js
+```
+
+Locally, without Doppler, `pnpm dev:all` runs the Next dev server and the worker
+together; `pnpm worker` runs the worker alone, and `pnpm sweep:arc` /
+`pnpm sweep:imports` run the sweeps on demand.

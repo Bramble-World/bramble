@@ -64,7 +64,7 @@ let analytics: Analytics | null = null;
  * The sink this process uses.
  *
  * `flushAt: 1` alongside `captureImmediate` because the two places that send
- * events are a serverless route handler and a Trigger.dev task, both of which
+ * events are a serverless route handler and a worker process, both of which
  * can exit before a batched queue is drained. A dropped batch is an event that
  * never happened as far as any chart is concerned, and it fails silently.
  */

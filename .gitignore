@@ -23,6 +23,12 @@
 # misc
 .DS_Store
 *.pem
+# ...except AWS's RDS CA bundle, which is a *public* trust store: 111 root
+# certificates and no private key, published at truststore.pki.rds.amazonaws.com.
+# It has to be tracked, because the Dockerfile bakes it in — and a build that
+# fetched it instead would depend on AWS being reachable from CI. See
+# docs/deployment.md for how to refresh it.
+!certs/rds-global-bundle.pem
 
 # debug
 npm-debug.log*
@@ -51,5 +57,5 @@ next-env.d.ts
 *.imessages.csv
 /transcripts/
 
-# Trigger.dev CLI local state (dev.lock, build tmp). Machine-specific.
-/.trigger/
+# Bundled worker, sweep and migration entrypoints. Built into the image.
+/dist/

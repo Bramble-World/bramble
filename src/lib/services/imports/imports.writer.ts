@@ -1,7 +1,7 @@
-import { and, eq, lt, or } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { imports } from '@/db/schema/tables';
 import { Executor } from '../executor';
-import { ImportStage, PublicImport } from './imports.types';
+import { ImportStage, MAX_IMPORT_ATTEMPTS, PublicImport, retryDelayMs } from './imports.types';
 
 const returning = {
   id: imports.id,
@@ -37,7 +37,17 @@ export async function insertImport(
 export async function requeueImport(tx: Executor, importId: string): Promise<PublicImport | null> {
   const [row] = await tx
     .update(imports)
-    .set({ status: 'queued', stage: null, failureCode: null, startedAt: null })
+    .set({
+      status: 'queued',
+      stage: null,
+      failureCode: null,
+      startedAt: null,
+      // A re-send is a fresh conversation as far as the retry budget goes.
+      // Without this an import that exhausted its attempts could never run
+      // again, however many times the client handed it back.
+      attempts: 0,
+      nextAttemptAt: null,
+    })
     .where(and(eq(imports.id, importId), eq(imports.status, 'failed')))
     .returning(returning);
   return row ?? null;
@@ -46,21 +56,97 @@ export async function requeueImport(tx: Executor, importId: string): Promise<Pub
 /**
  * How long a `running` import is left alone before another attempt may take it.
  *
- * Matched to the extraction task's `maxDuration`: a run cannot still be going
- * past its own ceiling, so anything older than this is a worker that died
- * without saying so. Shorter and two live attempts would overlap, which is the
- * duplicate extraction this guard exists to prevent; longer and a crashed run
- * blocks its own retry for no reason.
+ * Matched to the worker's per-import timeout: a run cannot still be going past
+ * its own ceiling, so anything older than this is a worker that died without
+ * saying so. Shorter and two live attempts would overlap, which is the duplicate
+ * extraction this guard exists to prevent; longer and a crashed run blocks its
+ * own retry for no reason.
  */
 export const RUN_RECLAIM_AFTER_MS = 900_000;
 
 /**
- * Claims an import for a worker run.
+ * What makes an import claimable, as one predicate.
  *
- * Returns false to everyone but the first caller. Trigger.dev delivers at least
- * once, so two attempts of the same job can overlap — and extraction is a model
- * call and a storyline write, which are the last things that should happen
- * twice.
+ * Written once and used by both entry points — the worker's "claim whatever is
+ * next" and the by-id claim — because two copies of this condition is two places
+ * for the duplicate-extraction guard to be wrong. Takes the table's SQL
+ * qualifier so the by-next variant can read it through its own alias.
+ *
+ * Column helpers are deliberately not used: drizzle renders them unqualified
+ * inside a subquery, which binds them to the outer table. The same trap cost a
+ * silently-zero count in `playthroughsForEvents`, and here it would mean
+ * claiming a row that does not satisfy the predicate at all.
+ */
+function claimable(qualifier: string, staleBefore: Date) {
+  const col = (name: string) => sql.raw(`"${qualifier}"."${name}"`);
+
+  return sql`${col('attempts')} < ${MAX_IMPORT_ATTEMPTS} and (
+    (
+      ${col('status')} = 'queued'
+      and (${col('next_attempt_at')} is null or ${col('next_attempt_at')} <= now())
+    )
+    or (${col('status')} = 'running' and ${col('started_at')} < ${staleBefore})
+  )`;
+}
+
+/** The row state a claim establishes. One run, one owner, one more attempt spent. */
+function claimed() {
+  return {
+    status: 'running' as const,
+    stage: 'reading' as const,
+    startedAt: new Date(),
+    nextAttemptAt: null,
+    attempts: sql`${imports.attempts} + 1`,
+  };
+}
+
+/** What a worker needs to run an import, and nothing else. */
+export type ClaimedImport = {
+  id: string;
+  userId: string;
+  attempts: number;
+};
+
+/**
+ * Takes the next claimable import, or null when there is nothing to do.
+ *
+ * Selection and claim are one statement on purpose. Reading a candidate and then
+ * claiming it would have every idle worker pick the same oldest row and all but
+ * one throw their round trip away; `for update skip locked` instead hands each
+ * worker a different row, which is what lets replicas be added without them
+ * fighting over the head of the queue.
+ *
+ * Carries the attempt number this claim consumed, so the caller knows whether a
+ * failure has any budget left without re-reading the row, and the `userId` from
+ * the row rather than from anything a request supplied.
+ */
+export async function claimNextImport(tx: Executor): Promise<ClaimedImport | null> {
+  const staleBefore = new Date(Date.now() - RUN_RECLAIM_AFTER_MS);
+
+  const [row] = await tx
+    .update(imports)
+    .set(claimed())
+    .where(
+      sql`"imports"."id" = (
+        select "claimable"."id" from "imports" "claimable"
+        where ${claimable('claimable', staleBefore)}
+        order by "claimable"."created_at"
+        for update skip locked
+        limit 1
+      )`
+    )
+    .returning({ id: imports.id, userId: imports.userId, attempts: imports.attempts });
+
+  return row ?? null;
+}
+
+/**
+ * Claims one named import for a run, returning the attempt number it consumed.
+ *
+ * Null to everyone but the first caller. Two attempts of the same import can
+ * overlap — a reclaimed stale row, or a caller handed an id directly — and
+ * extraction is a model call and a storyline write, which are the last things
+ * that should happen twice.
  *
  * A `running` import is claimable only once it is older than a run can possibly
  * be. Accepting `running` unconditionally would make the guard useless, since
@@ -68,23 +154,44 @@ export const RUN_RECLAIM_AFTER_MS = 900_000;
  * refusing it entirely would leave a worker that died mid-run blocking its own
  * retry forever. The staleness check is what gives both.
  */
-export async function claimImport(tx: Executor, importId: string): Promise<boolean> {
+export async function claimImport(tx: Executor, importId: string): Promise<number | null> {
   const staleBefore = new Date(Date.now() - RUN_RECLAIM_AFTER_MS);
 
   const [row] = await tx
     .update(imports)
-    .set({ status: 'running', stage: 'reading', startedAt: new Date() })
-    .where(
-      and(
-        eq(imports.id, importId),
-        or(
-          eq(imports.status, 'queued'),
-          and(eq(imports.status, 'running'), lt(imports.startedAt, staleBefore))
-        )
-      )
-    )
-    .returning({ id: imports.id });
-  return row !== undefined;
+    .set(claimed())
+    .where(and(eq(imports.id, importId), claimable('imports', staleBefore)))
+    .returning({ attempts: imports.attempts });
+  return row?.attempts ?? null;
+}
+
+/**
+ * Puts a failed attempt back in the queue, after a delay.
+ *
+ * The retryable path. The row goes back to `queued` rather than to `failed`,
+ * because `failed` is not claimable and marking it so is what made the old
+ * queue's retries do nothing at all: every attempt after the first found a
+ * failed row, declined to claim it, and recorded a successful no-op.
+ *
+ * The failure code is cleared with it. A `queued` row carrying the reason its
+ * last attempt died would show the reader a failure for an import that is still
+ * going to run, and the client branches on status alone.
+ */
+export async function requeueForRetry(
+  tx: Executor,
+  importId: string,
+  attempts: number
+): Promise<void> {
+  await tx
+    .update(imports)
+    .set({
+      status: 'queued',
+      stage: null,
+      failureCode: null,
+      startedAt: null,
+      nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)),
+    })
+    .where(and(eq(imports.id, importId), eq(imports.status, 'running')));
 }
 
 /** Moves the progress marker. Only meaningful while running. */

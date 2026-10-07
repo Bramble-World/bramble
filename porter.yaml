@@ -1,0 +1,134 @@
+# Porter deployment for the Bramble API.
+#
+# One image, four ways to start it. The web service, the import worker and the two
+# sweeps all run the same container with a different command — see the Dockerfile.
+# Building once rather than per-service is what guarantees the worker cannot be
+# running different code from the server that queued its work.
+#
+# Every secret comes from the `bramble-prd` environment group, filled from the
+# Doppler `prd` config. Nothing secret is in this file, and nothing in this file
+# needs to be. docs/deployment.md lists every variable, where it comes from, and
+# whether it is needed at build time or at runtime.
+version: v2
+name: bramble
+
+build:
+  method: docker
+  context: ./
+  dockerfile: ./Dockerfile
+
+# Applied before any new container serves traffic. A failed migration exits
+# non-zero, which fails the deploy — so new code can never meet an old schema.
+# This is the reason the migrator is a separate bundled entrypoint rather than a
+# step inside the server's startup: a release has to be blockable.
+predeploy:
+  run: node dist/db/migrate.js
+  ramMegabytes: 512
+  cpuCores: 0.25
+
+services:
+  - name: web
+    type: web
+    run: node server.js
+    port: 3000
+    # Two, so a rolling deploy and a single node failure both leave the API
+    # answering. The app holds no state between requests, so replicas need no
+    # coordination.
+    instances: 2
+    cpuCores: 0.5
+    ramMegabytes: 1024
+    domains:
+      - name: api.brambleworld.com
+
+    # Liveness and readiness are deliberately different endpoints. /api/health
+    # touches nothing outside the process, so a Postgres blip cannot restart
+    # every replica at once and turn a brief outage into a cold start under load.
+    livenessCheck:
+      enabled: true
+      httpPath: /api/health
+      timeoutSeconds: 3
+      initialDelaySeconds: 10
+    # /api/ready checks Postgres and Redis, so a replica that cannot serve is
+    # taken out of rotation instead of returning errors to clients.
+    readinessCheck:
+      enabled: true
+      httpPath: /api/ready
+      timeoutSeconds: 5
+      initialDelaySeconds: 5
+
+    # Generation is a model call. A turn can legitimately take a minute or more,
+    # and the default proxy timeout of sixty seconds would cut it off at the
+    # ingress — the client sees a 504 while the server finishes the work and
+    # bills for it.
+    ingressAnnotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: '180'
+      nginx.ingress.kubernetes.io/proxy-send-timeout: '180'
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: '30'
+      # 20mb to match serverActions.bodySizeLimit in next.config.ts. A real
+      # message export clears the default 1m, and the ingress rejecting it is a
+      # 413 with no explanation rather than the app's own error.
+      nginx.ingress.kubernetes.io/proxy-body-size: 20m
+
+    # Long enough for an in-flight request to finish, since a 60-second
+    # generation that is killed mid-flight is spend with nothing to show.
+    terminationGracePeriodSeconds: 180
+
+  - name: worker
+    type: worker
+    run: node dist/worker/import-worker.js
+    # No port. It listens for nothing — it polls the `imports` table, which is
+    # the whole queue.
+    instances: 1
+    cpuCores: 0.5
+    ramMegabytes: 1024
+
+    # **Must be at least as long as one import may take.** The worker handles
+    # SIGTERM by stopping new claims and letting in-flight extractions finish;
+    # if the platform kills it before they do, that promise is decoration — the
+    # model call is wasted and the row waits out its fifteen-minute reclaim
+    # window before anyone picks it up again.
+    #
+    # Matched to IMPORT_TIMEOUT_MS in src/worker/import-worker.ts, plus a minute
+    # for the claim and the storyline write either side of it.
+    terminationGracePeriodSeconds: 960
+
+  # ── Sweeps. Plain one-shot processes on a schedule. ──────────────────────────
+  #
+  # Both are idempotent and both exit non-zero on failure, which is what makes a
+  # broken sweep visible rather than quietly stopping.
+
+  - name: arc-sweep
+    type: job
+    run: node dist/sweeps/arc-sweep.js
+    # Hourly. Recomputes arc summaries for storylines nobody is playing —
+    # `arcSummary` is fed back into the turn prompt as "So far", so a stale one
+    # means the model is describing a story that has moved on.
+    cron: '0 * * * *'
+    cpuCores: 0.5
+    ramMegabytes: 1024
+    # A second pass while the first is still summarising would pay for the same
+    # model calls twice.
+    allowConcurrent: false
+    # Generous, because the work is model calls over every idle storyline. Still
+    # bounded, so a wedged run cannot block the next hour's.
+    timeoutSeconds: 3000
+
+  - name: import-sweep
+    type: job
+    run: node dist/sweeps/import-sweep.js
+    # Every ten minutes. Fails imports whose encrypted transcript has expired
+    # underneath them, so a reader is not left watching a spinner against work
+    # that can no longer succeed.
+    cron: '*/10 * * * *'
+    cpuCores: 0.25
+    ramMegabytes: 512
+    allowConcurrent: false
+    # Database writes only, no model calls.
+    timeoutSeconds: 300
+
+# Filled from the Doppler `prd` config. Grouped rather than listed per service
+# because the worker and the web process need almost the same set — and a
+# variable that exists for one and not the other is the kind of drift that shows
+# up as an import failing in a way no request does.
+envGroups:
+  - bramble-prd

@@ -1,11 +1,9 @@
-import { tasks } from '@trigger.dev/sdk';
 import { withUser } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { parseBody } from '@/lib/api/params';
 import { importView } from '@/lib/api/views';
 import * as imports from '@/lib/services/imports/imports.service';
 import { importRequestSchema } from '@/lib/services/imports/imports.validate';
-import type { importExtraction } from '@/trigger/import-extraction.task';
 
 /**
  * The account's allowance and every conversation it has handed over.
@@ -29,7 +27,8 @@ export const GET = withUser(async (user) => {
  * Hands over one conversation.
  *
  * Returns in milliseconds and does no extraction: the transcript is encrypted
- * into Redis, a job is queued, and the client polls. Extracting inline would
+ * into Redis, the row is left `queued` for a worker to claim, and the client
+ * polls. Extracting inline would
  * mean a request held open for the length of a model call, which is the failure
  * that produced `UND_ERR_HEADERS_TIMEOUT` and three billed attempts for one
  * user action.
@@ -47,13 +46,7 @@ export const GET = withUser(async (user) => {
 export const POST = withUser(async (user, request) => {
   const body = await parseBody(request, importRequestSchema);
 
-  const result = await imports.requestImport(user.id, body, (importId) =>
-    // Typed by the task rather than importing it, so this route does not pull
-    // the worker — and everything the worker imports — into the Next bundle.
-    // The payload is exactly the id: a queue record is a store too, and a
-    // transcript in one would outlive the thirty minutes the ciphertext gets.
-    tasks.trigger<typeof importExtraction>('import-extraction', { importId })
-  );
+  const result = await imports.requestImport(user.id, body);
 
   return json({ import: importView(result.import) }, { status: result.accepted ? 202 : 200 });
 });
