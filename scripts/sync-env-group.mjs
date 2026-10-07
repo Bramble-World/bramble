@@ -166,7 +166,8 @@ function argvFor(command, extra) {
     'env',
     command,
     ...extra,
-    '--no-input',
+    // `create` only. `env set` has no such flag and exits 1 on an unknown one.
+    ...(command === 'create' ? ['--no-input'] : []),
     '--project',
     String(PROJECT),
     '--cluster',
@@ -178,14 +179,41 @@ function argvFor(command, extra) {
   ];
 }
 
-/** Never logs the error body: the CLI echoes back the arguments it was given. */
+/**
+ * Every value being sent, longest first, for redaction.
+ *
+ * Longest first so that a value which contains another — a connection string
+ * holding a password, say — is masked before the shorter one turns it into a
+ * half-redacted string that still shows the rest.
+ */
+const sensitive = Object.values(secrets)
+  .filter((value) => value && value.length >= 8)
+  .sort((a, b) => b.length - a.length);
+
+/**
+ * The CLI's own output, with every secret value masked.
+ *
+ * It echoes back the keys *and values* it was given — `Updated keys:
+ * FOO=bar` — so its output cannot be printed as-is. Printing nothing was worse:
+ * the first real failure here was an unknown flag, and "exit 1" sent me to
+ * reproduce by hand what the CLI had already said plainly.
+ */
+function redact(text) {
+  return sensitive.reduce((out, value) => out.split(value).join('«redacted»'), text ?? '');
+}
+
 async function porter(argv, label) {
   try {
     const { stdout } = await run('porter', argv, { maxBuffer: 1024 * 1024 });
     return stdout.trim();
   } catch (error) {
     const detail = typeof error?.code === 'number' ? `exit ${error.code}` : 'failed to run';
-    throw new Error(`porter env ${label}: ${detail}. Re-run with --dry-run to inspect the plan.`);
+    const said = redact(`${error?.stderr ?? ''}${error?.stdout ?? ''}`)
+      .trim()
+      .split('\n')
+      .slice(-6)
+      .join('\n');
+    throw new Error(`porter env ${label}: ${detail}\n${said}`);
   }
 }
 
