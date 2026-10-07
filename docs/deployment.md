@@ -73,11 +73,42 @@ Dockerfile gets caught before a deploy.
 | ------------------- | ------ | -------------------- |
 | `SENTRY_AUTH_TOKEN` | Sentry | Uploads source maps. |
 
+**On Porter specifically: this one does not arrive.** Porter's build does not
+receive the application's secrets — _"Secrets will not be made available to your
+build process"_ — and there is no Docker build-secret mechanism in its Dockerfile
+builds. The build therefore succeeds and skips the upload, which is the
+degradation the Dockerfile was written for: Sentry still captures errors, because
+the DSN is a build _argument_; what is missing is symbolicated stack traces.
+
+Two ways to close that, neither required to ship:
+
+- add `PORTER_SENTRY_AUTH_TOKEN` to the generated GitHub Actions workflow from a
+  repository secret — Porter passes through supplementary variables prefixed
+  `PORTER_` — and read it in the Dockerfile alongside the secret mount;
+- or upload source maps from a separate CI step with `sentry-cli`, outside the
+  image build entirely.
+
+The token is deliberately **not** an `ARG`. An `ARG` is recorded in the image's
+build history and readable with `docker history` by anyone who can pull the image,
+which is worse than having no source maps.
+
 Mounted with `--mount=type=secret`, **never as a build arg**. An `ARG` is recorded
 in the image's build history and readable with `docker history` by anyone who can
 pull the image; a secret mount exists only for the duration of one `RUN` and is
 never written to a layer. Builds succeed without it — a release without source
 maps is still a release.
+
+**On Porter, these come from the application's environment, not from a `docker
+build` command.** Porter exposes environment variables to the build through the
+`ARG` declarations already in the Dockerfile — but it withholds _secrets_. So each
+of these must be added as a **plain variable, never a secret**, or it is silently
+absent and the client bundle is compiled without it. All three are public by
+definition: a publishable key and a DSN ship to every client that loads the page.
+
+`NEXT_PUBLIC_APP_URL` is set in `porter.yaml`'s own `env:` block instead, since it
+is both public and ours — one fewer dashboard field to get wrong.
+
+Locally, where there is no Porter, they are ordinary build arguments:
 
 ```bash
 docker build \
@@ -256,31 +287,82 @@ Dockerfile.
 
 ## First deploy
 
-1. Create the Postgres and Redis **datastores** in Porter (project `19721`,
-   cluster `6001`) rather than in the AWS console. Porter provisions RDS and
-   ElastiCache into the cluster's VPC and attaches the security groups itself, so
-   the app can reach them without any networking by hand — which is the whole
-   reason to do it this way. Note both connection strings.
+The order matters in one place: **`predeploy` runs the migrations, so the
+datastores and the environment group have to exist before the first deploy.**
+Deploying earlier fails on a missing `DATABASE_URL` — correctly, but confusingly.
+
+1. **Datastores.** Create Postgres and Redis in Porter (project `19721`, cluster
+   `6001`) rather than in the AWS console. Porter provisions RDS and ElastiCache
+   into the cluster's own VPC and attaches the security groups itself, so the app
+   can reach them with no networking by hand — which is the whole reason to do it
+   this way, and why no AWS credentials are needed anywhere in this process.
 
    Postgres must be reachable as `…?sslmode=require` (see _Postgres TLS_), and
-   Redis as `rediss://` with in-transit encryption enabled.
+   Redis as `rediss://`, which means enabling in-transit encryption when you
+   create it — it cannot be turned on afterwards without replacing the cluster.
 
-2. Generate `IMPORT_MASTER_KEY` and `CONTACT_HASH_SECRET`, and put them in Doppler
-   `prd` along with everything else in _Runtime environment_ above. The `prd`
-   config starts empty.
-3. Create the `bramble-prd` environment group in Porter from the Doppler `prd`
-   config.
-4. Set the three `NEXT_PUBLIC_*` build arguments and the `SENTRY_AUTH_TOKEN`
-   secret in Porter's build settings.
-5. Link the repository in Porter (project `19721`) so it generates the deploy
-   workflow, or apply the manifest by hand as above.
-6. Deploy. `predeploy` applies the migrations against an empty database and the
-   deploy fails if they do not apply.
-7. Point `api.brambleworld.com` at the web service, then configure the Clerk
-   production webhook (above) — it needs the domain to exist first.
-8. Check `/api/health` and `/api/ready`. A 503 from `/api/ready` names the
-   dependency that is not wired up; a 500 would mean something else, since an
-   unconfigured dependency is a 503 by design.
+2. **Secrets.** Generate the two that are ours:
+
+   ```bash
+   openssl rand -base64 32   # IMPORT_MASTER_KEY
+   openssl rand -base64 32   # CONTACT_HASH_SECRET  (any ≥32 chars)
+   ```
+
+   Put them, both connection strings, and everything else under _Runtime
+   environment_ into Doppler `prd`, which starts empty.
+
+3. **Environment group.** Create `bramble-prd` in Porter from the Doppler `prd`
+   config — the name has to match `envGroups` in `porter.yaml`.
+
+   Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `NEXT_PUBLIC_SENTRY_DSN` here as
+   **plain variables, not secrets.** Porter withholds secrets from the build, and
+   these are compiled into the JavaScript — marked secret they do not fail, they
+   are simply absent. Everything else in the group should be a secret.
+
+4. **Link the repository.** In Porter, point the app at `Bramble-World/bramble`
+   and the `main` branch. Porter commits a
+   `.github/workflows/porter_stack_bramble.yml` that builds from this `Dockerfile`
+   and applies this `porter.yaml` on every push, filling `PORTER_PROJECT`,
+   `PORTER_CLUSTER` and `PORTER_TOKEN` itself. This is the intended path; the
+   `porter apply` block above is for applying a manifest change by hand.
+
+5. **Deploy.** The first run builds the image, runs `predeploy`
+   (`node dist/db/migrate.js`) against the empty database, and starts the four
+   processes. A failed migration exits non-zero and blocks the release rather than
+   letting new code meet an old schema.
+
+6. **Domain.** Point `api.brambleworld.com` at the web service.
+
+7. **Clerk webhook.** Only now, because it needs the domain to resolve: add
+   `https://api.brambleworld.com/api/webhooks/clerk` to the Clerk **production**
+   instance and copy the signing secret into `CLERK_WEBHOOK_SIGNING_SECRET`.
+   Without it the route rejects every delivery — closed by default, and silent, so
+   if user records stop appearing this is the first thing to check.
+
+8. **Verify.**
+
+   ```bash
+   curl https://api.brambleworld.com/api/health   # {"status":"ok"}
+   curl https://api.brambleworld.com/api/ready    # {"status":"ok"}
+   ```
+
+   A 503 from `/api/ready` names the dependency that is not wired up. A **500**
+   means something else entirely, because an unconfigured dependency is a 503 by
+   design — so a 500 here is a bug, not a configuration gap.
+
+   Then watch the worker's logs for `worker_started`. It polls every two seconds
+   and logs nothing until an import arrives, so silence is the healthy state.
+
+## Rolling back
+
+`autoRollback` is not enabled in `porter.yaml`, so a bad release stays up. Roll
+back from Porter's dashboard, or redeploy a known-good image tag with
+`PORTER_TAG`.
+
+**Migrations do not roll back.** Drizzle generates forward-only SQL and there are
+no down migrations, so a deploy that drops or rewrites a column cannot be undone
+by reverting the code. Treat a destructive migration as a separate, deliberate
+release: ship the additive half first, let it run, then remove what is unused.
 
 ## Verifying a change locally
 

@@ -126,6 +126,24 @@ services:
     # Database writes only, no model calls.
     timeoutSeconds: 300
 
+# Build-time values that are public by definition, so they belong in version
+# control rather than in a dashboard.
+#
+# Porter exposes an application's environment variables to a Dockerfile build
+# through the `ARG` declarations in it — but **not its secrets**, which are
+# deliberately withheld from the build. Every `NEXT_PUBLIC_*` value is compiled
+# into the JavaScript, so one marked secret in Porter does not fail: it is simply
+# absent, and the bundle is built without it. Keeping the one value we know here
+# removes that trap for at least this variable.
+#
+# The other two (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SENTRY_DSN`)
+# live in the env group because they come from Clerk and Sentry rather than from
+# us — they must be added there as **plain variables, never secrets**, for the
+# same reason. Both are public: a publishable key and a DSN are shipped to every
+# client that loads the page.
+env:
+  NEXT_PUBLIC_APP_URL: https://api.brambleworld.com
+
 # Filled from the Doppler `prd` config. Grouped rather than listed per service
 # because the worker and the web process need almost the same set — and a
 # variable that exists for one and not the other is the kind of drift that shows
