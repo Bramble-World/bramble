@@ -20,6 +20,14 @@ const redisThat = (ping: () => Promise<unknown>) => redis.mockReturnValue({ ping
 const pg = (execute: () => Promise<unknown>) => db.execute.mockImplementation(execute as never);
 
 const up = () => Promise.resolve();
+/**
+ * Throws before returning a promise, which is what `redis()` does with no
+ * REDIS_URL — and what the probe got wrong: the exception escaped the check and
+ * made an unconfigured server answer 500 instead of 503.
+ */
+const unconfigured = () => {
+  throw new Error('REDIS_URL is not set, so readiness is checked.');
+};
 const down = () => Promise.reject(new Error('connect ECONNREFUSED 10.0.1.4:6379'));
 const hangs = () => new Promise(() => {});
 
@@ -90,6 +98,36 @@ describe('GET /api/ready', () => {
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ failed: ['redis'] });
+  });
+
+  /**
+   * A server with nothing configured is the case readiness most needs to get
+   * right, and the one a mocked client hides: `redis()` throws synchronously
+   * rather than returning a rejected promise, so a probe that calls it outside
+   * the promise chain fails the whole request instead of the one check. CI,
+   * which runs with no secrets at all, is what caught this.
+   */
+  it('answers 503 rather than 500 when a client throws before returning a promise', async () => {
+    pg(up);
+    redis.mockImplementation(unconfigured as never);
+
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toStrictEqual({
+      status: 'unavailable',
+      failed: ['redis'],
+    });
+  });
+
+  it('answers 503 when both clients throw synchronously', async () => {
+    db.execute.mockImplementation(unconfigured as never);
+    redis.mockImplementation(unconfigured as never);
+
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).failed).toStrictEqual(['postgres', 'redis']);
   });
 
   /**

@@ -32,18 +32,27 @@ const PROBE_TIMEOUT_MS = 2_000;
  * Races rather than relying on client timeouts: the Postgres pool will happily
  * queue a query for as long as it takes to get a connection, so the probe's
  * deadline has to be the probe's own.
+ *
+ * `Promise.resolve().then(probe)` rather than `probe()`, so a probe that throws
+ * *before* returning a promise is still a failed check rather than a failed
+ * request. `redis()` does exactly that when REDIS_URL is unset — and a server
+ * with nothing configured is the case readiness most needs to answer, since
+ * answering it with a 500 tells a load balancer the endpoint is broken rather
+ * than that the replica is not ready.
  */
 async function check(name: string, probe: () => Promise<unknown>): Promise<string | null> {
   const timeout = new Promise<string>((resolve) =>
     setTimeout(() => resolve(name), PROBE_TIMEOUT_MS)
   );
 
-  const attempt = probe().then(
-    () => null,
-    // The name, never the error. Both clients put connection strings into their
-    // messages, and those carry credentials.
-    () => name
-  );
+  const attempt = Promise.resolve()
+    .then(probe)
+    .then(
+      () => null,
+      // The name, never the error. Both clients put connection strings into
+      // their messages, and those carry credentials.
+      () => name
+    );
 
   return Promise.race([attempt, timeout]);
 }
