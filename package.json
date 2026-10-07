@@ -43,7 +43,7 @@
     "db:seed": "doppler run -- tsx src/db/seeds/seed.ts"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx}": [
+    "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}": [
       "eslint --fix",
       "prettier --write"
     ],
