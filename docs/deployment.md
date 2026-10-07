@@ -311,13 +311,31 @@ Deploying earlier fails on a missing `DATABASE_URL` — correctly, but confusing
    Put them, both connection strings, and everything else under _Runtime
    environment_ into Doppler `prd`, which starts empty.
 
-3. **Environment group.** Create `bramble-prd` in Porter from the Doppler `prd`
-   config — the name has to match `envGroups` in `porter.yaml`.
+3. **Environment group.** `bramble-prd` — the name must match `envGroups` in
+   `porter.yaml`, and Porter requires it to exist _before_ a deploy references it.
 
-   Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `NEXT_PUBLIC_SENTRY_DSN` here as
-   **plain variables, not secrets.** Porter withholds secrets from the build, and
-   these are compiled into the JavaScript — marked secret they do not fail, they
-   are simply absent. Everything else in the group should be a secret.
+   Run the sync rather than filling it in by hand. Doppler is the source of truth,
+   and a dozen dashboard fields re-typed on every rotation is how a staging value
+   reaches production:
+
+   ```bash
+   doppler run --config prd -- node scripts/sync-env-group.mjs --dry-run   # inspect
+   doppler run --config prd -- node scripts/sync-env-group.mjs             # apply
+   ```
+
+   It exits non-zero and names what is still missing, so it doubles as the
+   readiness check for everything above. It needs the Porter CLI
+   (`brew install porter-dev/porter/porter`) and authenticates from
+   `PORTER_API_KEY` in Doppler — no browser login.
+
+   The script owns the plain/secret split, which is the part that must not be done
+   by hand: Porter withholds secrets from the Docker build, and the `NEXT_PUBLIC_*`
+   values have to reach it. See the `PUBLIC` set in the script.
+
+   Environment groups have **no REST API** — `porter env create` is the only
+   supported route besides the dashboard, and the cluster-scoped endpoint that
+   looks like one answers 500. Groups are project-scoped and synced to AWS Secrets
+   Manager, so they do not appear in the legacy cluster-scoped listing either.
 
 4. **Link the repository.** In Porter, point the app at `Bramble-World/bramble`
    and the `main` branch. Porter commits a
