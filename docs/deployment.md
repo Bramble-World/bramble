@@ -5,14 +5,17 @@ server, the import worker, and two scheduled sweeps. `porter.yaml` is the whole
 deployment; this document is the part that cannot live in it, namely where each
 secret comes from and which ones are needed before the image is even built.
 
-|               |                                                                |
-| ------------- | -------------------------------------------------------------- |
-| **Image**     | `Dockerfile`, multi-stage, Node 22 Alpine, non-root, port 3000 |
-| **Manifest**  | `porter.yaml`                                                  |
-| **Env group** | `bramble-prd`, filled from the Doppler `prd` config            |
-| **Domain**    | `api.brambleworld.com`                                         |
-| **Database**  | RDS Postgres 16, TLS verified against the bundled AWS CA       |
-| **Cache**     | ElastiCache Redis, `rediss://`                                 |
+|                    |                                                                      |
+| ------------------ | -------------------------------------------------------------------- |
+| **Porter project** | `19721` (`bramble`)                                                  |
+| **Cluster**        | `6001` — `porter-bramble-spy-cat`, EKS, `us-east-1`                  |
+| **Registry**       | `237162087904.dkr.ecr.us-east-1.amazonaws.com` — ECR, Porter-managed |
+| **Image**          | `Dockerfile`, multi-stage, Node 22 Alpine, non-root, port 3000       |
+| **Manifest**       | `porter.yaml`                                                        |
+| **Env group**      | `bramble-prd`, filled from the Doppler `prd` config                  |
+| **Domain**         | `api.brambleworld.com`                                               |
+| **Database**       | RDS Postgres 16, TLS verified against the bundled AWS CA             |
+| **Cache**          | ElastiCache Redis, `rediss://`                                       |
 
 ## The four processes
 
@@ -211,9 +214,57 @@ before another worker picks it up. Keep it above `IMPORT_TIMEOUT_MS` in
 The web service gets 180s for the same reason at a smaller scale — a turn is a
 model call, and killing one mid-flight bills for nothing.
 
+## Applying the manifest
+
+`porter.yaml` is not read automatically — something has to apply it. The project
+id is **not** a field in the manifest (it has no such key); it is passed to the
+CLI, which is why it is recorded here instead.
+
+```bash
+PORTER_TOKEN="$PORTER_DEPLOY_TOKEN" \
+PORTER_PROJECT=19721 \
+PORTER_CLUSTER=6001 \
+porter apply -f porter.yaml
+```
+
+| Variable         | Value        | Source                                                                                            |
+| ---------------- | ------------ | ------------------------------------------------------------------------------------------------- |
+| `PORTER_PROJECT` | `19721`      | the Porter project                                                                                |
+| `PORTER_CLUSTER` | `6001`       | the EKS cluster's id in Porter                                                                    |
+| `PORTER_TOKEN`   | _(a secret)_ | a Porter API token. A GitHub Actions secret — **never a committed value, and never in this file** |
+| `PORTER_TAG`     | optional     | an image tag to deploy instead of building                                                        |
+
+Linking the repository in Porter's dashboard generates a
+`.github/workflows/porter_stack_bramble.yml` that does this on every push to the
+deploy branch, and fills all three values itself. That is the intended path —
+this block is for applying a manifest change by hand, and for knowing what the
+generated workflow is doing.
+
+Porter's REST API is served from **`dashboard.porter.run`**, not `api.porter.run`
+— the latter answers `521` to every path, which looks like an auth failure and is
+not one. Worth knowing before debugging a token that is fine:
+
+```bash
+curl -H "Authorization: Bearer $PORTER_TOKEN" \
+  https://dashboard.porter.run/api/projects/19721/clusters
+```
+
+Note that CI's `Docker Image` job is **not** a deploy: it builds the image and
+throws it away, with no registry credentials involved, so that a broken
+Dockerfile fails the pull request. Porter does its own build from this same
+Dockerfile.
+
 ## First deploy
 
-1. Create the RDS instance and the ElastiCache cluster. Note both endpoints.
+1. Create the Postgres and Redis **datastores** in Porter (project `19721`,
+   cluster `6001`) rather than in the AWS console. Porter provisions RDS and
+   ElastiCache into the cluster's VPC and attaches the security groups itself, so
+   the app can reach them without any networking by hand — which is the whole
+   reason to do it this way. Note both connection strings.
+
+   Postgres must be reachable as `…?sslmode=require` (see _Postgres TLS_), and
+   Redis as `rediss://` with in-transit encryption enabled.
+
 2. Generate `IMPORT_MASTER_KEY` and `CONTACT_HASH_SECRET`, and put them in Doppler
    `prd` along with everything else in _Runtime environment_ above. The `prd`
    config starts empty.
@@ -221,12 +272,15 @@ model call, and killing one mid-flight bills for nothing.
    config.
 4. Set the three `NEXT_PUBLIC_*` build arguments and the `SENTRY_AUTH_TOKEN`
    secret in Porter's build settings.
-5. Deploy. `predeploy` applies the migrations against an empty database and the
+5. Link the repository in Porter (project `19721`) so it generates the deploy
+   workflow, or apply the manifest by hand as above.
+6. Deploy. `predeploy` applies the migrations against an empty database and the
    deploy fails if they do not apply.
-6. Point `api.brambleworld.com` at the web service, then configure the Clerk
+7. Point `api.brambleworld.com` at the web service, then configure the Clerk
    production webhook (above) — it needs the domain to exist first.
-7. Check `/api/health` and `/api/ready`. A 503 from `/api/ready` names the
-   dependency that is not wired up.
+8. Check `/api/health` and `/api/ready`. A 503 from `/api/ready` names the
+   dependency that is not wired up; a 500 would mean something else, since an
+   unconfigured dependency is a 503 by design.
 
 ## Verifying a change locally
 
