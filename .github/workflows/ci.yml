@@ -262,7 +262,7 @@ jobs:
       - name: Seed
         run: pnpm exec tsx src/db/seeds/seed.ts
       - run: pnpm test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
