@@ -16,7 +16,18 @@ jobs:
               uses: porter-dev/setup-porter@v0.2.0
             - name: Deploy stack
               timeout-minutes: 30
-              run: porter apply
+              # `--attach-env-groups` is load-bearing and not decoration.
+              #
+              # `porter.yaml` declares `envGroups: [bramble-prd]`, and this CLI
+              # version silently ignores it — the first production deploy failed
+              # with `DATABASE_URL is not set, so there is nothing to migrate`
+              # because predeploy ran with no environment at all. Attaching it
+              # here is what actually binds the group.
+              #
+              # Porter rewrites this file whenever the app's configuration
+              # changes, in a pull request of its own. If a deploy ever fails on a
+              # missing variable again, check that this flag survived that rewrite.
+              run: porter apply --attach-env-groups bramble-prd
               env:
                 PORTER_APP_NAME: bramble
                 PORTER_CLUSTER: "6001"
