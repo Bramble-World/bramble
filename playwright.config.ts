@@ -33,6 +33,20 @@ export default defineConfig({
     // Locally, Doppler injects secrets. CI has no Doppler and needs none —
     // every integration in src/env.ts is optional, so the app boots without.
     command: process.env.CI ? 'pnpm dev' : 'doppler run -- pnpm dev',
+    /**
+     * The fake generator, always.
+     *
+     * These specs assert that the loop works — a turn is offered, a choice is
+     * recorded, canon grows — not that the model writes well. A real model call
+     * makes them slow enough to blow the 30s test timeout, which is exactly what
+     * happened locally: CI has no `OPENAI_API_KEY` and so was quietly already
+     * running the fake, while anyone with Doppler's dev config saw a failure CI
+     * could never reproduce.
+     *
+     * It also stops a browser smoke test spending real money every time someone
+     * runs it.
+     */
+    env: { BRAMBLE_AI_MODE: 'fake' },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

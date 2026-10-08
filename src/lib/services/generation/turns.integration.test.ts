@@ -1,0 +1,857 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { db } from '@/index';
+import { storylineSessions, turnSurfaces, users } from '@/db/schema/tables';
+import {
+  ConflictError,
+  NotFoundError,
+  StorylineNotReadyError,
+  ValidationError,
+} from '@/lib/utils/errors';
+import * as sessionReader from '../sessions/sessions.reader';
+import { createFakeGenerator, FakeGenerator } from '@/lib/ai';
+import { registerFixtures } from '@/lib/ai/fixtures';
+import { consequencePrompt } from '@/lib/ai/prompts/consequence.prompt';
+import { turnPrompt, type TurnOutput } from '@/lib/ai/prompts/turn.prompt';
+import * as persons from '../persons/persons.service';
+import * as storylines from '../storylines/storylines.service';
+import * as sessions from '../sessions/sessions.service';
+import * as timeline from '../timeline/timeline.service';
+import { advanceSession, commitChoice, generateConsequences, generateTurn } from './turns.service';
+
+/**
+ * The decision loop, end to end, against the fake generator and a real database.
+ *
+ * The fake is the point: everything downstream of the model call is the real
+ * thing — real context assembly, real transactions, real constraints — so what
+ * these prove is the plumbing, which is what this PR is. Prompt quality is a
+ * separate question and no test can answer it.
+ */
+const CLERK = 'user_turnloop_owner';
+let userId: string;
+let storylineId: string;
+let fake: FakeGenerator;
+
+beforeAll(async () => {
+  await db.delete(users).where(eq(users.clerkId, CLERK));
+  const [user] = await db
+    .insert(users)
+    .values({ clerkId: CLERK, email: 'owner@turnloop.local' })
+    .returning({ id: users.id });
+  userId = user.id;
+
+  const storyline = await storylines.createStoryline(userId, {
+    title: 'The Unsent Apology',
+    sourceSurface: 'imessage',
+    tone: 'wistful',
+  });
+  storylineId = storyline.id;
+  await storylines.markStatus(userId, storylineId, 'ready');
+
+  const self = await persons.getOrCreateSelfPerson(userId, 'Blossom');
+  const maya = await persons.createPerson(userId, { name: 'Maya' });
+  const a = await storylines.castCharacter(userId, storylineId, self.id, { role: 'protagonist' });
+  const b = await storylines.castCharacter(userId, storylineId, maya.id);
+  await storylines.relateCharacters(userId, storylineId, a.id, b.id, { closeness: 'was close' });
+
+  await timeline.appendEvent(userId, storylineId, {
+    origin: 'extracted',
+    title: 'Where things stood',
+    description: 'They had not spoken in three weeks.',
+    participantCharacterIds: [a.id, b.id],
+  });
+  await timeline.appendEvent(userId, storylineId, {
+    origin: 'extracted',
+    title: 'The message',
+    description: 'One of them finally typed something.',
+  });
+});
+
+afterAll(async () => {
+  await db.delete(users).where(eq(users.clerkId, CLERK));
+});
+
+beforeEach(async () => {
+  fake = createFakeGenerator();
+  registerFixtures(fake);
+
+  // Playthroughs are cleared between tests, and turns cascade with them. Without
+  // this the suite shares one account across ~25 tests that each play a turn,
+  // which is past the daily energy allowance — so later tests would fail on a
+  // 429 that has nothing to do with what they are asserting. Every test makes
+  // its own session anyway; the storyline, cast and timeline fixture survives.
+  await db.delete(storylineSessions).where(eq(storylineSessions.userId, userId));
+});
+
+async function freshSession() {
+  return sessions.startSession(userId, storylineId);
+}
+
+describe('generateTurn', () => {
+  it('produces a beat with choices and persists it', async () => {
+    const session = await freshSession();
+
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    expect(turn.narrativeContent.length).toBeGreaterThan(0);
+    expect(turn.choices.length).toBeGreaterThanOrEqual(2);
+    expect(turn.selectedChoiceId).toBeNull();
+  });
+
+  // The check is before the model call, not after: a session has at most one
+  // open turn, so generating first would be paying for output to discard.
+  it('returns the open turn without calling the model again', async () => {
+    const session = await freshSession();
+
+    const first = await generateTurn(userId, session.id, { generator: fake });
+    const callsAfterFirst = fake.calls.length;
+    const second = await generateTurn(userId, session.id, { generator: fake });
+
+    expect(second.id).toBe(first.id);
+    expect(fake.calls.length).toBe(callsAfterFirst);
+  });
+
+  it('gives the model the storyline and the loop so far', async () => {
+    const session = await freshSession();
+
+    await generateTurn(userId, session.id, { generator: fake });
+
+    const call = fake.calls.at(-1)!;
+    expect(call.promptName).toBe('turn.generate');
+    expect(call.prompt).toContain('The Unsent Apology');
+    expect(call.prompt).toContain('Where things stood');
+    expect(call.prompt).toContain('Maya');
+  });
+
+  it('never puts a contact reference in front of the model', async () => {
+    const session = await freshSession();
+    await generateTurn(userId, session.id, { generator: fake });
+
+    const stored = await db.query.persons.findMany({ where: { userId } });
+    for (const person of stored) {
+      if (person.sourceContactRef) {
+        expect(fake.calls.at(-1)!.prompt).not.toContain(person.sourceContactRef);
+      }
+    }
+  });
+});
+
+describe('commitChoice then generateConsequences', () => {
+  it('records the answer without calling the model', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    const before = fake.calls.length;
+
+    const answered = await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    expect(answered.selectedChoiceId).toBe(turn.choices[0].id);
+    expect(answered.respondedAt).not.toBeNull();
+    // The user is waiting on this half; a model call here would put a
+    // multi-second wait inside their click.
+    expect(fake.calls.length).toBe(before);
+  });
+
+  /**
+   * The bug this column exists for.
+   *
+   * Idempotence used to be inferred from a beat pointing at the turn, but the
+   * consequence prompt is allowed to decide a choice changed nothing — and that
+   * outcome writes no beat. So "ran, and nothing happened" was stored exactly
+   * like "never ran": every retry paid for a fresh generation, and could write a
+   * beat the second time that the first had not. Measured on real data, 38 of 65
+   * answered turns were in that state.
+   *
+   * This is the test that could not have passed before, and it needs an
+   * empty-then-nonempty fixture, because a fake that always returns the same
+   * thing cannot tell the two readings apart.
+   */
+  it('does not recompute a turn whose consequences were legitimately empty', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    let calls = 0;
+    fake.register(consequencePrompt, () => {
+      calls += 1;
+      // Empty the first time, and emphatically not empty afterwards — so a
+      // second generation would be visible in the timeline rather than silent.
+      return calls === 1
+        ? { events: [], contextEntries: [], relationshipStates: [] }
+        : {
+            events: [
+              {
+                title: 'Should never exist',
+                description: 'Written by a generation that should not have happened.',
+                stakes: null,
+                participantCharacterIds: [],
+                actorCharacterId: null,
+                generationRationale: 'x',
+                engagementScore: 5,
+              },
+            ],
+            contextEntries: [],
+            relationshipStates: [],
+          };
+    });
+
+    const first = await generateConsequences(userId, turn.id, { generator: fake });
+    expect(first.events).toBe(0);
+
+    const second = await generateConsequences(userId, turn.id, { generator: fake });
+
+    expect(second.events).toBe(0);
+    // The model was asked once, not twice.
+    expect(calls).toBe(1);
+    const beats = await timeline.listTimeline(storylineId);
+    expect(beats.map((b) => b.title)).not.toContain('Should never exist');
+  });
+
+  it('writes generated beats with lineage back to the decision', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    // Force the branch that changes canon, rather than depending on the seed.
+    fake.register(consequencePrompt, ({ vars }) => ({
+      events: [
+        {
+          title: 'A different answer',
+          description: 'It was said out loud this time.',
+          stakes: null,
+          participantCharacterIds: vars.storyline.characters.map((c) => c.id),
+          actorCharacterId: null,
+          generationRationale: 'The reader chose directness where the original was evasive.',
+          engagementScore: 5,
+        },
+      ],
+      contextEntries: [{ content: 'It had been building for months.', characterId: null }],
+      relationshipStates: vars.storyline.relationships.length
+        ? [
+            {
+              relationshipId: vars.storyline.relationships[0].id,
+              closeness: 'closer',
+              tension: null,
+              powerBalance: null,
+            },
+          ]
+        : [],
+    }));
+
+    const result = await generateConsequences(userId, turn.id, { generator: fake });
+    expect(result.events).toBe(1);
+
+    const generated = await db.query.events.findMany({ where: { triggeredByTurnId: turn.id } });
+    expect(generated).toHaveLength(1);
+    // invariants.md §4: a generated beat carries its lineage and its reasoning.
+    expect(generated[0].origin).toBe('conversation_generated');
+    expect(generated[0].generationRationale).not.toBeNull();
+
+    // And it lands in the gap, not at the end — the whole point of gap numbering.
+    const beats = await timeline.listTimeline(storylineId);
+    const orders = beats.map((b) => b.narrativeOrder);
+    expect(orders).toStrictEqual([...orders].sort((a, b) => a - b));
+    expect(generated[0].narrativeOrder).toBeGreaterThan(orders[0]);
+    expect(generated[0].narrativeOrder).toBeLessThan(orders[orders.length - 1] + 1);
+  });
+
+  // The lineage column is the idempotency key. A retry after a lost response must
+  // not pay for a second generation or append a duplicate beat.
+  it('is a no-op the second time, without calling the model', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    fake.register(consequencePrompt, () => ({
+      events: [
+        {
+          title: 'Once only',
+          description: 'x',
+          stakes: null,
+          participantCharacterIds: [],
+          actorCharacterId: null,
+          generationRationale: 'because',
+          engagementScore: 5,
+        },
+      ],
+      contextEntries: [],
+      relationshipStates: [],
+    }));
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+    const callsAfterFirst = fake.calls.length;
+    const second = await generateConsequences(userId, turn.id, { generator: fake });
+
+    expect(second.events).toBe(0);
+    expect(fake.calls.length).toBe(callsAfterFirst);
+    expect(await db.query.events.findMany({ where: { triggeredByTurnId: turn.id } })).toHaveLength(
+      1
+    );
+  });
+
+  it('accepts a decision that changes nothing', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    fake.register(consequencePrompt, () => ({
+      events: [],
+      contextEntries: [],
+      relationshipStates: [],
+    }));
+
+    await expect(generateConsequences(userId, turn.id, { generator: fake })).resolves.toStrictEqual(
+      { events: 0, contextEntries: 0, relationshipStates: 0 }
+    );
+  });
+
+  it('refuses to generate consequences for an unanswered turn', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    await expect(generateConsequences(userId, turn.id, { generator: fake })).rejects.toBeInstanceOf(
+      ValidationError
+    );
+  });
+
+  it('refuses to answer the same turn twice', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    await expect(commitChoice(userId, turn.id, turn.choices[1].id)).rejects.toBeInstanceOf(
+      ConflictError
+    );
+  });
+
+  // A model can name ids that do not exist. Dropping them is better than losing
+  // the whole beat, and the timeline service would refuse the write regardless.
+  it('discards character ids the model invented', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    fake.register(consequencePrompt, ({ vars }) => ({
+      events: [
+        {
+          title: 'Hallucinated cast',
+          description: 'x',
+          stakes: null,
+          participantCharacterIds: [
+            vars.storyline.characters[0].id,
+            '00000000-0000-0000-0000-000000000000',
+          ],
+          actorCharacterId: null,
+          generationRationale: 'because',
+          engagementScore: 5,
+        },
+      ],
+      contextEntries: [],
+      relationshipStates: [],
+    }));
+
+    const result = await generateConsequences(userId, turn.id, { generator: fake });
+    expect(result.events).toBe(1);
+
+    const [written] = await db.query.events.findMany({
+      where: { triggeredByTurnId: turn.id },
+      with: { participants: true },
+    });
+    expect(written.participants).toHaveLength(1);
+  });
+
+  /**
+   * The reader has to be able to see what their own decision caused.
+   *
+   * Consequences used to be placed wherever the model named, and it named
+   * badly — anchoring at 1500-3500 in a session whose narration had reached
+   * 6000. A beat filed above the playhead is invisible to the person who caused
+   * it; one filed far below it silently rewrites history they have already read.
+   */
+  it('lands a consequence at the playhead and moves the playhead to cover it', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    const before = await sessions.getSession(userId, session.id);
+
+    fake.register(consequencePrompt, () => ({
+      events: [
+        {
+          title: 'Placed',
+          description: 'x',
+          stakes: null,
+          participantCharacterIds: [],
+          actorCharacterId: null,
+          generationRationale: 'because',
+          engagementScore: 5,
+        },
+      ],
+      contextEntries: [],
+      relationshipStates: [],
+    }));
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+
+    const [written] = await db.query.events.findMany({ where: { triggeredByTurnId: turn.id } });
+    // Directly above where the reader stood, not at the far end of a story they
+    // have not read yet.
+    expect(written.narrativeOrder).toBeGreaterThan(before.playheadOrder);
+
+    const after = await sessions.getSession(userId, session.id);
+    expect(after.playheadOrder).toBeGreaterThanOrEqual(written.narrativeOrder);
+
+    const beats = await timeline.listTimeline(storylineId);
+    const orders = beats.map((b) => b.narrativeOrder);
+    expect(orders).toStrictEqual([...orders].sort((a, b) => a - b));
+    expect(new Set(orders).size).toBe(orders.length);
+  });
+});
+
+/**
+ * What the reader is allowed to see.
+ *
+ * A storyline extracted from a real conversation carries the whole of it,
+ * including the parts the reader has not reached. Handed all of it and asked
+ * for "the next beat", the model narrates the next *real* one — measured on
+ * live data, seven turns mapped 1:1 onto extracted beats and quoted their
+ * dates, and a twenty-turn session ended by narrating the final beat verbatim.
+ *
+ * These pin the cut at the only place it can be observed: what the generator
+ * was actually handed.
+ */
+/**
+ * Who set a beat in motion.
+ *
+ * Distinct from who was present, and that distinction was the whole of a
+ * reported defect: a housemate appeared in eleven of seventeen beats and caused
+ * none of them, with no way to see it except by reading titles. Recorded for
+ * measurement — no prompt reads it, because feeding it back would turn choosing
+ * who acts into a rota.
+ */
+describe('the actor behind a beat', () => {
+  it('records which character caused it', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    const cast = await storylines.listCharacters(storylineId);
+    const other = cast.find((c) => c.role !== 'protagonist')!;
+
+    fake.register(consequencePrompt, () => ({
+      events: [
+        {
+          title: 'She moved first',
+          description: 'x',
+          stakes: null,
+          participantCharacterIds: [],
+          actorCharacterId: other.id,
+          generationRationale: 'because',
+          engagementScore: 5,
+        },
+      ],
+      contextEntries: [],
+      relationshipStates: [],
+    }));
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+
+    const [written] = await db.query.events.findMany({ where: { triggeredByTurnId: turn.id } });
+    expect(written.actorCharacterId).toBe(other.id);
+  });
+
+  // Same treatment as participants: a hallucinated id must not throw away an
+  // otherwise good beat, and must not be written either.
+  it('drops an actor who is not in this storyline', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    fake.register(consequencePrompt, () => ({
+      events: [
+        {
+          title: 'Nobody in particular',
+          description: 'x',
+          stakes: null,
+          participantCharacterIds: [],
+          actorCharacterId: '00000000-0000-0000-0000-000000000000',
+          generationRationale: 'because',
+          engagementScore: 5,
+        },
+      ],
+      contextEntries: [],
+      relationshipStates: [],
+    }));
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+
+    const [written] = await db.query.events.findMany({ where: { triggeredByTurnId: turn.id } });
+    expect(written.title).toBe('Nobody in particular');
+    expect(written.actorCharacterId).toBeNull();
+  });
+});
+
+describe('the playhead', () => {
+  const orders = (call: { vars: unknown }) =>
+    (
+      call.vars as { storyline: { timeline: Array<{ narrativeOrder: number }> } }
+    ).storyline.timeline.map((b) => b.narrativeOrder);
+
+  it('starts a new session at the first beat, not at the end of the story', async () => {
+    const session = await freshSession();
+    expect(session.playheadOrder).toBe(1000);
+  });
+
+  it('shows the turn only what the reader has reached', async () => {
+    const session = await freshSession();
+
+    await generateTurn(userId, session.id, { generator: fake });
+    const call = fake.calls.at(-1)!;
+
+    expect(orders(call)).toStrictEqual([1000]);
+    // Both halves matter. Without the first, deleting renderTimeline entirely
+    // would pass; without the second, the leak this whole change exists to
+    // close would go unnoticed.
+    expect(call.prompt).toContain('Where things stood');
+    expect(call.prompt).not.toContain('The message');
+  });
+
+  // The complementary failure: a cut that is correct and never moves is a
+  // reader frozen at the opening beat for the rest of the story.
+  it('moves on when the reader answers, revealing the next beat', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    expect((await sessions.getSession(userId, session.id)).playheadOrder).toBe(2000);
+
+    await generateTurn(userId, session.id, { generator: fake });
+    expect(fake.calls.at(-1)!.prompt).toContain('The message');
+  });
+
+  it('tells the turn once the source conversation is spent', async () => {
+    const session = await freshSession();
+
+    const first = await generateTurn(userId, session.id, { generator: fake });
+    expect((fake.calls.at(-1)!.vars as { beyondScript: boolean }).beyondScript).toBe(false);
+
+    // Past the last extracted beat (2000).
+    await commitChoice(userId, first.id, first.choices[0].id);
+    const second = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, second.id, second.choices[0].id);
+    await generateTurn(userId, session.id, { generator: fake });
+
+    expect((fake.calls.at(-1)!.vars as { beyondScript: boolean }).beyondScript).toBe(true);
+  });
+
+  /**
+   * The leak that prompted this.
+   *
+   * A real storyline's first turn named an investor and proposed messaging him,
+   * at a playhead whose only visible beat was two siblings in a kitchen —
+   * because extraction had described him as "the investor who offers $300,000"
+   * and the cast list was rendered in full from turn one. Hiding the beat he
+   * appears in is not enough if his name and his ending are in the prompt
+   * anyway.
+   */
+  it('does not name a character the reader has not met', async () => {
+    const outsider = await persons.createPerson(userId, { name: 'Zenobia' });
+    const cast = await storylines.castCharacter(userId, storylineId, outsider.id, {
+      description: 'The investor who eventually wires the money.',
+    });
+    await timeline.appendEvent(userId, storylineId, {
+      origin: 'extracted',
+      title: 'Much later, the money arrives',
+      description: 'x',
+      participantCharacterIds: [cast.id],
+    });
+
+    const session = await freshSession();
+    await generateTurn(userId, session.id, { generator: fake });
+    const call = fake.calls.at(-1)!;
+
+    // Present in the storyline, absent from the prompt — including the
+    // description, which is where the ending was actually leaking.
+    expect(call.prompt).toContain('Where things stood');
+    expect(call.prompt).not.toContain('Zenobia');
+    expect(call.prompt).not.toContain('eventually wires the money');
+  });
+
+  /**
+   * Consequences reason about what a decision changed, which needs the story
+   * entire — and the relationship states they write must be able to attach to
+   * any beat. Narrowing this is the tempting "consistency" fix that would
+   * silently break both, so it is pinned here rather than left to a comment.
+   */
+  it('still gives the consequence stage the whole timeline', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+
+    const call = fake.calls.filter((c) => c.promptName === 'consequence.commit').at(-1)!;
+    expect(orders(call)).toStrictEqual(expect.arrayContaining([1000, 2000]));
+  });
+});
+
+describe('playing several turns', () => {
+  it('runs the loop repeatedly without colliding', async () => {
+    const session = await freshSession();
+
+    for (let i = 0; i < 3; i += 1) {
+      const turn = await generateTurn(userId, session.id, { generator: fake });
+      await commitChoice(userId, turn.id, turn.choices[0].id);
+      await generateConsequences(userId, turn.id, { generator: fake });
+    }
+
+    const played = await db.query.storyTurns.findMany({ where: { sessionId: session.id } });
+    expect(played).toHaveLength(3);
+    for (const turn of played) expect(turn.selectedChoiceId).not.toBeNull();
+
+    const orders = (await timeline.listTimeline(storylineId)).map((b) => b.narrativeOrder);
+    expect(new Set(orders).size).toBe(orders.length);
+    expect(orders).toStrictEqual([...orders].sort((a, b) => a - b));
+  });
+});
+
+/**
+ * The two readers that take no userId.
+ *
+ * `listCharacters(storylineId)` and `listTimeline(storylineId)` are scoped only
+ * by storyline, which makes them the most likely tenancy hole in a naive route:
+ * a handler that passes a URL id straight through returns another user's data
+ * with no error anywhere. The `*ForUser` wrappers exist so a route never has to
+ * remember — and these prove the wrappers throw rather than merely look like
+ * they do. One of them did not, when first written: the underlying reader
+ * returns null rather than throwing, so the `await` guarding it was decorative.
+ */
+describe('ownership on the unscoped readers', () => {
+  let otherUserId: string;
+  const OTHER_CLERK = 'user_ownership_other';
+
+  beforeAll(async () => {
+    await db.delete(users).where(eq(users.clerkId, OTHER_CLERK));
+    const [other] = await db
+      .insert(users)
+      .values({ clerkId: OTHER_CLERK, email: 'other@ownership.local' })
+      .returning({ id: users.id });
+    otherUserId = other.id;
+  });
+
+  afterAll(async () => {
+    await db.delete(users).where(eq(users.clerkId, OTHER_CLERK));
+  });
+
+  it('returns the cast to the owner', async () => {
+    await expect(storylines.listCharactersForUser(userId, storylineId)).resolves.not.toHaveLength(
+      0
+    );
+  });
+
+  it('refuses the cast to anyone else, as not-found rather than forbidden', async () => {
+    await expect(storylines.listCharactersForUser(otherUserId, storylineId)).rejects.toBeInstanceOf(
+      NotFoundError
+    );
+  });
+
+  it('returns the timeline to the owner', async () => {
+    await expect(timeline.listTimelineForUser(userId, storylineId)).resolves.not.toHaveLength(0);
+  });
+
+  it('refuses the timeline to anyone else', async () => {
+    await expect(timeline.listTimelineForUser(otherUserId, storylineId)).rejects.toBeInstanceOf(
+      NotFoundError
+    );
+  });
+});
+
+/**
+ * One call that brings a session to a playable state.
+ *
+ * The ordering constraint — consequences before the next turn, because the turn
+ * prompt reads the canon they write — used to be publishable only as three calls
+ * in the right order. A client that skipped the middle one would generate every
+ * later turn against stale canon, with no error anywhere and quality quietly
+ * decaying. Here it is structural: the client cannot get it wrong because it
+ * cannot express it.
+ */
+describe('advanceSession', () => {
+  it('settles an owed consequence before generating the next turn', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    // Answered, never resolved — the state a client lands in when it dies
+    // between the two.
+    const owedBefore = await sessionReader.findTurnsOwedConsequences(db, session.id);
+    expect(owedBefore.map((t) => t.id)).toStrictEqual([turn.id]);
+
+    const order: string[] = [];
+    fake.register(consequencePrompt, () => {
+      order.push('consequence');
+      return { events: [], contextEntries: [], relationshipStates: [] };
+    });
+    const realTurnFixture = fake.calls.length;
+    void realTurnFixture;
+
+    await advanceSession(userId, session.id, { generator: fake });
+
+    // The consequence prompt ran, and it ran before the turn that followed it.
+    const promptOrder = fake.calls.map((c) => c.promptName).slice(-2);
+    expect(promptOrder).toStrictEqual(['consequence.commit', 'turn.generate']);
+    expect(order).toStrictEqual(['consequence']);
+
+    const owedAfter = await sessionReader.findTurnsOwedConsequences(db, session.id);
+    expect(owedAfter).toStrictEqual([]);
+  });
+
+  it('is safe to call twice — the second finds the work done', async () => {
+    const session = await freshSession();
+    await advanceSession(userId, session.id, { generator: fake });
+    const callsAfterFirst = fake.calls.length;
+
+    const again = await advanceSession(userId, session.id, { generator: fake });
+
+    expect(again).toBeTruthy();
+    // No new generation: the open turn is returned as it stands.
+    expect(fake.calls.length).toBe(callsAfterFirst);
+  });
+
+  // A storyline can fail after a session has begun, and nothing else re-checks.
+  it('refuses a session whose storyline is no longer ready', async () => {
+    const session = await freshSession();
+    await storylines.markFailed(userId, storylineId, 'went wrong');
+
+    await expect(advanceSession(userId, session.id, { generator: fake })).rejects.toBeInstanceOf(
+      StorylineNotReadyError
+    );
+
+    await storylines.markStatus(userId, storylineId, 'ready');
+  });
+});
+
+/**
+ * Story surfaces, end to end: what the model puts on the reader's phone is
+ * validated against who they have met, stored apart from the turn, resolved to
+ * names on the way out, and remembered by the prompts that come after.
+ */
+describe('surfaces', () => {
+  async function castIds() {
+    const cast = await db.query.characters.findMany({
+      where: { storylineId },
+      with: { person: true },
+    });
+    const id = (name: string) => cast.find((c) => c.person.name === name)!.id;
+    return { blossom: id('Blossom'), maya: id('Maya') };
+  }
+
+  const phoneBeat = (notifications: TurnOutput['notifications']): TurnOutput => ({
+    headline: 'Maya just texted you at 1:47.',
+    narrative: 'You read it with the sound off.',
+    choices: [
+      { label: 'Reply', description: null },
+      { label: 'Leave it', description: null },
+    ],
+    surfaceKind: 'imessage_notifications',
+    clockTime: '1:47',
+    dateLabel: 'Saturday, June 14',
+    notifications,
+  });
+
+  it('stores the headline and the texts, and serves them with the sender named', async () => {
+    const { maya } = await castIds();
+    fake.register(turnPrompt, () =>
+      phoneBeat([
+        { senderCharacterId: maya, text: 'i have to tell you something' },
+        { senderCharacterId: maya, text: 'are you up' },
+      ])
+    );
+    const session = await freshSession();
+
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    expect(turn.headline).toBe('Maya just texted you at 1:47.');
+    expect(turn.narrativeContent).toBe('You read it with the sound off.');
+    expect(turn.surfaces).toStrictEqual([
+      {
+        type: 'imessage_notifications',
+        clockTime: '1:47',
+        dateLabel: 'Saturday, June 14',
+        notifications: [
+          {
+            sender: { id: expect.any(String), name: 'Maya', isSelf: false },
+            text: 'i have to tell you something',
+          },
+          {
+            sender: { id: expect.any(String), name: 'Maya', isSelf: false },
+            text: 'are you up',
+          },
+        ],
+      },
+    ]);
+    // A resumed turn reads the same as a fresh one.
+    expect(await sessionReader.getOpenTurn(db, session.id)).toStrictEqual(turn);
+  });
+
+  it('plays as text when every sender is someone the reader cannot get a text from', async () => {
+    const { blossom } = await castIds();
+    fake.register(turnPrompt, () =>
+      phoneBeat([
+        { senderCharacterId: blossom, text: 'a text from yourself' },
+        { senderCharacterId: '00000000-0000-0000-0000-000000000000', text: 'from nobody' },
+      ])
+    );
+    const session = await freshSession();
+
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    expect(turn.surfaces).toStrictEqual([]);
+    expect(turn.headline).toBe('Maya just texted you at 1:47.');
+    expect(turn.choices).toHaveLength(2);
+  });
+
+  it('remembers the texts in the next beat and in the consequences', async () => {
+    const { maya } = await castIds();
+    fake.register(turnPrompt, () => phoneBeat([{ senderCharacterId: maya, text: 'are you up' }]));
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+
+    await generateConsequences(userId, turn.id, { generator: fake });
+    expect(fake.calls.at(-1)!.prompt).toContain('On your phone — Maya: "are you up"');
+
+    await generateTurn(userId, session.id, { generator: fake });
+    const next = fake.calls.at(-1)!;
+    expect(next.promptName).toBe('turn.generate');
+    expect(next.prompt).toContain(
+      '- Maya just texted you at 1:47. You read it with the sound off.'
+    );
+    expect(next.prompt).toContain('  On your phone — Maya: "are you up"');
+  });
+
+  it('skips a stored surface this build cannot read, and keeps the turn', async () => {
+    const { maya } = await castIds();
+    fake.register(turnPrompt, () => phoneBeat([{ senderCharacterId: maya, text: 'are you up' }]));
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    await db.insert(turnSurfaces).values([
+      { turnId: turn.id, position: 1, type: 'boarding_pass', version: 1, payload: { gate: 'B12' } },
+      { turnId: turn.id, position: 2, type: 'imessage_notifications', version: 1, payload: {} },
+    ]);
+
+    const read = await sessionReader.getTurn(db, turn.id);
+    expect(read!.surfaces).toStrictEqual(turn.surfaces);
+  });
+
+  it('goes with its turn when the session is deleted', async () => {
+    const { maya } = await castIds();
+    fake.register(turnPrompt, () => phoneBeat([{ senderCharacterId: maya, text: 'are you up' }]));
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    await db.delete(storylineSessions).where(eq(storylineSessions.id, session.id));
+
+    expect(await db.query.turnSurfaces.findMany({ where: { turnId: turn.id } })).toStrictEqual([]);
+  });
+});

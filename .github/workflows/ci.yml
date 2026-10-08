@@ -76,8 +76,18 @@ jobs:
           # NODE_ENV can't break the build the way a local shell can.
           NODE_ENV: production
 
-  # ── Migrations must apply cleanly before anything is promoted ─────────────
+  # ── The database gate: the schema must apply, accept writes, and be readable
+  #    through its relations before anything is promoted ──────────────────────
   migrations:
+    # Named `Migrations` because that is the context `staging` and `main` require
+    # in their branch protection. The job had been renamed to `Database`, which
+    # made the required check one that no run ever produces — so every promotion
+    # was unmergeable, which is why nothing had reached staging in 139 commits.
+    #
+    # The job does more than migrate (it seeds, then runs the integration suite
+    # against the result), so `Database` was the better description. Renaming the
+    # job is the fix that needs no change to a protected branch's settings; the
+    # alternative is to point the protection at `Database` instead.
     name: Migrations
     runs-on: ubuntu-latest
     services:
@@ -93,8 +103,30 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bramble_ci
+      # The import tests run against a real Redis rather than a fake, because
+      # what they assert is that a transcript is ciphertext at rest and gone
+      # afterwards — and a fake would let both of those be true by construction.
+      REDIS_URL: redis://localhost:6379
+      # Not a secret, deliberately. The tests assert that the value in Redis is
+      # unreadable without the key and bound to its import, neither of which
+      # depends on which key. The real one lives in Doppler and never enters CI.
+      IMPORT_MASTER_KEY: Y2ktbm90LWEtc2VjcmV0LWltcG9ydC1tYXN0ZXItayE=
+      # Not a secret, and deliberately not one. persons.source_contact_ref is an
+      # HMAC, so the integration tests need *a* key to hash under; they assert
+      # that the same handle produces the same ref and that the raw handle never
+      # reaches the column, neither of which depends on the key's value. The real
+      # key lives in Doppler and never enters CI.
+      CONTACT_HASH_SECRET: ci-not-a-secret-contact-hash-key-32-chars
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -103,9 +135,58 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      # Called directly, not via pnpm db:migrate — that wrapper shells out to
-      # Doppler, which CI doesn't need for a throwaway database.
-      - run: pnpm exec drizzle-kit migrate
+      # The runtime migrator rather than drizzle-kit, because it is what the
+      # deploy runs: Porter's predeploy step is `node dist/db/migrate.js`, and a
+      # CI gate that proves a *different* migrator works proves nothing about the
+      # release. drizzle-kit is a dev dependency and is not in the image at all.
+      #
+      # Called directly rather than via pnpm db:migrate, which shells out to
+      # Doppler — not something CI needs for a throwaway database.
+      - name: Apply migrations
+        run: pnpm exec tsx src/db/migrate.ts
+      # The seed is the only thing that exercises the schema through real
+      # inserts, so it catches what a migration cannot: a constraint the writes
+      # violate, a column the seed forgot, a relation that drifted. It also stops
+      # the seed rotting silently as the schema changes.
+      #
+      # The script refuses any non-local host, and this DATABASE_URL is
+      # localhost, so the guard passes here and still protects a real database.
+      - name: Seed (proves the schema accepts real writes)
+        run: pnpm exec tsx src/db/seeds/seed.ts
+      # Relations are resolved when a query runs, not when it compiles. A wrong
+      # alias or a swapped through() column passes typecheck and lint and then
+      # breaks every nested read — so without this step the whole read layer can
+      # rot while CI stays green. Runs here because it needs the seeded database
+      # the two steps above just built.
+      - name: Relational query tests
+        run: pnpm test:integration
+
+  # ── The image: it has to build, on every branch ───────────────────────────
+  #
+  # Built and thrown away. Nothing is pushed and no registry credentials are
+  # involved — the point is that a broken Dockerfile fails the pull request
+  # rather than the deploy, which is the one failure that is both easy to
+  # introduce and invisible until it is expensive.
+  image:
+    name: Docker Image
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # No build args and no secrets, deliberately. Every NEXT_PUBLIC_* value is
+      # optional, so this also asserts the property the Dockerfile claims: a
+      # build with nothing configured still succeeds. CI has no secrets to give
+      # it, so if that ever stopped being true this job would be the first to know.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          # Layer cache in the Actions cache, so a source-only change does not
+          # reinstall every dependency from scratch on every pull request.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ── API tests: every branch. No browser, so they stay fast ────────────────
   api:
@@ -134,6 +215,45 @@ jobs:
       github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main' ||
       github.base_ref == 'staging' || github.base_ref == 'main'
     needs: [build]
+    # The lab specs drive the real pipeline against a real database — importing a
+    # transcript, generating a beat, committing a choice. Without these the four
+    # of them cannot pass at all: /lab needs a seeded account to act as, and the
+    # import needs somewhere to hold the ciphertext. The job ran green for months
+    # on the two landing-page specs alone because it never ran: it is gated on
+    # staging and main, and nothing had been promoted.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bramble_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bramble_e2e
+      REDIS_URL: redis://localhost:6379
+      # Throwaway, and deliberately so — the same values the Database job uses.
+      # What these specs assert does not depend on which key encrypts the
+      # transcript, only that one does. The real keys live in Doppler.
+      IMPORT_MASTER_KEY: Y2ktbm90LWEtc2VjcmV0LWltcG9ydC1tYXN0ZXItayE=
+      CONTACT_HASH_SECRET: ci-not-a-secret-contact-hash-key-32-chars
+      # No OPENAI_API_KEY, so the generator would fall back to the fake anyway.
+      # Stated rather than relied on: playwright.config.ts pins it too, so the
+      # suite behaves the same here and on a developer's machine.
+      BRAMBLE_AI_MODE: fake
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -143,6 +263,13 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      # The runtime migrator, as the deploy runs it and as the Database job does.
+      - name: Apply migrations
+        run: pnpm exec tsx src/db/migrate.ts
+      # /lab acts as the seeded account, so without this every lab spec fails on
+      # a missing user rather than on anything it meant to test.
+      - name: Seed
+        run: pnpm exec tsx src/db/seeds/seed.ts
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}

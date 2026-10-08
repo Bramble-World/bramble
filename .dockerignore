@@ -1,0 +1,46 @@
+# Everything the build produces for itself, or that would make it unreproducible.
+#
+# node_modules in particular: the image installs from the lockfile, and a host
+# copy would carry macOS-native binaries into a Linux container. Copying it is
+# also by far the slowest part of the build context.
+node_modules
+.pnpm-store
+.next
+dist
+out
+build
+
+.git
+.github
+.husky
+
+# Secrets. None of these should ever be in a layer, and `.env*` is the file most
+# likely to be sitting in a working copy.
+.env
+.env.*
+!.env.example
+
+# Test output and local scratch.
+coverage
+playwright-report
+test-results
+blob-report
+.playwright
+*.log
+
+# Editor and OS noise.
+.vscode
+.idea
+.DS_Store
+
+# Local transcripts. Real message exports, which must never enter a build
+# context, let alone a layer — see .gitignore for the same rule.
+*.imessages.csv
+/transcripts/
+
+# Docs and config that no build step reads.
+docs
+README.md
+AGENTS.md
+CLAUDE.md
+*.md
