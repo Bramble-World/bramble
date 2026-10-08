@@ -288,10 +288,26 @@ describe('import_completed', () => {
 describe('nothing but ids, counts, durations and enums', () => {
   it('sends no property outside the allowlist, across every path', async () => {
     const session = await sessions.startSession(userId, storylineId);
-    // Several turns, because the fake only renders a surface on alternate seeds
-    // and a run that happened to produce none would make the surfaces assertion
-    // below vacuous — it would be checking an empty array.
-    for (let i = 0; i < 4; i++) {
+
+    /**
+     * Turns until a surface is actually rendered, rather than a fixed number and
+     * a hope.
+     *
+     * The fake renders one only on an even seed, and the seed is a hash of the
+     * prompt vars — so each turn is roughly a coin flip. At the four turns this
+     * used to play, a run where none rendered was a 1-in-16 chance, and the
+     * surfaces assertion below then checked an empty array. It did not fail
+     * silently; it failed loudly in CI while passing locally and on the previous
+     * run of the same commit, which is the worst way to learn about it.
+     *
+     * Bounded, so a fake that stopped rendering surfaces entirely fails the
+     * assertion below rather than looping — and well inside the daily energy
+     * allowance, which these turns spend.
+     */
+    const rendered = () =>
+      only('beat_played').some((c) => (c.event.properties.surfaces as string[]).length > 0);
+
+    for (let i = 0; i < 10 && !rendered(); i++) {
       const turn = await advanceSession(userId, session.id, { generator: fake });
       await commitChoice(userId, turn.id, turn.choices[0].id);
     }
