@@ -1,0 +1,1 @@
+CREATE INDEX "idx_story_turns_session_created" ON "story_turns" ("session_id","created_at");

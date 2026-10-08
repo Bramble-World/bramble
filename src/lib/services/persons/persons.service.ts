@@ -1,0 +1,211 @@
+import { ConflictError, NotFoundError, ValidationError } from '@/lib/utils/errors';
+import * as reader from './persons.reader';
+import * as writer from './persons.writer';
+import { hashContactHandle } from './persons.contact';
+import { PublicPerson, VoiceProfile } from './persons.types';
+import * as sessionReader from '../sessions/sessions.reader';
+import * as storylineReader from '../storylines/storylines.reader';
+import { CharacterRole, PublicStoryline } from '../storylines/storylines.types';
+
+/**
+ * The account holder's own `persons` row, created on first request.
+ *
+ * invariants.md §5: "Every user needs exactly one `isSelf` person. The partial
+ * unique index stops a second one, but nothing creates the first." Nothing did,
+ * so this is that function. It matters because the user is cast as a `character`
+ * like anyone else — without this row a storyline cannot include its own
+ * protagonist.
+ *
+ * Read, insert-if-absent, read again, mirroring users.service.ts: the partial
+ * unique index arbitrates the race rather than the application, so two
+ * concurrent first requests produce one row and both callers see it.
+ */
+/**
+ * Gives a person a voice if they do not have one, and otherwise leaves them be.
+ *
+ * Separate from the lookups so every path that resolves an existing person can
+ * repair the same gap, and so the "only fills, never overwrites" rule is stated
+ * in one place rather than at each call site.
+ */
+export async function ensureVoiceProfile(
+  userId: string,
+  person: PublicPerson,
+  voiceProfile?: VoiceProfile
+): Promise<PublicPerson> {
+  if (!voiceProfile || person.voiceProfile) return person;
+  return (await writer.setVoiceProfileIfAbsent(person.id, userId, voiceProfile)) ?? person;
+}
+
+export async function getOrCreateSelfPerson(userId: string, name: string): Promise<PublicPerson> {
+  const existing = await reader.getSelfPerson(userId);
+  if (existing) return existing;
+
+  const inserted = await writer.insertPersonIfAbsent({ userId, name, isSelf: true });
+  if (inserted) return inserted;
+
+  // The insert was a no-op, which for isSelf can only mean a concurrent caller
+  // won the race — there is no other constraint it could have hit, since this
+  // insert carries no sourceContactRef.
+  const raced = await reader.getSelfPerson(userId);
+  if (raced) return raced;
+
+  throw new ConflictError('Could not provision the account holder as a person');
+}
+
+/**
+ * Finds the person behind a contact handle, creating one on first sight.
+ *
+ * The raw handle is hashed here and never leaves this function — the writer's
+ * input type only accepts a `ContactRef`, so the raw value cannot reach the
+ * column even by mistake. invariants.md §1.
+ *
+ * Both the lookup and the insert hash through the same helper. If they ever
+ * disagreed, the same contact would get a second `persons` row and
+ * cross-storyline continuity would silently stop working for that person.
+ */
+export async function getOrCreatePersonByHandle(
+  userId: string,
+  handle: string,
+  name: string,
+  voiceProfile?: VoiceProfile
+): Promise<PublicPerson> {
+  const ref = hashContactHandle(handle);
+
+  const existing = await reader.getPersonByContactRef(userId, ref);
+  // A person already known by their handle keeps their row — that sharing is the
+  // point, and it is what makes someone recognisable across storylines. But
+  // returning it untouched also threw away the voice this extraction just
+  // worked out, so anyone who existed before voices were captured never got
+  // one: their row said null on the day it was written and said null forever,
+  // while everyone created afterwards got a voice on their first insert. The
+  // turn prompt renders voice notes, so those people reached the model with
+  // nothing saying how they speak.
+  if (existing) return ensureVoiceProfile(userId, existing, voiceProfile);
+
+  // The voice belongs on the row whichever way the person was found. Taking it
+  // only on the name-only path meant everyone who had actually sent a message —
+  // which is every real contact — was created without one, and the turn prompt
+  // renders voice notes, so their storylines reached the model with nothing
+  // saying how anybody speaks.
+  const inserted = await writer.insertPersonIfAbsent({
+    userId,
+    name,
+    sourceContactRef: ref,
+    voiceProfile,
+  });
+  if (inserted) return inserted;
+
+  const raced = await reader.getPersonByContactRef(userId, ref);
+  if (raced) return raced;
+
+  throw new ConflictError(`Could not provision a person for ${name}`);
+}
+
+/** A person with no contact handle — someone mentioned in a story but never messaged. */
+export async function createPerson(
+  userId: string,
+  input: { name: string; voiceProfile?: VoiceProfile }
+): Promise<PublicPerson> {
+  const person = await writer.insertPersonIfAbsent({ userId, ...input });
+  if (!person) throw new ConflictError(`Could not create a person named ${input.name}`);
+  return person;
+}
+
+export async function getPerson(userId: string, personId: string): Promise<PublicPerson> {
+  const person = await reader.getPerson(userId, personId);
+  if (!person) throw new NotFoundError('Person', personId);
+  return person;
+}
+
+export const listPersons = reader.listPersons;
+
+/**
+ * Records that two people are something to each other — siblings, coworkers.
+ *
+ * Takes the two ids in any order and sorts them, because
+ * `personRelationships` carries `CHECK (person_a_id < person_b_id)` so that a
+ * pair cannot be stored twice reversed (invariants.md §2).
+ *
+ * `userId` is the *caller's*, and both ids are verified to belong to it before
+ * anything is written. No foreign key enforces that — invariants.md §3 lists
+ * "a relationship joining two users' contacts" as one of the silent failures —
+ * and taking `userId` alongside two unchecked ids is exactly the shape that
+ * produces one.
+ */
+export async function linkPersons(
+  userId: string,
+  personOneId: string,
+  personTwoId: string,
+  relationshipType?: string
+): Promise<{ id: string }> {
+  if (personOneId === personTwoId) {
+    throw new ValidationError('A person cannot be related to themselves');
+  }
+
+  const owned = await reader.ownedPersonIds(userId, [personOneId, personTwoId]);
+  if (owned.size !== 2) {
+    // Deliberately not naming which id failed: to a caller who does not own it,
+    // "that person is not yours" and "no such person" should be the same answer.
+    throw new NotFoundError('Person');
+  }
+
+  const [personAId, personBId] = [personOneId, personTwoId].sort();
+
+  const inserted = await writer.insertPersonRelationshipIfAbsent({
+    userId,
+    personAId,
+    personBId,
+    relationshipType,
+  });
+  if (inserted) return inserted;
+
+  // Untargeted onConflictDoNothing, so a no-op means the pair already exists.
+  throw new ConflictError('These two people are already related');
+}
+
+/**
+ * Everything the person screens show about one human — screens 10 and 11.
+ *
+ * Assembled here rather than in the route so the composition has somewhere to be
+ * tested against a real database, and so the ownership argument is made once:
+ * `getPerson` throws for a person who is not the caller's, and the two reads
+ * after it are themselves scoped on `userId`, so nothing derived from the URL
+ * reaches an unscoped query.
+ *
+ * Only what is recorded. No hook line, no bio, no invented second label — a
+ * sparse screen is honest; a generated one is the same leak as `arcSummary`
+ * wearing different clothes.
+ */
+export async function personDetail(
+  userId: string,
+  personId: string
+): Promise<{
+  person: PublicPerson;
+  relationshipType: string | null;
+  arcs: Array<{ storyline: PublicStoryline; role: CharacterRole; lastPlayedAt: Date | null }>;
+}> {
+  const person = await getPerson(userId, personId);
+
+  const [relationshipType, cast] = await Promise.all([
+    reader.relationshipToSelf(userId, personId),
+    storylineReader.arcsForPerson(userId, personId),
+  ]);
+
+  const lastPlayed = await sessionReader.lastPlayedByStoryline(
+    userId,
+    cast.map(({ storyline }) => storyline.id)
+  );
+
+  const arcs = cast.map(({ storyline, role }) => ({
+    storyline,
+    role,
+    lastPlayedAt: lastPlayed.get(storyline.id) ?? null,
+  }));
+
+  // Most recently played first; never played falls to the back in import order.
+  // Recency is the only ordering with meaning here — `createdAt` is the moment
+  // of import, which is identical for every arc that came out of one file.
+  arcs.sort((a, b) => (b.lastPlayedAt?.getTime() ?? 0) - (a.lastPlayedAt?.getTime() ?? 0));
+
+  return { person, relationshipType, arcs };
+}

@@ -1,0 +1,3 @@
+ALTER TABLE "storyline_sessions" ADD COLUMN "started_from_event_id" uuid;--> statement-breakpoint
+CREATE INDEX "idx_storyline_sessions_from_event" ON "storyline_sessions" ("user_id","started_from_event_id","last_active_at" DESC NULLS LAST);--> statement-breakpoint
+ALTER TABLE "storyline_sessions" ADD CONSTRAINT "storyline_sessions_started_from_event_id_events_id_fkey" FOREIGN KEY ("started_from_event_id") REFERENCES "events"("id") ON DELETE SET NULL;

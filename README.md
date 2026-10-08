@@ -29,8 +29,17 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deploying
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The backend runs on **Porter** (AWS EKS) from one Docker image started four ways —
+the web server, the import worker, and two cron sweeps. `porter.yaml` is the
+deployment; **[docs/deployment.md](docs/deployment.md)** lists every production
+environment variable, where it comes from, and which ones are needed at build time
+rather than at runtime.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+docker build -t bramble:local .          # builds with nothing configured
+pnpm dev:all                             # Next dev server + import worker
+pnpm worker                              # the worker alone
+pnpm sweep:arc | pnpm sweep:imports      # a sweep on demand
+```

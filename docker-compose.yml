@@ -16,7 +16,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # Where transcripts wait, encrypted, between the import request and the
+  # worker that reads them. No volume on purpose: this data is supposed to be
+  # transient, and a local dev volume would quietly make it durable.
+  redis:
+    image: redis:7-alpine
+    # Persistence off, matching what the import spec asks of the real one —
+    # otherwise ciphertext reaches disk and outlives its thirty-minute expiry.
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    ports:
+      - '127.0.0.1:6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:
 # Local development connection string:
 # DATABASE_URL="postgresql://postgres:postgres@localhost:5432/bramble"
+# REDIS_URL="redis://localhost:6379"

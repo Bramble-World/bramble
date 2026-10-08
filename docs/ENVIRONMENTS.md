@@ -39,14 +39,14 @@ share history and the diffs stay small and readable.
 
 ## What CI runs
 
-| Job                          | Runs on                   | Purpose                                                                                 |
-| ---------------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
-| Lint, Type Check, Unit Tests | every branch and PR       | fast feedback                                                                           |
-| Build                        | after those pass          | catches what tests can't                                                                |
-| Migrations                   | every branch and PR       | applies migrations to a throwaway Postgres, so a broken migration never reaches staging |
-| API                          | every branch and PR       | route handlers over real HTTP; browserless, so it stays fast                            |
-| E2E (browser)                | `staging` and `main` only | chromium smoke test of the public pages; slow, runs where it matters                    |
-| Release                      | `main` pushes only        | semantic-release tags and writes notes                                                  |
+| Job                          | Runs on                   | Purpose                                                                                                                                  |
+| ---------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Lint, Type Check, Unit Tests | every branch and PR       | fast feedback                                                                                                                            |
+| Build                        | after those pass          | catches what tests can't                                                                                                                 |
+| Migrations                   | every branch and PR       | applies migrations to a throwaway Postgres, then seeds it — so a broken migration, or a schema the writes violate, never reaches staging |
+| API                          | every branch and PR       | route handlers over real HTTP; browserless, so it stays fast                                                                             |
+| E2E (browser)                | `staging` and `main` only | chromium smoke test of the public pages; slow, runs where it matters                                                                     |
+| Release                      | `main` pushes only        | semantic-release tags and writes notes                                                                                                   |
 
 No deploy step yet — that's deliberate, pending a hosting decision. When it's
 added, it hangs off the `build` job per branch.
@@ -79,6 +79,28 @@ CI does **not** use Doppler. Every quality gate runs with
 `SKIP_ENV_VALIDATION=true` against a throwaway database, so no production
 secret is ever exposed to a workflow run.
 
+### `CONTACT_HASH_SECRET`
+
+`persons.sourceContactRef` is an HMAC of a phone number or email, not a plain
+digest — a plain digest of a phone number is not meaningfully one-way, since the
+North American keyspace is about 10^10 and a database dump alone would be enough
+to recover every contact. Keeping the key outside the database is what makes the
+hash worth anything, so it lives in Doppler like any other secret.
+
+Two consequences worth knowing:
+
+- **Hashing throws when it is unset** rather than falling back to an unkeyed
+  digest. A weaker hash would still populate the column and still look correct,
+  which is the silent failure the key exists to prevent.
+- **Rotating it orphans every existing `sourceContactRef`.** The same contact
+  would hash to a new value, so re-syncing would create a second `persons` row
+  for everyone and cross-storyline continuity would break for all of them.
+  Rotation therefore means re-hashing the column, not just changing the key.
+
+CI sets a fixed, deliberately non-secret value: the integration tests assert that
+one handle always produces one ref and that the raw handle never reaches the
+column, and neither depends on the key's value.
+
 ## Test layers
 
 | Layer       | Command                 | Covers                                       |
@@ -98,7 +120,12 @@ Generate on `dev`, and let them promote with the code:
 ```bash
 pnpm db:generate     # writes SQL to src/db/drizzle/
 pnpm db:migrate      # applies to your local database
+pnpm db:seed         # rebuilds the demo fixture (local hosts only)
 ```
+
+`db:seed` refuses any non-local database and deletes its own seed user before
+rebuilding, so it is safe to re-run. CI runs it after every migration, which is
+what stops it rotting as the schema changes.
 
 Commit the generated SQL. CI proves every migration applies cleanly from
 scratch on each branch, so a migration that only works against your laptop
