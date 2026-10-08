@@ -67,57 +67,29 @@ Dockerfile gets caught before a deploy.
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk prod                         | Clerk's client key. Public by design.                                     |
 | `NEXT_PUBLIC_SENTRY_DSN`            | Sentry                             | Enables Sentry. Also gates the build plugin — no DSN, no source-map step. |
 
-### Build secret
+### Source maps are not uploaded from the image build
 
-| Secret              | Source | Purpose              |
-| ------------------- | ------ | -------------------- |
-| `SENTRY_AUTH_TOKEN` | Sentry | Uploads source maps. |
+`SENTRY_AUTH_TOKEN` is **not** passed to the build, and the Dockerfile uses no
+BuildKit features at all.
 
-**On Porter specifically: this one does not arrive.** Porter's build does not
-receive the application's secrets — _"Secrets will not be made available to your
-build process"_ — and there is no Docker build-secret mechanism in its Dockerfile
-builds. The build therefore succeeds and skips the upload, which is the
-degradation the Dockerfile was written for: Sentry still captures errors, because
-the DSN is a build _argument_; what is missing is symbolicated stack traces.
+This started as a `RUN --mount=type=secret`, which is the right shape in
+principle. Two things make it wrong here. Porter builds with the **legacy**
+`docker build`, where `RUN --mount` is a syntax error rather than a no-op — the
+first deploy failed with _"the --mount option requires BuildKit"_. And it would
+not have worked even with BuildKit, because Porter withholds an application's
+secrets from its build by design.
 
-Two ways to close that, neither required to ship:
+An `ARG` is worse than having no source maps: an `ARG` is recorded in the image's
+build history and readable with `docker history` by anyone who can pull the image.
 
-- add `PORTER_SENTRY_AUTH_TOKEN` to the generated GitHub Actions workflow from a
-  repository secret — Porter passes through supplementary variables prefixed
-  `PORTER_` — and read it in the Dockerfile alongside the secret mount;
-- or upload source maps from a separate CI step with `sentry-cli`, outside the
-  image build entirely.
+So Sentry still **reports** errors, because the DSN is a build argument — the
+stack traces are just unsymbolicated. To fix that, upload from a separate CI step
+with `sentry-cli` after the build, outside the image, or pass
+`PORTER_SENTRY_AUTH_TOKEN` through the generated workflow (Porter forwards
+variables prefixed `PORTER_`).
 
-The token is deliberately **not** an `ARG`. An `ARG` is recorded in the image's
-build history and readable with `docker history` by anyone who can pull the image,
-which is worse than having no source maps.
-
-Mounted with `--mount=type=secret`, **never as a build arg**. An `ARG` is recorded
-in the image's build history and readable with `docker history` by anyone who can
-pull the image; a secret mount exists only for the duration of one `RUN` and is
-never written to a layer. Builds succeed without it — a release without source
-maps is still a release.
-
-**On Porter, these come from the application's environment, not from a `docker
-build` command.** Porter exposes environment variables to the build through the
-`ARG` declarations already in the Dockerfile — but it withholds _secrets_. So each
-of these must be added as a **plain variable, never a secret**, or it is silently
-absent and the client bundle is compiled without it. All three are public by
-definition: a publishable key and a DSN ship to every client that loads the page.
-
-`NEXT_PUBLIC_APP_URL` is set in `porter.yaml`'s own `env:` block instead, since it
-is both public and ours — one fewer dashboard field to get wrong.
-
-Locally, where there is no Porter, they are ordinary build arguments:
-
-```bash
-docker build \
-  --build-arg NEXT_PUBLIC_APP_URL=https://api.brambleworld.com \
-  --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$CLERK_PK" \
-  --build-arg NEXT_PUBLIC_SENTRY_DSN="$SENTRY_DSN" \
-  --secret id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
-  -t bramble:local .
-```
+The same constraint is why the pnpm store has no `--mount=type=cache`. Layer
+caching works everywhere, and CI caches through buildx (`cache-from: type=gha`).
 
 ## Runtime environment
 
