@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { postgresConnection } from './ssl';
@@ -18,7 +18,20 @@ import { postgresConnection } from './ssl';
  * connection with no CA, however correct the object next to it looks.
  */
 
-const CA = join(tmpdir(), 'bramble-ssl-test-ca.pem');
+/**
+ * A private directory, rather than a fixed name in the shared temp dir.
+ *
+ * `join(tmpdir(), 'fixed-name.pem')` is predictable and that directory is
+ * world-writable, so another user on the machine can pre-create the path — as a
+ * symlink somewhere else, which is then what the write lands on. `mkdtempSync`
+ * makes a 0700 directory with a random suffix, so there is no name to guess and
+ * nobody else can read it.
+ *
+ * CodeQL flags the first form as `js/insecure-temporary-file` and is right to:
+ * the content here is a fake certificate, but the pattern is the one that leaks
+ * a real key.
+ */
+const CA = join(mkdtempSync(join(tmpdir(), 'bramble-ssl-')), 'ca.pem');
 writeFileSync(
   CA,
   '-----BEGIN CERTIFICATE-----\nnot a real certificate\n-----END CERTIFICATE-----\n'
@@ -101,7 +114,7 @@ describe('when TLS is asked for', () => {
    * file into a silently unverified production database.
    */
   it('throws rather than connecting unverified when the CA is unreadable', () => {
-    vi.stubEnv('DATABASE_CA_PATH', join(tmpdir(), 'bramble-no-such-ca.pem'));
+    vi.stubEnv('DATABASE_CA_PATH', join(CA, '..', 'definitely-absent.pem'));
 
     expect(() => postgresConnection(`${PLAIN}?sslmode=require`)).toThrow(
       /Refusing to connect without verifying/
