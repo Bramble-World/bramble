@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-#
 # One image, three ways to run it: the web server, the import worker, and one-off
 # commands (migrations, the two sweeps). Building one image rather than three
 # means the worker cannot be running different code from the server that queued
@@ -24,8 +22,11 @@ WORKDIR /app
 # package.json disagree.
 FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm config set store-dir /pnpm/store && pnpm install --frozen-lockfile
+# No `--mount=type=cache` for the pnpm store, deliberately. Porter's builder runs
+# the legacy `docker build`, where `RUN --mount` is a syntax error rather than a
+# no-op — "the --mount option requires BuildKit" fails the whole deploy. Layer
+# caching still works everywhere, and CI caches through buildx (`cache-from: gha`).
+RUN pnpm install --frozen-lockfile
 
 
 # ---- build ------------------------------------------------------------------
@@ -57,17 +58,22 @@ ENV NODE_ENV=production
 # Telemetry off: a build should not phone home, and in CI it cannot anyway.
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# SENTRY_AUTH_TOKEN uploads source maps, and it is a secret mount rather than an
-# ARG on purpose. An ARG is recorded in the image's build history and readable
-# with `docker history` by anyone who can pull the image; a secret mount exists
-# only for the duration of this one RUN and is never written to a layer.
+# Source maps are deliberately not uploaded from inside the image build.
 #
-# The build succeeds without it. Sentry's plugin only runs when a DSN is set
-# (see next.config.ts), and without a token it skips the upload with a warning
-# rather than failing — so a release without source maps is still a release.
-RUN --mount=type=secret,id=sentry_auth_token \
-    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
-    pnpm build
+# The obvious way is a build secret, and that is what this used to do — but
+# `RUN --mount=type=secret` needs BuildKit, and Porter builds with the legacy
+# builder, so it failed the deploy outright with "the --mount option requires
+# BuildKit". It would not have worked there even with BuildKit: Porter withholds
+# an application's secrets from its build by design.
+#
+# The tempting alternative is an `ARG`, and it is worse than having no source
+# maps: an ARG is recorded in the image's build history and readable with
+# `docker history` by anyone who can pull the image.
+#
+# So Sentry still reports errors — the DSN is a build argument above — and the
+# stack traces are unsymbolicated until source maps are uploaded from a separate
+# step with `sentry-cli`, outside the image. See docs/deployment.md.
+RUN pnpm build
 
 # The worker, the sweeps and the migrator, bundled. The runtime image has no dev
 # dependencies, so none of them can be run through tsx — see scripts/build-server.mjs.
