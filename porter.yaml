@@ -37,8 +37,20 @@ services:
     instances: 2
     cpuCores: 0.5
     ramMegabytes: 1024
+    # Both hostnames, one service — it is one Next app. `api.` is what the macOS
+    # client talks to; `www.` serves the public pages (`/`, `/download`,
+    # `/venture-demo`). Nothing in the app is host-aware: `src/proxy.ts` matches
+    # on path only, and no code reads `NEXT_PUBLIC_APP_URL`, so the same
+    # container answers either name.
+    #
+    # The apex is deliberately absent. A zone apex cannot be a CNAME, this load
+    # balancer only publishes a hostname, and GoDaddy has no ALIAS/flattening —
+    # so `brambleworld.com` is forwarded to `www` at the registrar instead.
+    # Moving DNS to Route 53 would allow an ALIAS record and make the apex
+    # routable here.
     domains:
       - name: api.brambleworld.com
+      - name: www.brambleworld.com
 
     # Liveness and readiness are deliberately different endpoints. /api/health
     # touches nothing outside the process, so a Postgres blip cannot restart
