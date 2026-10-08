@@ -79,7 +79,16 @@ jobs:
   # ── The database gate: the schema must apply, accept writes, and be readable
   #    through its relations before anything is promoted ──────────────────────
   migrations:
-    name: Database
+    # Named `Migrations` because that is the context `staging` and `main` require
+    # in their branch protection. The job had been renamed to `Database`, which
+    # made the required check one that no run ever produces — so every promotion
+    # was unmergeable, which is why nothing had reached staging in 139 commits.
+    #
+    # The job does more than migrate (it seeds, then runs the integration suite
+    # against the result), so `Database` was the better description. Renaming the
+    # job is the fix that needs no change to a protected branch's settings; the
+    # alternative is to point the protection at `Database` instead.
+    name: Migrations
     runs-on: ubuntu-latest
     services:
       postgres:
