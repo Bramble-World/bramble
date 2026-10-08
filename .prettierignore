@@ -11,6 +11,10 @@ coverage
 pnpm-lock.yaml
 package-lock.json
 src/db/drizzle
+# Porter writes this workflow and rewrites it whenever the app's configuration
+# changes, in a pull request of its own. Formatting it would be undone the next
+# time, so the lint gate would break again on a file nobody here edits.
+.github/workflows/porter-app-*.yml
 
 # Environment
 .env*
