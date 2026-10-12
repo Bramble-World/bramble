@@ -230,6 +230,24 @@ verifies every delivery and rejects unsigned requests, so an absent secret means
 nothing gets through — closed by default, and silent. If user records stop
 appearing, check this first.
 
+## Deleting an account on request
+
+The privacy policy (`/privacy`) promises that emailing great@brambleworld.com
+deletes an account and all its data **within 30 days**. Deleting the user in
+the Clerk dashboard is not enough: the `user.deleted` webhook only soft-deletes,
+and every story stays. Run the script inside the cluster, where the database is:
+
+```sh
+# Check the request came from the account's own email address first.
+porter app run bramble -- node dist/scripts/delete-account.js someone@example.com            # dry run
+porter app run bramble -- node dist/scripts/delete-account.js someone@example.com --confirm
+```
+
+It deletes the user rows (everything they own cascades;
+`purge.integration.test.ts` checks every table) and then the Clerk accounts
+with that email. Then, by hand, delete the PostHog persons whose ids it prints
+(People → the id → Delete person and data), and reply to confirm.
+
 ## Health checks
 
 | Endpoint      | Answers                           | Checks                                                    |
