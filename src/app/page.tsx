@@ -24,7 +24,7 @@ export default function Home() {
       </div>
 
       <a
-        href="https://discord.gg/xVapjPubw"
+        href="https://discord.gg/WNRdvWu8M"
         className="mb-8 self-center rounded-full px-6 py-3 text-center text-xl font-bold text-black sm:text-2xl md:text-3xl"
       >
         click here to join the discord and beta test Bramble
