@@ -15,6 +15,7 @@
     "sweep:imports": "doppler run -- tsx src/sweeps/import-sweep.ts",
     "build": "next build",
     "build:server": "node scripts/build-server.mjs",
+    "promote": "node scripts/promote.mjs",
     "build:doppler": "doppler run --preserve-env=NODE_ENV -- next build",
     "build:migrate": "drizzle-kit migrate && next build",
     "start": "next start",
