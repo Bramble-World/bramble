@@ -13,7 +13,7 @@ silent. The silent ones are the dangerous ones.
 
 **Message content is never written to a long-term store.** It is held encrypted
 in Redis for at most 30 minutes, readable only by the extraction worker, which
-deletes it when done. Anthropic receives the transcript to perform the
+deletes it when done. OpenAI receives the transcript to perform the
 extraction. Postgres holds only the model's retelling — storylines, people,
 events — and an `imports` row with no message content in it. This is the
 product's central claim, not an implementation detail.
