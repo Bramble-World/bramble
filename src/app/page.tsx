@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { LegalLinks } from '@/components/legal/legal-page';
 
 export default function Home() {
   return (
@@ -29,6 +30,8 @@ export default function Home() {
       >
         click here to join the discord and beta test Bramble
       </a>
+
+      <LegalLinks />
     </main>
   );
 }

@@ -40,7 +40,7 @@ Mac                         API                              Redis            Qu
  │ ◀────────── 202 { import }
  │                                                                           GET import:{id}, decrypt
  │ GET /imports/{id} (poll)                                                  status=reading → writing
- │ ◀────────── { status, stage }                                             stream Claude call
+ │ ◀────────── { status, stage }                                             stream model call
  │                                                                           persist storyline +
  │                                                                           consume slot (one tx)
  │                                                          DEL import:{id} ◀ status=ready
@@ -196,7 +196,7 @@ This is envelope encryption.
 - **Payload:** exactly `{ importId }`.
 - **What the worker reads:** it fetches the ciphertext from Redis, decrypts
   it in memory, and never logs it.
-- **Model call:** the Claude call streams. This removes the 300 s
+- **Model call:** the model call streams. This removes the 300 s
   headers-timeout ceiling noted in `extraction.prompt.ts`.
 - **Retries:** allowed while the Redis key exists. If the key is missing,
   mark the import `failed` with `TRANSCRIPT_EXPIRED` and `retryable: true`.
@@ -224,7 +224,7 @@ Update `invariants.md` §1 to say:
 
 > Message content is never written to a long-term store. It is held
 > encrypted in Redis for at most 30 minutes, readable only by the extraction
-> worker, which deletes it when done. Anthropic receives the transcript to
+> worker, which deletes it when done. OpenAI receives the transcript to
 > perform the extraction.
 
 ---

@@ -23,6 +23,7 @@ const ENTRIES = {
   'src/sweeps/arc-sweep.ts': `${OUT}/sweeps/arc-sweep.js`,
   'src/sweeps/import-sweep.ts': `${OUT}/sweeps/import-sweep.js`,
   'src/db/migrate.ts': `${OUT}/db/migrate.js`,
+  'src/scripts/delete-account.ts': `${OUT}/scripts/delete-account.js`,
 };
 
 await Promise.all(

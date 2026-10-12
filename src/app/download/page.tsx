@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import { LegalLinks } from '@/components/legal/legal-page';
 import Link from 'next/link';
 import { DownloadForm } from './download-form';
 
@@ -50,6 +51,8 @@ export default function Download() {
       >
         no code yet? join the discord
       </a>
+
+      <LegalLinks />
     </main>
   );
 }
