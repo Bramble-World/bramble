@@ -45,7 +45,7 @@ export default function Download() {
       </div>
 
       <a
-        href="https://discord.gg/xVapjPubw"
+        href="https://discord.gg/WNRdvWu8M"
         className="mb-8 self-center text-center text-base font-bold text-black/70 sm:text-lg"
       >
         no code yet? join the discord
