@@ -13,7 +13,7 @@ secret comes from and which ones are needed before the image is even built.
 | **Image**          | `Dockerfile`, multi-stage, Node 22 Alpine, non-root, port 3000       |
 | **Manifest**       | `porter.yaml`                                                        |
 | **Env group**      | `bramble-prd`, filled from the Doppler `prd` config                  |
-| **Domain**         | `api.brambleworld.com`                                               |
+| **Domains**        | `api.brambleworld.com`, `www.brambleworld.com` (apex 301s to `www`)  |
 | **Database**       | RDS Postgres 16, TLS verified against the bundled AWS CA             |
 | **Cache**          | ElastiCache Redis, `rediss://`                                       |
 
@@ -136,6 +136,34 @@ confidence rather than left in place forever because nobody is sure.
 
 `DATABASE_CA_PATH` only needs setting for a Postgres that is not RDS. `LAB_*` and
 the seed variables are development-only.
+
+## DNS
+
+The zone lives at **GoDaddy**, and stays there: it also carries the Microsoft 365
+mail records for `@brambleworld.com` (`MX`, SPF, the `onmicrosoft.com`
+verification `TXT`, `autodiscover`, and two `_domainkey` DKIM `CNAME`s). Moving
+nameservers would mean recreating all six by hand, with broken mail as the
+failure mode.
+
+| Name  | Type               | Value                                                                           |
+| ----- | ------------------ | ------------------------------------------------------------------------------- |
+| `api` | `CNAME`            | `k8s-ingressn-ingressn-d73539d19a-79ad0aeb86bb7fa4.elb.us-east-1.amazonaws.com` |
+| `www` | `CNAME`            | the same load balancer                                                          |
+| `@`   | GoDaddy forwarding | `301` → `https://www.brambleworld.com`, no masking                              |
+
+**Why the apex is a redirect and not a domain on the app.** The AWS ingress is a
+load balancer with a hostname and no stable IP, so a domain reaches it by
+`CNAME` — and `CNAME` is not allowed at a zone apex. The usual answer is an
+`ALIAS`/`ANAME` record, which GoDaddy does not offer. Forwarding at the
+registrar costs nothing and keeps the mail records untouched; the alternative is
+moving the zone to Route 53 or Cloudflare, which is the thing to do if the apex
+ever needs to serve rather than redirect.
+
+Porter issues a Let's Encrypt certificate per domain over HTTP-01, which
+validates against **authoritative** DNS. So a new domain is added to
+`porter.yaml` and deployed _first_, then its record is pointed here: the
+certificate is then issued within a minute or two of the DNS change, long before
+resolver caches have finished moving traffic across.
 
 ## Postgres TLS
 
@@ -377,7 +405,8 @@ Deploying earlier fails on a missing `DATABASE_URL` — correctly, but confusing
    processes. A failed migration exits non-zero and blocks the release rather than
    letting new code meet an old schema.
 
-6. **Domain.** Point `api.brambleworld.com` at the web service.
+6. **Domains.** Point `api.brambleworld.com` and `www.brambleworld.com` at the
+   web service — see [DNS](#dns) for why the apex is not one of them.
 
 7. **Clerk webhook.** Only now, because it needs the domain to resolve: add
    `https://api.brambleworld.com/api/webhooks/clerk` to the Clerk **production**

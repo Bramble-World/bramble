@@ -37,8 +37,21 @@ services:
     instances: 2
     cpuCores: 0.5
     ramMegabytes: 1024
+    # Both the API and the marketing site. One app serves them, and nothing in
+    # the app branches on the host — the pages are public and the API
+    # authenticates every route itself.
+    #
+    # The apex (`brambleworld.com`) is deliberately **not** here. On AWS the
+    # ingress is a load balancer with a hostname and no stable IP, so a domain
+    # reaches it by CNAME — which the DNS spec does not allow at a zone apex.
+    # GoDaddy has no ALIAS/ANAME record to work around that, and moving the zone
+    # would mean recreating the Microsoft 365 mail records by hand. So the apex
+    # is a 301 to `www` at GoDaddy instead and never arrives here. Adding it
+    # would leave cert-manager retrying a Let's Encrypt challenge forever
+    # against a host that does not resolve to us.
     domains:
       - name: api.brambleworld.com
+      - name: www.brambleworld.com
 
     # Liveness and readiness are deliberately different endpoints. /api/health
     # touches nothing outside the process, so a Postgres blip cannot restart
