@@ -87,8 +87,10 @@ export function registerFixtures(fake: FakeGenerator): void {
           stakes: 'Whatever was unsaid is now said.',
           participantCharacterIds: cast.slice(0, 2).map((c) => c.id),
           actorCharacterId: cast.find((c) => !c.isSelf)?.id ?? null,
-          generationRationale:
-            'The reader chose to be direct where the original exchange was evasive, so the story now has to account for that having been said out loud.',
+          // Short, because the prompt now asks for one clause rather than a
+          // sentence or two. The fake parses fixtures with the production
+          // schema, so this is also the assertion that the cap holds.
+          generationRationale: 'Directness where the original exchange was evasive.',
           engagementScore: 7,
         },
       ],

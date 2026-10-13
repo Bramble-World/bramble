@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { StageName } from './models';
+import { ReasoningEffort, StageName } from './models';
 
 /**
  * A prompt and the shape of what it must produce.
@@ -30,11 +30,39 @@ export type PromptSpec<Vars, Out> = {
   readonly render: (vars: Vars) => { system: string; prompt: string };
 };
 
+/**
+ * What one model call cost.
+ *
+ * **The breakdown is the point, not the totals.** `inputTokens` and
+ * `outputTokens` alone cannot answer either question that matters about spend:
+ *
+ * - **How much of the output was thinking?** Reasoning tokens bill as output and
+ *   are the majority of it, so output cost is governed by `reasoningEffort` in
+ *   models.ts rather than by how long a beat is. Without `reasoningTokens` that
+ *   is a guess.
+ * - **Is prompt caching working?** A cache *write* costs roughly nineteen times
+ *   a cache *read* of the same token, so a prompt whose prefix shifts between
+ *   calls is billed at the write rate forever and the saving never arrives.
+ *   `cacheReadTokens` against `cacheWriteTokens` is the only way to see it, and
+ *   it is invisible in the totals because both land in `inputTokens`.
+ *
+ * Every field is a count, an id or an enum — never prompt or model text — so the
+ * whole record is safe to log (invariants.md §1).
+ */
 export type GenerationMeta = {
   promptName: string;
+  /** Which stage, so cost can be attributed without parsing `promptName`. */
+  stage: StageName;
   model: string;
+  reasoningEffort: ReasoningEffort;
   inputTokens: number;
+  /** Billed at the cheap rate. High is good. */
+  cacheReadTokens: number;
+  /** Billed at a large premium. High means the prefix is not stable. */
+  cacheWriteTokens: number;
   outputTokens: number;
+  /** Part of `outputTokens`, not additional to it. */
+  reasoningTokens: number;
   finishReason: string;
   durationMs: number;
 };
