@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="October 12, 2026">
+    <LegalPage title="Privacy Policy" effective="October 13, 2026">
       <p>
         Bramble turns conversations you choose into interactive stories you can play. That means
         handling some of the most personal data there is, so this policy explains exactly what we
@@ -140,9 +140,8 @@ export default function Privacy() {
       <h3>Our website</h3>
       <p>
         brambleworld.com doesn&rsquo;t use analytics or advertising cookies. Our hosting providers
-        keep standard server logs, including IP addresses. On the download page, we use your IP
-        address for 15 minutes to limit how many times an access code can be tried. If something
-        breaks on the site, we record the error, without your IP address.
+        keep standard server logs, including IP addresses. If something breaks on the site, we
+        record the error, without your IP address.
       </p>
 
       <h2>Who else handles your data</h2>

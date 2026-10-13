@@ -82,22 +82,13 @@ export const env = createEnv({
      */
     MIN_MACOS_BUILD: z.coerce.number().int().min(0).default(0),
     /**
-     * The shared code beta testers type to reach the macOS download.
-     *
-     * Optional so a checkout builds without it, and the page says the beta is
-     * not open yet rather than 500ing. Compared server-side only: a code the
-     * browser could see is not a gate.
-     *
-     * One code for everyone, which bounds what it can be worth — see
-     * `src/app/download/actions.ts` for what this does and does not protect.
-     */
-    BETA_ACCESS_CODE: z.string().min(6).optional(),
-    /**
      * Where the signed macOS build lives.
      *
-     * Deliberately server-side (no `NEXT_PUBLIC_`), so it is never inlined into
-     * the client bundle. It reaches the browser only after a correct code, which
-     * is the only reason the code means anything.
+     * Public: it is rendered as an href on the landing page, and the download is
+     * not gated. Still not `NEXT_PUBLIC_`, so that it is read at request time
+     * rather than inlined at build time — one image serves every environment,
+     * and a release should only have to change a variable. Optional, so a
+     * checkout with no build configured renders a page saying so.
      */
     MACOS_DOWNLOAD_URL: z.url().optional(),
     /** Shown beside the download, e.g. "0.3.1 (beta)". Cosmetic. */
@@ -145,7 +136,6 @@ export const env = createEnv({
     IMPORT_MASTER_KEY: process.env.IMPORT_MASTER_KEY,
     IMPORT_WORKER_CONCURRENCY: process.env.IMPORT_WORKER_CONCURRENCY,
     MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
-    BETA_ACCESS_CODE: process.env.BETA_ACCESS_CODE,
     MACOS_DOWNLOAD_URL: process.env.MACOS_DOWNLOAD_URL,
     MACOS_BUILD_LABEL: process.env.MACOS_BUILD_LABEL,
     POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,

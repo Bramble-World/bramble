@@ -46,7 +46,18 @@ export default defineConfig({
      * It also stops a browser smoke test spending real money every time someone
      * runs it.
      */
-    env: { BRAMBLE_AI_MODE: 'fake' },
+    env: {
+      BRAMBLE_AI_MODE: 'fake',
+      /**
+       * A stand-in build, so the landing page's download link is exercised.
+       *
+       * The link is read per request rather than baked in at build time, and the
+       * failure mode when that breaks is silent: the page renders, the button
+       * simply is not there. Nothing else in the suite would notice.
+       */
+      MACOS_DOWNLOAD_URL: 'https://downloads.example.test/Bramble-test.dmg',
+      MACOS_BUILD_LABEL: '0.0.0 (test)',
+    },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

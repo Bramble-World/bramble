@@ -124,14 +124,13 @@ confidence rather than left in place forever because nobody is sure.
 
 ### Optional
 
-| Variable                | Read by     | Source          | Purpose                                                                                                                           |
-| ----------------------- | ----------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `POSTHOG_PROJECT_TOKEN` | web, worker | PostHog         | Product analytics. Absent means analytics are off, which is a supported state.                                                    |
-| `POSTHOG_HOST`          | web, worker | PostHog         | Region host, e.g. `https://us.i.posthog.com`.                                                                                     |
-| `CLERK_JWT_KEY`         | web         | Clerk prod      | PEM public key. Verifies session JWTs in-process instead of fetching JWKS per request. A latency optimisation, not a requirement. |
-| `BETA_ACCESS_CODE`      | web         | chosen          | ≥6 chars. Gates the macOS download page.                                                                                          |
-| `MACOS_DOWNLOAD_URL`    | web         | release hosting | Where the signed `.dmg` lives.                                                                                                    |
-| `MACOS_BUILD_LABEL`     | web         | release         | Human-readable build on the download page.                                                                                        |
+| Variable                | Read by     | Source          | Purpose                                                                                                                                                                                                                               |
+| ----------------------- | ----------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTHOG_PROJECT_TOKEN` | web, worker | PostHog         | Product analytics. Absent means analytics are off, which is a supported state.                                                                                                                                                        |
+| `POSTHOG_HOST`          | web, worker | PostHog         | Region host, e.g. `https://us.i.posthog.com`.                                                                                                                                                                                         |
+| `CLERK_JWT_KEY`         | web         | Clerk prod      | PEM public key. Verifies session JWTs in-process instead of fetching JWKS per request. A latency optimisation, not a requirement.                                                                                                     |
+| `MACOS_DOWNLOAD_URL`    | web         | release hosting | Where the signed `.dmg` lives. Setting it **publishes the download**: the link appears on the landing page and on `/download`. Read per request, so a new release needs no rebuild. Unset means both pages say there is no build yet. |
+| `MACOS_BUILD_LABEL`     | web         | release         | Human-readable build shown beside the download, e.g. `0.3.1 (beta)`. Cosmetic.                                                                                                                                                        |
 
 ### Never set in production
 
