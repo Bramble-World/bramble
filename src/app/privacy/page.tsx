@@ -157,11 +157,8 @@ export default function Privacy() {
           <strong>Clerk</strong>: sign-in and account security.
         </li>
         <li>
-          <strong>Amazon Web Services</strong>: hosts our servers and database, in the United
-          States.
-        </li>
-        <li>
-          <strong>Vercel</strong>: hosts our website.
+          <strong>Amazon Web Services</strong>: hosts our website, our servers and our database, in
+          the United States.
         </li>
         <li>
           <strong>PostHog</strong> and <strong>Sentry</strong>: usage data and crash reports, as
