@@ -113,3 +113,20 @@ export async function softDeleteUserByClerkId(clerkId: string): Promise<PublicUs
 
   return user ?? null;
 }
+
+/**
+ * Permanently deletes every user row with this email, live or soft-deleted, and
+ * with it everything the account owns: storylines, people, motifs, imports and
+ * playthroughs all cascade from `users`. Returns what was deleted so the caller
+ * can remove the matching Clerk accounts.
+ *
+ * Distinct from `softDeleteUserByClerkId` on purpose. Clerk's `user.deleted`
+ * webhook only marks the row; this is what honours a request to delete
+ * someone's data (privacy policy, "Deleting your account").
+ */
+export async function purgeUsersByEmail(email: string): Promise<{ id: string; clerkId: string }[]> {
+  return db
+    .delete(users)
+    .where(eq(users.email, email.trim().toLowerCase()))
+    .returning({ id: users.id, clerkId: users.clerkId });
+}

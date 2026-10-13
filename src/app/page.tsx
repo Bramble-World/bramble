@@ -1,6 +1,11 @@
 import Image from 'next/image';
+import { DownloadButton, macBuild } from '@/components/download/download-button';
+import { LegalLinks } from '@/components/legal/legal-page';
+import { DISCORD_INVITE_URL } from '@/lib/links';
 
-export default function Home() {
+export default async function Home() {
+  const build = await macBuild();
+
   return (
     <main className="relative flex min-h-svh w-full flex-col overflow-hidden bg-[#FFFFFB] px-6 py-8">
       <header>
@@ -23,12 +28,31 @@ export default function Home() {
         </p>
       </div>
 
-      <a
-        href="https://discord.gg/WNRdvWu8M"
-        className="mb-8 self-center rounded-full px-6 py-3 text-center text-xl font-bold text-black sm:text-2xl md:text-3xl"
-      >
-        click here to join the discord and beta test Bramble
-      </a>
+      {/* The download is the page's one job once there is a build. Until there
+          is, the Discord invite is, and it keeps its original wording rather
+          than becoming a footnote under a button that is not there. */}
+      <div className="mb-8 flex flex-col items-center gap-4 self-center">
+        {build ? (
+          <>
+            <DownloadButton build={build} />
+            <a
+              href={DISCORD_INVITE_URL}
+              className="text-center text-base font-bold text-black/70 sm:text-lg"
+            >
+              join the discord
+            </a>
+          </>
+        ) : (
+          <a
+            href={DISCORD_INVITE_URL}
+            className="rounded-full px-6 py-3 text-center text-xl font-bold text-black sm:text-2xl md:text-3xl"
+          >
+            click here to join the discord and beta test Bramble
+          </a>
+        )}
+      </div>
+
+      <LegalLinks />
     </main>
   );
 }

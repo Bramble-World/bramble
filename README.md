@@ -43,3 +43,22 @@ pnpm dev:all                             # Next dev server + import worker
 pnpm worker                              # the worker alone
 pnpm sweep:arc | pnpm sweep:imports      # a sweep on demand
 ```
+
+## Promoting a change
+
+Branches promote `dev` → `staging` → `main`, and a push to `main` deploys.
+
+```bash
+pnpm promote --dry-run   # what would be promoted, changes nothing
+pnpm promote             # open, wait for checks, merge — each hop in turn
+pnpm promote --sync      # merge main back into dev, after a hotfix
+```
+
+It stops at the first hop whose checks fail or whose merge conflicts, and merges
+nothing further. A hop that is already level is skipped rather than opened as an
+empty pull request.
+
+`main` requires no reviews, so a one-line urgent fix can go straight there as its
+own pull request — **but then run `pnpm promote --sync`.** Skipping that is how
+`main` drifted 139 commits from `dev`, and how the two branches ended up with
+conflicting copies of the same `.prettierignore` rule.

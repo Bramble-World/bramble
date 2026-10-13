@@ -124,14 +124,13 @@ confidence rather than left in place forever because nobody is sure.
 
 ### Optional
 
-| Variable                | Read by     | Source          | Purpose                                                                                                                           |
-| ----------------------- | ----------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `POSTHOG_PROJECT_TOKEN` | web, worker | PostHog         | Product analytics. Absent means analytics are off, which is a supported state.                                                    |
-| `POSTHOG_HOST`          | web, worker | PostHog         | Region host, e.g. `https://us.i.posthog.com`.                                                                                     |
-| `CLERK_JWT_KEY`         | web         | Clerk prod      | PEM public key. Verifies session JWTs in-process instead of fetching JWKS per request. A latency optimisation, not a requirement. |
-| `BETA_ACCESS_CODE`      | web         | chosen          | ≥6 chars. Gates the macOS download page.                                                                                          |
-| `MACOS_DOWNLOAD_URL`    | web         | release hosting | Where the signed `.dmg` lives.                                                                                                    |
-| `MACOS_BUILD_LABEL`     | web         | release         | Human-readable build on the download page.                                                                                        |
+| Variable                | Read by     | Source          | Purpose                                                                                                                                                                                                                               |
+| ----------------------- | ----------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTHOG_PROJECT_TOKEN` | web, worker | PostHog         | Product analytics. Absent means analytics are off, which is a supported state.                                                                                                                                                        |
+| `POSTHOG_HOST`          | web, worker | PostHog         | Region host, e.g. `https://us.i.posthog.com`.                                                                                                                                                                                         |
+| `CLERK_JWT_KEY`         | web         | Clerk prod      | PEM public key. Verifies session JWTs in-process instead of fetching JWKS per request. A latency optimisation, not a requirement.                                                                                                     |
+| `MACOS_DOWNLOAD_URL`    | web         | release hosting | Where the signed `.dmg` lives. Setting it **publishes the download**: the link appears on the landing page and on `/download`. Read per request, so a new release needs no rebuild. Unset means both pages say there is no build yet. |
+| `MACOS_BUILD_LABEL`     | web         | release         | Human-readable build shown beside the download, e.g. `0.3.1 (beta)`. Cosmetic.                                                                                                                                                        |
 
 ### Never set in production
 
@@ -229,6 +228,24 @@ Copy the generated signing secret into `CLERK_WEBHOOK_SIGNING_SECRET`. The route
 verifies every delivery and rejects unsigned requests, so an absent secret means
 nothing gets through — closed by default, and silent. If user records stop
 appearing, check this first.
+
+## Deleting an account on request
+
+The privacy policy (`/privacy`) promises that emailing great@brambleworld.com
+deletes an account and all its data **within 30 days**. Deleting the user in
+the Clerk dashboard is not enough: the `user.deleted` webhook only soft-deletes,
+and every story stays. Run the script inside the cluster, where the database is:
+
+```sh
+# Check the request came from the account's own email address first.
+porter app run bramble -- node dist/scripts/delete-account.js someone@example.com            # dry run
+porter app run bramble -- node dist/scripts/delete-account.js someone@example.com --confirm
+```
+
+It deletes the user rows (everything they own cascades;
+`purge.integration.test.ts` checks every table) and then the Clerk accounts
+with that email. Then, by hand, delete the PostHog persons whose ids it prints
+(People → the id → Delete person and data), and reply to confirm.
 
 ## Health checks
 
