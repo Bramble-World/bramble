@@ -85,8 +85,8 @@ export default function Terms() {
         <li>import conversations you have no right to use, or that involve exploiting a child;</li>
         <li>use Bramble for anything illegal;</li>
         <li>
-          get around Bramble&rsquo;s limits or access controls, including sharing beta access codes
-          publicly, or try to access other people&rsquo;s accounts or our systems;
+          get around Bramble&rsquo;s limits or access controls, or try to access other
+          people&rsquo;s accounts or our systems;
         </li>
         <li>
           copy, modify, reverse engineer or resell the app or service, except where the law allows
