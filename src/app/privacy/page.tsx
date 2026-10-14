@@ -81,8 +81,9 @@ export default function Privacy() {
         <li>the text of each message and when it was sent;</li>
         <li>whether you sent it; and</li>
         <li>
-          the name each person has in your Contacts (or a placeholder such as &ldquo;Person A&rdquo;
-          if they aren&rsquo;t in your Contacts).
+          the name each person has in your Contacts (or, if they aren&rsquo;t in your Contacts or
+          you haven&rsquo;t allowed access, a placeholder such as &ldquo;Unknown &middot;
+          3fa2&rdquo; made from their random code).
         </li>
       </ul>
       <p>
@@ -121,14 +122,22 @@ export default function Privacy() {
 
       <h3>Usage data and crash reports</h3>
       <p>
-        Unless you turn it off, the app sends usage events (for example, which onboarding screen you
-        reached, or that you made the second of three choices) to PostHog, and crash reports (what
-        the app was doing when it crashed, your Mac model, macOS version and Bramble version) to
-        Sentry. Our server also records a few events, such as that a story finished being written
-        and how long it took. These are tied to a random account ID, not your name or email, and
-        never include your messages, the names of people in them, or your stories. Turn them off in
-        Bramble&rsquo;s Settings, with &ldquo;Share anonymous usage data and crash reports&rdquo;;
-        that stops both the app and our server from sending them.
+        Unless you turn it off, the app sends usage events (for example, which step of signing in or
+        onboarding you reached, or that you made the second of three choices) to PostHog, and crash
+        reports (what the app was doing when it crashed, your Mac model, macOS version and Bramble
+        version) to Sentry. Our server also records a few events, such as that a story finished
+        being written and how long it took. These are tied to a random account ID, not your name or
+        email, and never include your messages, the names of people in them, or your stories. Turn
+        them off in Bramble&rsquo;s Settings, with &ldquo;Share anonymous usage data and crash
+        reports&rdquo;; that stops both the app and our server from sending them.
+      </p>
+
+      <h3>Notifications</h3>
+      <p>
+        If you allow notifications, Bramble shows them on your Mac when a story you imported is
+        ready, and when your energy is back after running out. They&rsquo;re created on your Mac,
+        never name the people in your stories, and send nothing to us or anyone else. Turn energy
+        reminders off in Bramble&rsquo;s Settings, or all of them in macOS&rsquo;s System Settings.
       </p>
 
       <h3>Updates and downloads</h3>
