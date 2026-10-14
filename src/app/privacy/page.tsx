@@ -59,11 +59,12 @@ export default function Privacy() {
       <h3>Your account</h3>
       <p>
         When you sign up we collect your email address and, if you use one, your password, or the
-        details Apple shares when you use Sign in with Apple. Sign-in is run by our authentication
-        provider, Clerk, which stores your password in hashed form; we never see it. We keep a copy
-        of your email address with your account so we can recognise you and contact you about your
-        account. Clerk also records sign-in activity, such as your device, browser and IP address,
-        to keep your account secure.
+        details Apple shares when you use Sign in with Apple. If you add a passkey, it stays in your
+        iCloud Keychain or password manager; Clerk keeps only its public key. Sign-in is run by our
+        authentication provider, Clerk, which stores your password in hashed form; we never see it.
+        We keep a copy of your email address with your account so we can recognise you and contact
+        you about your account. Clerk also records sign-in activity, such as your device, browser
+        and IP address, to keep your account secure.
       </p>
 
       <h3>Messages and contacts on your Mac</h3>
