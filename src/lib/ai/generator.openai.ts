@@ -14,7 +14,7 @@ import {
   UpstreamBusyError,
 } from '@/lib/utils/errors';
 import { STAGE_MODELS } from './models';
-import { Generator, GenerationResult, PromptSpec } from './prompt';
+import { GenerationMeta, Generator, GenerationResult, PromptSpec } from './prompt';
 
 /**
  * The only file in the repo that imports `ai` or `@ai-sdk/openai`.
@@ -65,17 +65,22 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
           abortSignal: opts?.signal,
         });
 
-        return {
-          value: result.output,
-          meta: {
-            promptName: spec.name,
-            model,
-            inputTokens: result.usage.inputTokens ?? 0,
-            outputTokens: result.usage.outputTokens ?? 0,
-            finishReason: result.finishReason,
-            durationMs: Date.now() - startedAt,
-          },
+        const meta: GenerationMeta = {
+          promptName: spec.name,
+          stage: spec.stage,
+          model,
+          reasoningEffort,
+          inputTokens: result.usage.inputTokens ?? 0,
+          cacheReadTokens: result.usage.inputTokenDetails.cacheReadTokens ?? 0,
+          cacheWriteTokens: result.usage.inputTokenDetails.cacheWriteTokens ?? 0,
+          outputTokens: result.usage.outputTokens ?? 0,
+          reasoningTokens: result.usage.outputTokenDetails.reasoningTokens ?? 0,
+          finishReason: result.finishReason,
+          durationMs: Date.now() - startedAt,
         };
+
+        record(meta);
+        return { value: result.output, meta };
       } catch (error) {
         // The cause is attached, never interpolated. The message stays generic
         // because model output and provider bodies can echo the prompt, and the
@@ -172,4 +177,42 @@ export function schemaName(promptName: string): string {
 /** Whether a live client can be built at all. */
 export function hasOpenAIKey(): boolean {
   return Boolean(env.OPENAI_API_KEY);
+}
+
+/**
+ * Writes what a call cost to stdout, as one JSON line per generation.
+ *
+ * **A log line rather than a table, deliberately.** The question this has to
+ * answer first is "which stage is the money, and is caching working at all" —
+ * which is an aggregate over a day, not a per-row history anything queries. A
+ * column on `story_turns` would need a migration, would miss extraction and the
+ * arc sweep entirely (neither has a turn to hang off), and would still not be
+ * read by any code path. Logs already carry the worker's events in this exact
+ * shape and are aggregated the same way.
+ *
+ * Every value is a count, an id or an enum. No prompt text, no model output, no
+ * person or storyline identifiers beyond the stage name — so this is safe under
+ * invariants.md §1, and it stays safe only as long as that remains true. Do not
+ * add the rendered prompt here to debug a bad beat.
+ *
+ * Persist it if a per-user cost view is ever wanted; the shape is already right.
+ */
+function record(meta: GenerationMeta): void {
+  console.log(
+    JSON.stringify({
+      at: new Date().toISOString(),
+      event: 'generation',
+      stage: meta.stage,
+      promptName: meta.promptName,
+      model: meta.model,
+      reasoningEffort: meta.reasoningEffort,
+      inputTokens: meta.inputTokens,
+      cacheReadTokens: meta.cacheReadTokens,
+      cacheWriteTokens: meta.cacheWriteTokens,
+      outputTokens: meta.outputTokens,
+      reasoningTokens: meta.reasoningTokens,
+      finishReason: meta.finishReason,
+      durationMs: meta.durationMs,
+    })
+  );
 }

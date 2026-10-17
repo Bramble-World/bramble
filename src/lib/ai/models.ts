@@ -41,7 +41,13 @@ export type StageModel = {
  */
 export const STAGE_MODELS: Record<StageName, StageModel> = {
   turn: { model: DEFAULT_MODEL, reasoningEffort: 'low' },
-  consequence: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
+  // Lowered from 'medium'. This stage runs on every choice, and reasoning tokens
+  // bill as output — which is the majority of output cost and cannot be cached,
+  // so effort here is the largest dial on the one stage that fires most often.
+  // Its job is also the most constrained of the four: say what a decision
+  // changed, against a cast and a timeline it is given. Watch the beats it
+  // writes; if they go slack, this is the first thing to put back.
+  consequence: { model: DEFAULT_MODEL, reasoningEffort: 'low' },
   // Lowered from 'high'. Extraction is the one stage whose output grew several
   // times over — up to 20 beats, 12 cast, 16 relationships — and reasoning time
   // grows with it. At 'high' a dense conversation took longer to generate than

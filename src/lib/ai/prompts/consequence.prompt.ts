@@ -48,11 +48,20 @@ export const consequenceOutputSchema = z.object({
           .describe(
             'The one character who set this beat in motion, if a single person did. Null when it is something that happened to them rather than something someone did.'
           ),
+        // Capped, not removed. `NewEvent` requires it on the generated branch so
+        // a steered beat can always say why it exists, and invariants.md §1
+        // turns on it being the model's own words rather than quoted source.
+        //
+        // But this is a reasoning model: it has already thought, billed as
+        // output, before it writes a word here. Asking for a paragraph pays a
+        // second time to narrate reasoning that `reasoningTokens` already
+        // accounts for. A clause is enough to stay traceable.
         generationRationale: z
           .string()
           .min(1)
+          .max(120)
           .describe(
-            'Why this beat follows from the choice. Your own reasoning — never quote the story text back.'
+            'Why this beat follows from the choice, in one short clause of at most fifteen words. Your own reasoning — never quote the story text back.'
           ),
         engagementScore: z
           .number()
@@ -77,7 +86,15 @@ export const consequenceOutputSchema = z.object({
           .describe('Whose backstory, or null for the whole story.'),
       })
     )
-    .max(3),
+    // One, down from three. These are billed twice: as output here, and then as
+    // input in every later turn prompt, because `## Background` renders every
+    // entry a storyline has ever accumulated and nothing prunes them. At three
+    // per beat a twenty-beat playthrough carries sixty of them into every call
+    // it makes thereafter.
+    //
+    // One per beat still lets backstory surface steadily; what it stops is a
+    // single choice minting three.
+    .max(1),
 
   relationshipStates: z
     .array(
@@ -132,8 +149,9 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       '  which every beat is the reader doing something teaches every later turn that',
       '  nobody else ever does anything, and the story stops moving. When the other',
       '  person is the one who moved the scene, the beat is theirs.',
-      '- generationRationale is your own reasoning about why the beat follows. Never',
-      '  quote or paraphrase the narration back into it.',
+      '- generationRationale is your own reasoning about why the beat follows, in',
+      '  one short clause — not a paragraph. Never quote or paraphrase the',
+      '  narration back into it.',
       '- Only reference character and relationship ids that appear below.',
       '',
       ENGAGEMENT_RUBRIC,

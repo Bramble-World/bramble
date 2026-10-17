@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
 import {
@@ -46,7 +46,15 @@ function modelReturning(text: string) {
       // undefined counts and an undefined reason rather than a type error. Worth
       // pinning, since this file exists to catch exactly that kind of drift.
       finishReason: { unified: 'stop' as const },
-      usage: { inputTokens: { total: 11 }, outputTokens: { total: 7 } },
+      // The nested counts are what cost analysis runs on: reasoning is the bulk
+      // of output spend, and cacheRead against cacheWrite is the only way to see
+      // whether prompt caching is working — a cache write costs many times a
+      // read of the same token. Both are populated here so the assertions below
+      // fail if the SDK moves them again.
+      usage: {
+        inputTokens: { total: 11, noCache: 3, cacheRead: 5, cacheWrite: 3 },
+        outputTokens: { total: 7, text: 3, reasoning: 4 },
+      },
       warnings: [],
     }),
   });
@@ -119,6 +127,56 @@ describe('the OpenAI generator', () => {
     expect(result.meta.inputTokens).toBe(11);
     expect(result.meta.outputTokens).toBe(7);
     expect(result.meta.finishReason).toBe('stop');
+  });
+
+  /**
+   * The breakdown, not just the totals.
+   *
+   * These four numbers are the ones any decision about spend is made from, and
+   * every one of them is nested a level deeper in the SDK than the totals are —
+   * so they are exactly what a version bump drops silently. A `?? 0` in the
+   * generator turns that into a confident zero rather than an error, which is
+   * why it has to be asserted rather than trusted.
+   */
+  it('carries the reasoning and cache breakdown through to the caller', async () => {
+    const generator = createGenerator(() => modelReturning('{"narrative":"She waited."}'));
+
+    const { meta } = await generator.run(spec, { title: 'Unsent' });
+
+    expect(meta.reasoningTokens).toBe(4);
+    expect(meta.cacheReadTokens).toBe(5);
+    expect(meta.cacheWriteTokens).toBe(3);
+    // Attribution: which stage spent it, and at what effort.
+    expect(meta.stage).toBe('turn');
+    expect(meta.reasoningEffort).toBe(STAGE_MODELS.turn.reasoningEffort);
+  });
+
+  /**
+   * The cost line is written to stdout on every generation, so it is a standing
+   * opportunity to leak the thing invariants.md §1 forbids: the prompt carries
+   * story content, and the output is the story itself.
+   */
+  it('logs counts about a generation and never its text', async () => {
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((line) => void logged.push(line));
+    const generator = createGenerator(() => modelReturning('{"narrative":"She waited."}'));
+
+    await generator.run(spec, { title: 'Unsent' });
+    spy.mockRestore();
+
+    const line = logged.find((l) => l.includes('"event":"generation"'));
+    expect(line).toBeDefined();
+    expect(JSON.parse(line!)).toMatchObject({
+      event: 'generation',
+      stage: 'turn',
+      reasoningTokens: 4,
+      cacheReadTokens: 5,
+      cacheWriteTokens: 3,
+      outputTokens: 7,
+    });
+    // Neither what was sent nor what came back.
+    expect(line).not.toContain('She waited');
+    expect(line).not.toContain('Unsent');
   });
 
   /**
