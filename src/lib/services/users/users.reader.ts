@@ -1,5 +1,5 @@
 import { db } from '@/index';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { PublicUser, User } from './users.types';
 import { users } from '@/db/schema/tables';
 
@@ -10,6 +10,7 @@ export async function getUserByClerkId(clerkId: string): Promise<PublicUser | nu
       clerkId: users.clerkId,
       email: users.email,
       shareUsage: users.shareUsage,
+      isGuest: users.isGuest,
     })
     .from(users)
     .where(and(eq(users.clerkId, clerkId), isNull(users.deletedAt)))
@@ -31,6 +32,7 @@ export async function getUserByClerkIdIncludingDeleted(
       clerkId: users.clerkId,
       email: users.email,
       shareUsage: users.shareUsage,
+      isGuest: users.isGuest,
       deletedAt: users.deletedAt,
     })
     .from(users)
@@ -54,9 +56,43 @@ export async function getUserById(id: string): Promise<PublicUser | null> {
       clerkId: users.clerkId,
       email: users.email,
       shareUsage: users.shareUsage,
+      isGuest: users.isGuest,
     })
     .from(users)
     .where(and(eq(users.id, id), isNull(users.deletedAt)))
+    .limit(1);
+  return user ?? null;
+}
+
+/**
+ * A guest who can still play: not deleted, not yet claimed, not expired.
+ *
+ * What every guest-token request is checked against, which is why the token
+ * itself can live as long as the guest does. Deleting the row, claiming it or
+ * letting it expire all make this return null, and so all three end the token's
+ * use at once — no revocation list, because the row *is* the list.
+ *
+ * Expiry is compared with the database clock rather than the process's, so a
+ * guest is live or not by the same clock the sweep deletes by.
+ */
+export async function getLiveGuest(id: string): Promise<PublicUser | null> {
+  const [user] = await db
+    .select({
+      id: users.id,
+      clerkId: users.clerkId,
+      email: users.email,
+      shareUsage: users.shareUsage,
+      isGuest: users.isGuest,
+    })
+    .from(users)
+    .where(
+      and(
+        eq(users.id, id),
+        eq(users.isGuest, true),
+        isNull(users.deletedAt),
+        gt(users.guestExpiresAt, sql`now()`)
+      )
+    )
     .limit(1);
   return user ?? null;
 }

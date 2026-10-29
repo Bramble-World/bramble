@@ -1,6 +1,7 @@
 import { requireCurrentUser } from '@/lib/services/auth/auth.service';
 import { PublicUser } from '@/lib/services/users/users.types';
 import { handleError } from '@/lib/utils/api.handler-errors';
+import { ForbiddenError, SignupRequiredError } from '@/lib/utils/errors';
 import { assertClientSupported } from './client-version';
 
 /**
@@ -35,4 +36,36 @@ export function withUser<Context = unknown>(
       return handleError(error);
     }
   };
+}
+
+/**
+ * `withUser` for what only an account may do.
+ *
+ * A guest is a real user with a real token, so `withUser` lets them through by
+ * design — the play loop is theirs as much as anyone's. Routes that need an
+ * account (imports today) say so here, by signature, rather than each one
+ * remembering to check. Refused with `SIGNUP_REQUIRED`, whose remedy is the
+ * save screen rather than a sign-out.
+ */
+export function withAccount<Context = unknown>(
+  handler: (user: PublicUser, request: Request, context: Context) => Promise<Response>
+) {
+  return withUser<Context>(async (user, request, context) => {
+    if (user.isGuest) throw new SignupRequiredError('Sign up to import a conversation.');
+    return handler(user, request, context);
+  });
+}
+
+/**
+ * `withUser` for the onboarding routes, which only make sense before signing
+ * up: they write a guest's one story. An account is refused with 403, because
+ * writing a scripted opening into a real world is not something it can ask for.
+ */
+export function withGuest<Context = unknown>(
+  handler: (user: PublicUser, request: Request, context: Context) => Promise<Response>
+) {
+  return withUser<Context>(async (user, request, context) => {
+    if (!user.isGuest) throw new ForbiddenError('Onboarding is for guests.');
+    return handler(user, request, context);
+  });
 }

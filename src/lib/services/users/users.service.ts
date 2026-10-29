@@ -1,4 +1,9 @@
-import { ConflictError, ForbiddenError, NotFoundError } from '@/lib/utils/errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+} from '@/lib/utils/errors';
 import * as reader from './users.reader';
 import * as writer from './users.writer';
 import { PublicUser } from './users.types';
@@ -11,6 +16,19 @@ export async function getUserByClerkId(clerkId: string): Promise<PublicUser> {
     throw new NotFoundError('User', clerkId);
   }
   return user;
+}
+
+/**
+ * The guest a verified guest token names, if they can still play.
+ *
+ * A token that verifies but names nobody live — deleted, claimed into an
+ * account, or past its expiry — is the same 401 as a token that does not
+ * verify, so nothing here distinguishes them for a caller.
+ */
+export async function requireLiveGuest(id: string): Promise<PublicUser> {
+  const guest = await reader.getLiveGuest(id);
+  if (!guest) throw new UnauthorizedError();
+  return guest;
 }
 
 /**
@@ -29,7 +47,7 @@ export async function getOrCreateFromClerk(
   if (existing) return existing;
 
   // Only on first sight — the default Clerk session token carries no email
-  // claim, and users.email is NOT NULL.
+  // claim, and an account row must have one (chk_users_account_identity).
   const identity = await fetchIdentity();
 
   const inserted = await writer.insertUserIfAbsent({

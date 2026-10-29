@@ -47,7 +47,14 @@ async function main() {
     : [{ count: 0 }];
 
   const clerkUsers = (await clerkBackend.users.getUserList({ emailAddress: [normalized] })).data;
-  const clerkIds = [...new Set([...rows.map((r) => r.clerkId), ...clerkUsers.map((u) => u.id)])];
+  // A row found by email is never a guest — guests have no email — so every
+  // clerkId here is set; the filter is for the type, which allows a guest's null.
+  const clerkIds = [
+    ...new Set([
+      ...rows.flatMap((r) => (r.clerkId ? [r.clerkId] : [])),
+      ...clerkUsers.map((u) => u.id),
+    ]),
+  ];
 
   console.log(`database users: ${rows.length} (${ids.join(', ') || 'none'})`);
   console.log(`storylines:     ${storylineCount}`);

@@ -1,4 +1,4 @@
-import { withUser } from '@/lib/api/with-user';
+import { withAccount } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { uuidParam } from '@/lib/api/params';
 import { importView } from '@/lib/api/views';
@@ -15,7 +15,7 @@ type Params = { params: Promise<{ importId: string }> };
  *
  * Carries no message content — the row it reads has none.
  */
-export const GET = withUser(async (user, _request, { params }: Params) => {
+export const GET = withAccount(async (user, _request, { params }: Params) => {
   const importId = uuidParam((await params).importId, 'importId');
 
   // Scoped getter: throws NotFoundError for an import that is not this

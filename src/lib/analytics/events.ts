@@ -59,6 +59,42 @@ export type AnalyticsEvent =
         limit: number;
         retry_after_s: number;
       };
+    }
+  /*
+   * The iPhone's guest onboarding. `save_shown` and `save_not_now` belong to the
+   * same funnel but happen only on the device, so the app sends those itself.
+   */
+  | {
+      name: 'onboarding_opened';
+      properties: {
+        /** Which scripted opening was shown — an id from `openings.ts`, never its text. */
+        opening_id: string;
+      };
+    }
+  | {
+      name: 'person_named';
+      properties: {
+        /** The chip the guest picked. An enum; the name they typed never ships. */
+        relationship: 'ex' | 'old_friend' | 'crush' | 'boss' | 'sibling';
+        /** Whether they chose pronouns or skipped. Not which ones. */
+        pronouns_given: 'yes' | 'no';
+      };
+    }
+  | {
+      name: 'guest_beat_played';
+      properties: {
+        /** 1 for the scripted beat, 2 and 3 for the written ones. */
+        n: number;
+      };
+    }
+  | {
+      name: 'signup_completed';
+      properties: {
+        /** How they signed up, as the app reports it. Absent when it did not say. */
+        method?: 'apple' | 'passkey' | 'email';
+        /** Whether the guest story joined an account that already existed. */
+        merged: boolean;
+      };
     };
 
 export type AnalyticsEventName = AnalyticsEvent['name'];
@@ -83,4 +119,10 @@ export const ALLOWED_PROPERTY_KEYS = [
   'message_count',
   'limit',
   'retry_after_s',
+  'opening_id',
+  'relationship',
+  'pronouns_given',
+  'n',
+  'method',
+  'merged',
 ] as const;

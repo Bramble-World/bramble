@@ -108,6 +108,32 @@ export const env = createEnv({
      */
     POSTHOG_PROJECT_TOKEN: z.string().optional(),
     POSTHOG_HOST: z.url().optional(),
+    /**
+     * Signs the tokens guests play with (HS256). At least 32 characters.
+     *
+     * Optional like the rest so a bare checkout builds, but guest creation fails
+     * closed without it — an unsigned or weakly signed guest token would be a
+     * way to act as any guest. Not shared with anything else: rotating it signs
+     * every guest out, which costs them only their unsaved 7-day story.
+     */
+    GUEST_TOKEN_SECRET: z.string().min(32).optional(),
+    /**
+     * Whether creating a guest needs an App Attest attestation from the iPhone.
+     *
+     * Unset means 'required' wherever NODE_ENV is production — which is staging
+     * and production, both of which run the production build — and 'off'
+     * everywhere else, so local development and CI create guests with plain
+     * requests. Set 'off' explicitly only to debug a deployed environment; it
+     * opens guest creation to anything that can reach the API, rate-limited per
+     * address only. See src/lib/services/guests/attestation.ts.
+     */
+    GUEST_ATTESTATION: z.enum(['required', 'off']).optional(),
+    /**
+     * Which App Attest environment attestations must come from. 'development'
+     * accepts Xcode builds signed for development as well as production ones;
+     * 'production' (the default) accepts only TestFlight and App Store builds.
+     */
+    APP_ATTEST_ENVIRONMENT: z.enum(['production', 'development']).default('production'),
   },
 
   /**
@@ -140,6 +166,9 @@ export const env = createEnv({
     MACOS_BUILD_LABEL: process.env.MACOS_BUILD_LABEL,
     POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,
     POSTHOG_HOST: process.env.POSTHOG_HOST,
+    GUEST_TOKEN_SECRET: process.env.GUEST_TOKEN_SECRET,
+    GUEST_ATTESTATION: process.env.GUEST_ATTESTATION,
+    APP_ATTEST_ENVIRONMENT: process.env.APP_ATTEST_ENVIRONMENT,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },

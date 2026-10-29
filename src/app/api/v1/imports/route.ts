@@ -1,4 +1,4 @@
-import { withUser } from '@/lib/api/with-user';
+import { withAccount } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { parseBody } from '@/lib/api/params';
 import { importView } from '@/lib/api/views';
@@ -8,12 +8,17 @@ import { importRequestSchema } from '@/lib/services/imports/imports.validate';
 /**
  * The account's allowance and every conversation it has handed over.
  *
+ * Accounts only, like every import route: a guest is refused with
+ * `SIGNUP_REQUIRED`. Importing is the Mac's path into the game, a guest is the
+ * iPhone's, and a transcript handed over under an identity that deletes itself
+ * in seven days is not a promise the import pipeline was built to keep.
+ *
  * One request serves the whole import screen. `used` counts only `ready`; the
  * client computes what is left as `limit - used - pending`, reading `pending`
  * off the rows it already has, so there is no second number here that can
  * disagree with the list beside it.
  */
-export const GET = withUser(async (user) => {
+export const GET = withAccount(async (user) => {
   const allowance = await imports.allowanceFor(user.id);
 
   return json({
@@ -43,7 +48,7 @@ export const GET = withUser(async (user) => {
  * carries no message content, and the only place the transcript rests is the
  * encrypted store.
  */
-export const POST = withUser(async (user, request) => {
+export const POST = withAccount(async (user, request) => {
   const body = await parseBody(request, importRequestSchema);
 
   const result = await imports.requestImport(user.id, body);

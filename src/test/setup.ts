@@ -23,5 +23,8 @@ vi.mock('@/env', () => ({
     // because the module refuses anything else rather than silently using a
     // weaker cipher.
     IMPORT_MASTER_KEY: Buffer.from('unit-test-import-master-key-32by', 'utf8').toString('base64'),
+    // Present so guest tokens can be signed and verified; the test covering a
+    // missing secret overrides this module locally.
+    GUEST_TOKEN_SECRET: 'unit-test-guest-token-secret-32-chars!',
   },
 }));

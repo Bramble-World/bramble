@@ -35,6 +35,10 @@ const EVERY_EVENT: AnalyticsEvent[] = [
     properties: { status: 'failed', failure_code: 'GENERATION_UNUSABLE', duration_ms: 4_002 },
   },
   { name: 'energy_depleted', properties: { limit: 20, retry_after_s: 3041 } },
+  { name: 'onboarding_opened', properties: { opening_id: 'are_you_up' } },
+  { name: 'person_named', properties: { relationship: 'old_friend', pronouns_given: 'no' } },
+  { name: 'guest_beat_played', properties: { n: 2 } },
+  { name: 'signup_completed', properties: { method: 'passkey', merged: true } },
 ];
 
 describe('what a property may be', () => {
