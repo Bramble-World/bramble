@@ -1,9 +1,19 @@
 import { UnauthorizedError } from '@/lib/utils/errors';
-import { getOrCreateFromClerk } from '@/lib/services/users/users.service';
+import { getOrCreateFromClerk, requireLiveGuest } from '@/lib/services/users/users.service';
 import { PublicUser } from '@/lib/services/users/users.types';
-import { identityFromClerkUser } from '@/lib/services/users/users.identity';
+import { ClerkIdentity, identityFromClerkUser } from '@/lib/services/users/users.identity';
 import { clerkBackend } from './auth.client';
 import { clerkEnabled } from './auth.config';
+import { isGuestToken, verifyGuestToken } from './guest-token';
+
+/**
+ * The header a guest token rides in when the bearer slot is already taken.
+ *
+ * Only `POST /api/v1/guests/claim` needs it: claiming is the one request that
+ * carries both identities at once — the Clerk session being signed into, and the
+ * guest whose story is moving into it.
+ */
+export const GUEST_TOKEN_HEADER = 'x-bramble-guest';
 
 /**
  * Resolves the Clerk user id from an `Authorization: Bearer <session jwt>` header.
@@ -54,13 +64,57 @@ export async function requireClerkUserId(request: Request): Promise<string> {
  * provider.
  */
 export async function requireCurrentUser(request: Request): Promise<PublicUser> {
-  const clerkId = await requireClerkUserId(request);
+  // Dispatched on the token's own issuer, before Clerk sees it. Only a token
+  // that claims to be a guest token takes the guest path, and it is verified
+  // there in full; everything else — including garbage, alg:none and an
+  // expired Clerk session — takes the Clerk path exactly as it did before
+  // guests existed, so its 401 is unchanged byte for byte.
+  const token = bearerToken(request);
+  if (token && isGuestToken(token)) {
+    return requireGuest(token);
+  }
 
-  return getOrCreateFromClerk(clerkId, async () => {
-    const identity = identityFromClerkUser(await clerkBackend.users.getUser(clerkId));
-    if (!identity) {
-      throw new UnauthorizedError('Clerk account has no email address');
-    }
-    return identity;
-  });
+  const clerkId = await requireClerkUserId(request);
+  return getOrCreateFromClerk(clerkId, () => clerkIdentity(clerkId));
+}
+
+/**
+ * The guest a token names, if they can still play.
+ *
+ * Two checks, both required: the signature proves we issued the token, and the
+ * row read proves the guest still exists, is still a guest and has not expired.
+ */
+export async function requireGuest(token: string): Promise<PublicUser> {
+  return requireLiveGuest(await verifyGuestToken(token));
+}
+
+/**
+ * The guest named by the `X-Bramble-Guest` header. Same checks, same 401.
+ */
+export async function requireGuestFromHeader(request: Request): Promise<PublicUser> {
+  const token = request.headers.get(GUEST_TOKEN_HEADER)?.trim();
+  if (!token) throw new UnauthorizedError();
+  return requireGuest(token);
+}
+
+/**
+ * The email Clerk holds for an account, for provisioning a row.
+ *
+ * Only on first sight — the default session token carries no email claim. A
+ * Clerk account with none cannot become a Bramble account, so it is a 401
+ * rather than a row that breaks chk_users_account_identity.
+ */
+export async function clerkIdentity(clerkId: string): Promise<ClerkIdentity> {
+  const identity = identityFromClerkUser(await clerkBackend.users.getUser(clerkId));
+  if (!identity) {
+    throw new UnauthorizedError('Clerk account has no email address');
+  }
+  return identity;
+}
+
+/** The token from `Authorization: Bearer <token>`, or null. Case-sensitive, like Clerk's. */
+function bearerToken(request: Request): string | null {
+  const header = request.headers.get('authorization');
+  if (!header?.startsWith('Bearer ')) return null;
+  return header.slice('Bearer '.length).trim() || null;
 }

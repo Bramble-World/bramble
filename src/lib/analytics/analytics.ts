@@ -24,6 +24,11 @@ export interface Analytics {
   /** False when nothing is configured, so callers can skip work before a read. */
   readonly enabled: boolean;
   capture(userId: string, event: AnalyticsEvent): Promise<void>;
+  /**
+   * Joins a previous distinct id onto a person, so their history follows them.
+   * Used once: a guest whose story merged into an account that already existed.
+   */
+  alias(userId: string, previousId: string): Promise<void>;
 }
 
 /**
@@ -36,6 +41,7 @@ export interface Analytics {
 export class NoopAnalytics implements Analytics {
   readonly enabled = false;
   async capture(): Promise<void> {}
+  async alias(): Promise<void> {}
 }
 
 export class PostHogAnalytics implements Analytics {
@@ -52,6 +58,19 @@ export class PostHogAnalytics implements Analytics {
       properties: event.properties,
       // Off everywhere. An IP-derived location is personal data this product has
       // no use for, and the events are about what happened, not where.
+      disableGeoip: true,
+    });
+  }
+
+  async alias(userId: string, previousId: string): Promise<void> {
+    // `distinctId` is the person who survives, `alias` the id folded into them —
+    // the account, and the guest whose row no longer exists. PostHog refuses to
+    // fold in an id that was itself `identify`d, so the direction matters.
+    // Immediate for the same reason capture is: a route handler can finish
+    // before a queue drains.
+    await this.client.aliasImmediate({
+      distinctId: userId.toLowerCase(),
+      alias: previousId.toLowerCase(),
       disableGeoip: true,
     });
   }
@@ -116,6 +135,30 @@ export async function track(userId: string, event: AnalyticsEvent): Promise<void
   } catch (error) {
     console.error('analytics capture failed', {
       event: event.name,
+      reason: error instanceof Error ? error.name : 'unknown',
+    });
+  }
+}
+
+/**
+ * Folds a guest's analytics history into the account they joined.
+ *
+ * Only for a merge. A guest who signs up as a new account keeps their row and
+ * so keeps their id — the distinct id never changes and there is nothing to
+ * join. A guest whose story moves into an existing account loses their row, and
+ * without this their three beats would belong to a person who stopped existing.
+ *
+ * Gated on the account's consent, since it is the account the history is being
+ * attached to; never throws, for the same reasons `track` does not.
+ */
+export async function trackAlias(userId: string, previousId: string): Promise<void> {
+  try {
+    const sink = getAnalytics();
+    if (!sink.enabled) return;
+    if (!(await userReader.sharesUsage(userId))) return;
+    await sink.alias(userId, previousId);
+  } catch (error) {
+    console.error('analytics alias failed', {
       reason: error instanceof Error ? error.name : 'unknown',
     });
   }

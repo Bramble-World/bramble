@@ -48,6 +48,7 @@ export async function insertUserIfAbsent(input: NewUser): Promise<PublicUser | n
       clerkId: users.clerkId,
       email: users.email,
       shareUsage: users.shareUsage,
+      isGuest: users.isGuest,
     });
 
   return user ?? null;
@@ -89,6 +90,37 @@ export async function updateUserByClerkId(
       clerkId: users.clerkId,
       email: users.email,
       shareUsage: users.shareUsage,
+      isGuest: users.isGuest,
+    });
+
+  return user ?? null;
+}
+
+/**
+ * Writes the reader's own settings, addressed by `users.id`.
+ *
+ * Its own writer rather than `updateUserByClerkId` with a narrower patch,
+ * because a guest has no clerk id to address — and the settings screen is the
+ * one place a guest and an account must behave identically, since the opt-out
+ * is honoured from the first screen. The live-row guard is the one that matters
+ * here, as it is for the clerk-keyed writer.
+ */
+export async function updatePreferencesById(
+  id: string,
+  patch: Pick<UserPatch, 'shareUsage'>
+): Promise<PublicUser | null> {
+  if (patch.shareUsage === undefined) return null;
+
+  const [user] = await db
+    .update(users)
+    .set({ shareUsage: patch.shareUsage })
+    .where(and(eq(users.id, id), isNull(users.deletedAt)))
+    .returning({
+      id: users.id,
+      clerkId: users.clerkId,
+      email: users.email,
+      shareUsage: users.shareUsage,
+      isGuest: users.isGuest,
     });
 
   return user ?? null;
@@ -109,6 +141,7 @@ export async function softDeleteUserByClerkId(clerkId: string): Promise<PublicUs
       clerkId: users.clerkId,
       email: users.email,
       shareUsage: users.shareUsage,
+      isGuest: users.isGuest,
     });
 
   return user ?? null;
@@ -124,7 +157,9 @@ export async function softDeleteUserByClerkId(clerkId: string): Promise<PublicUs
  * webhook only marks the row; this is what honours a request to delete
  * someone's data (privacy policy, "Deleting your account").
  */
-export async function purgeUsersByEmail(email: string): Promise<{ id: string; clerkId: string }[]> {
+export async function purgeUsersByEmail(
+  email: string
+): Promise<{ id: string; clerkId: string | null }[]> {
   return db
     .delete(users)
     .where(eq(users.email, email.trim().toLowerCase()))

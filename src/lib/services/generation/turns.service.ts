@@ -13,7 +13,7 @@ import { NewEvent } from '../timeline/timeline.types';
 import { assembleSessionContext, assembleStorylineContext } from './context.reader';
 import { contextAsOf, scriptExhausted } from './playhead';
 import * as sessionWriter from '../sessions/sessions.writer';
-import { assertEnergy } from '../sessions/energy.service';
+import { assertMayPlay } from '../sessions/energy.service';
 import { track } from '@/lib/analytics/analytics';
 import { ConflictError, StorylineNotReadyError } from '@/lib/utils/errors';
 import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
@@ -57,7 +57,9 @@ export async function generateTurn(
   // necessary. A reader out of energy still gets the turn above for free — being
   // out of energy should not hide the decision already in front of them — and a
   // retry or a concurrent loser, both of which produce nothing, cost nothing.
-  await assertEnergy(userId);
+  // A guest is checked against their beat limit instead; same placement, same
+  // reasons.
+  const { guestBeat } = await assertMayPlay(userId);
 
   const [storyline, sessionContext] = await Promise.all([
     assembleStorylineContext(userId, session.storylineId),
@@ -103,8 +105,8 @@ export async function generateTurn(
       // Only when this call wrote the turn. Get-or-create returns a perfectly
       // good turn on the resumed branch and to a race loser, and counting those
       // would inflate every figure derived from beats played.
-      onCreated: (written) =>
-        track(userId, {
+      onCreated: async (written) => {
+        await track(userId, {
           name: 'beat_played',
           properties: {
             turn_order: written.turnOrder,
@@ -115,7 +117,14 @@ export async function generateTurn(
             started_from_event: session.startedFromEventId !== null,
             generation_ms: meta.durationMs,
           },
-        }),
+        });
+        // The onboarding funnel's own count, beside the general one: which of a
+        // guest's three beats this was. Beat 1 is scripted and reported when the
+        // story is written.
+        if (guestBeat !== null) {
+          await track(userId, { name: 'guest_beat_played', properties: { n: guestBeat } });
+        }
+      },
     }
   );
 }
@@ -385,8 +394,12 @@ export async function advanceSession(
   // paid for, so one point buys "settle what is owed, then give me the next
   // beat" — which is what this function means. Charging again would bill a
   // reader twice for one beat because their first attempt failed.
+  //
+  // For a guest the same placement holds the beat limit: past it, the answer is
+  // SIGNUP_REQUIRED before anything is settled — the last beat's consequences
+  // are written when the account plays on, not paid for on a guest's behalf now.
   if (!(await sessionReader.getOpenTurn(db, sessionId))) {
-    await assertEnergy(userId);
+    await assertMayPlay(userId);
   }
 
   // Oldest first. Each one's beats are canon for the turn after it, so settling

@@ -127,6 +127,10 @@ jobs:
       # reaches the column, neither of which depends on the key's value. The real
       # key lives in Doppler and never enters CI.
       CONTACT_HASH_SECRET: ci-not-a-secret-contact-hash-key-32-chars
+      # Not a secret either. The guest tests sign and verify tokens with it, and
+      # assert that a token signed with anything else is refused — neither
+      # depends on which key. The real one lives in Doppler and never enters CI.
+      GUEST_TOKEN_SECRET: ci-not-a-secret-guest-token-key-32chars
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -250,6 +254,7 @@ jobs:
       # transcript, only that one does. The real keys live in Doppler.
       IMPORT_MASTER_KEY: Y2ktbm90LWEtc2VjcmV0LWltcG9ydC1tYXN0ZXItayE=
       CONTACT_HASH_SECRET: ci-not-a-secret-contact-hash-key-32-chars
+      GUEST_TOKEN_SECRET: ci-not-a-secret-guest-token-key-32chars
       # No OPENAI_API_KEY, so the generator would fall back to the fake anyway.
       # Stated rather than relied on: playwright.config.ts pins it too, so the
       # suite behaves the same here and on a developer's machine.

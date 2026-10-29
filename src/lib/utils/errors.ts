@@ -36,6 +36,22 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/**
+ * A guest has reached something only an account can do: a fourth beat, or an
+ * import.
+ *
+ * 403 rather than 401, because the guest token is perfectly valid and
+ * refreshing it would change nothing — and a client that read this as an auth
+ * failure would throw away the token that holds the story it is about to save.
+ * Its own code, because the remedy is a screen (save your story) rather than an
+ * error message.
+ */
+export class SignupRequiredError extends AppError {
+  constructor(message = 'Sign up to keep playing.') {
+    super(message, 'SIGNUP_REQUIRED', 403);
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(
     message: string,

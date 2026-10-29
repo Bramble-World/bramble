@@ -1,6 +1,6 @@
 # Porter deployment for the Bramble API.
 #
-# One image, four ways to start it. The web service, the import worker and the two
+# One image, five ways to start it. The web service, the import worker and the three
 # sweeps all run the same container with a different command — see the Dockerfile.
 # Building once rather than per-service is what guarantees the worker cannot be
 # running different code from the server that queued its work.
@@ -107,7 +107,7 @@ services:
 
   # ── Sweeps. Plain one-shot processes on a schedule. ──────────────────────────
   #
-  # Both are idempotent and both exit non-zero on failure, which is what makes a
+  # All are idempotent and all exit non-zero on failure, which is what makes a
   # broken sweep visible rather than quietly stopping.
 
   - name: arc-sweep
@@ -137,6 +137,19 @@ services:
     ramMegabytes: 512
     allowConcurrent: false
     # Database writes only, no model calls.
+    timeoutSeconds: 300
+
+  - name: guest-sweep
+    type: job
+    run: node dist/sweeps/guest-sweep.js
+    # Hourly. Deletes guests whose seven days are up, and their stories with
+    # them — the privacy policy promises an unsaved guest story is deleted when
+    # it expires, and this is what keeps that promise.
+    cron: '0 * * * *'
+    cpuCores: 0.25
+    ramMegabytes: 512
+    allowConcurrent: false
+    # Cascading deletes only, no model calls.
     timeoutSeconds: 300
 
 # Build-time values that are public by definition, so they belong in version
