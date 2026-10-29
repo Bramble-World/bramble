@@ -19,6 +19,7 @@ import {
   storylineSessions,
   storyTurns,
   turnChoices,
+  users,
 } from '@/db/schema/tables';
 import {
   resolveSurfaces,
@@ -188,6 +189,11 @@ export async function findIdleSessions(idleSince: Date): Promise<PublicSession[]
  * be handed. The sweep is not a request: it runs for everyone, and it needs the
  * owner precisely so the summarise call it makes is still ownership-scoped
  * rather than bypassing the check.
+ *
+ * Guests' sessions are left out. A guest's story is deleted after seven days
+ * unless it's saved, so summarising it would pay for a model call that is
+ * usually thrown away; once it's saved and played on, it is an account's
+ * story and the sweep picks it up like any other.
  */
 export async function findIdleSessionOwners(
   idleSince: Date
@@ -198,7 +204,8 @@ export async function findIdleSessionOwners(
       userId: storylineSessions.userId,
     })
     .from(storylineSessions)
-    .where(lt(storylineSessions.lastActiveAt, idleSince));
+    .innerJoin(users, eq(users.id, storylineSessions.userId))
+    .where(and(lt(storylineSessions.lastActiveAt, idleSince), eq(users.isGuest, false)));
 }
 
 /** Whether a choice was one of the options offered on that turn. */

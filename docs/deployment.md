@@ -1,7 +1,7 @@
 # Deploying the Bramble API
 
-The backend runs on Porter (AWS EKS) as **one image started four ways**: the web
-server, the import worker, and two scheduled sweeps. `porter.yaml` is the whole
+The backend runs on Porter (AWS EKS) as **one image started several ways**: the web
+server, the import worker, and three scheduled sweeps. `porter.yaml` is the whole
 deployment; this document is the part that cannot live in it, namely where each
 secret comes from and which ones are needed before the image is even built.
 
@@ -19,12 +19,12 @@ secret comes from and which ones are needed before the image is even built.
 
 ## The four processes
 
-| Process    | Command                                  | Notes                                                       |
-| ---------- | ---------------------------------------- | ----------------------------------------------------------- |
-| Web        | `node server.js`                         | 2 replicas. Liveness `/api/health`, readiness `/api/ready`. |
-| Worker     | `node dist/worker/import-worker.js`      | 1 replica. No port — it polls the `imports` table.          |
-| Migrations | `node dist/db/migrate.js`                | Porter `predeploy`. Non-zero exit blocks the release.       |
-| Sweeps     | `node dist/sweeps/{arc,import}-sweep.js` | Cron jobs, hourly and every ten minutes.                    |
+| Process    | Command                                        | Notes                                                       |
+| ---------- | ---------------------------------------------- | ----------------------------------------------------------- |
+| Web        | `node server.js`                               | 2 replicas. Liveness `/api/health`, readiness `/api/ready`. |
+| Worker     | `node dist/worker/import-worker.js`            | 1 replica. No port — it polls the `imports` table.          |
+| Migrations | `node dist/db/migrate.js`                      | Porter `predeploy`. Non-zero exit blocks the release.       |
+| Sweeps     | `node dist/sweeps/{arc,import,guest}-sweep.js` | Cron jobs: arc and guest hourly, import every ten minutes.  |
 
 One image rather than four, so the worker cannot be running different code from
 the server that queued its work. The worker and the sweeps are bundled with
@@ -109,6 +109,7 @@ confidence rather than left in place forever because nobody is sure.
 | `REDIS_URL`                    | web, worker, sweeps    | AWS ElastiCache          | `rediss://…` Where encrypted transcripts wait between the import request and the worker.                                                                                                                                           |
 | `IMPORT_MASTER_KEY`            | web, worker            | generated, Doppler `prd` | Base64, 32 bytes. Wraps every per-import data key. Deliberately a different secret from `REDIS_URL`: envelope encryption is pointless if the key sits beside the credentials that reach the ciphertext. `openssl rand -base64 32`. |
 | `CONTACT_HASH_SECRET`          | web, worker            | generated, Doppler `prd` | ≥32 chars. HMAC key for `persons.source_contact_ref`. Hashing throws without it rather than falling back to an unkeyed digest. **Rotating it orphans every existing person row.**                                                  |
+| `GUEST_TOKEN_SECRET`           | web                    | generated, Doppler `prd` | ≥32 chars. Signs guest tokens (HS256). Without it guest creation fails closed and every guest token is a 401. Rotating it signs every guest out — they lose only their unsaved 7-day story. `openssl rand -base64 32`.             |
 | `CLERK_SECRET_KEY`             | web                    | Clerk prod               | `sk_live_…`. Verifies bearer tokens. Without it every request is a 401.                                                                                                                                                            |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | web                    | Clerk prod → Webhooks    | `whsec_…`. Verifies the Clerk webhook. Without it the route rejects everything, which is the correct closed default. See _Clerk webhook_ below.                                                                                    |
 | `OPENAI_API_KEY`               | web, worker, arc-sweep | OpenAI                   | `sk-…`. The model. Without it the generator falls back to a deterministic fake — which is worse than failing, because it is invisible.                                                                                             |
@@ -116,11 +117,13 @@ confidence rather than left in place forever because nobody is sure.
 
 ### Expected, with defaults worth setting explicitly
 
-| Variable                    | Default      | Set to       | Purpose                                                                                                                                          |
-| --------------------------- | ------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_ENV`                  | `production` | `production` | Pinned in the Dockerfile too. Its only other job is gating `/lab`, which must never be reachable in production — hence the default.              |
-| `MIN_MACOS_BUILD`           | `0`          | `0`          | Oldest macOS build served. `0` serves every client. A wrong value locks out every client at once, so raise it only with a release ready.         |
-| `IMPORT_WORKER_CONCURRENCY` | `2`          | leave unset  | Imports extracted per worker at once. Queue depth is better answered with another replica than with one process holding more work it could lose. |
+| Variable                    | Default                                            | Set to       | Purpose                                                                                                                                                 |
+| --------------------------- | -------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                  | `production`                                       | `production` | Pinned in the Dockerfile too. Its only other job is gating `/lab`, which must never be reachable in production — hence the default.                     |
+| `MIN_MACOS_BUILD`           | `0`                                                | `0`          | Oldest macOS build served. `0` serves every client. A wrong value locks out every client at once, so raise it only with a release ready.                |
+| `IMPORT_WORKER_CONCURRENCY` | `2`                                                | leave unset  | Imports extracted per worker at once. Queue depth is better answered with another replica than with one process holding more work it could lose.        |
+| `GUEST_ATTESTATION`         | `required` under `NODE_ENV=production`, else `off` | leave unset  | Whether `POST /api/v1/guests` needs an App Attest attestation. `off` opens guest creation to anything that can reach the API, limited only per address. |
+| `APP_ATTEST_ENVIRONMENT`    | `production`                                       | `production` | Which App Attest environment is accepted. `development` also accepts Xcode-installed builds — for staging while testing from Xcode, never production.   |
 
 ### Optional
 

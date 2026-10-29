@@ -11,7 +11,16 @@ export async function GET(request: Request) {
     // clerkId is an internal join key and is deliberately not returned.
     // shareUsage rides along so the Mac's settings toggle has a value to render
     // without a second request. Changed through PUT /api/v1/me/preferences.
-    return NextResponse.json({ id: user.id, email: user.email, shareUsage: user.shareUsage });
+    //
+    // A guest answers here too, with `email: null` and `isGuest: true`: the
+    // iPhone identifies its analytics by `id` from the first screen, before
+    // anyone has an email to show.
+    return NextResponse.json({
+      id: user.id,
+      email: user.email,
+      shareUsage: user.shareUsage,
+      isGuest: user.isGuest,
+    });
   } catch (error) {
     return handleError(error);
   }

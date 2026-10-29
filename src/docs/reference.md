@@ -8,7 +8,12 @@ This document explains what every table and field in the Bramble schema represen
 
 ### `users`
 
-One row per Bramble account. Root of ownership for everything else. Follows the existing project convention (`clerkId`, soft-delete via `deletedAt`, partial unique index on active email).
+One row per Bramble account — or per **guest**, someone playing on the iPhone before signing up. Root of ownership for everything else. Follows the existing project convention (`clerkId`, soft-delete via `deletedAt`, partial unique index on active email).
+
+- `clerkId` / `email` — the Clerk identity. **Null only for a guest**; a CHECK (`chk_users_account_identity`) requires both on every other row.
+- `isGuest` — true until the guest signs up. A guest is a real user, so the whole play loop works for them without a branch; signing up either sets `clerkId`/`email` on this row and clears the flag, or moves everything the guest owns to an existing account and deletes this row.
+- `guestExpiresAt` — when an unsaved guest is deleted (seven days after creation), by the hourly guest sweep. Also the guest token's expiry. Null for an account.
+- `appAttestKeyId` — the App Attest key a guest was created with, so one attested key holds at most one live guest (a partial unique index). Cleared on sign-up.
 
 ### `persons`
 
@@ -17,13 +22,14 @@ A real contact from the user's life — a sister, a coworker, an ex — stored *
 - `sourceContactRef` — a **hashed** phone number or email, used only to detect "have I already created a person for this contact" on re-sync. Never a raw phone/email. Unique per `(userId, sourceContactRef)`.
 - `isSelf` — true for exactly one `persons` row per user: the account holder themselves. This lets the user be cast as a `character`, have a `voiceProfile`, and participate in relationships like anyone else. Enforced by a partial unique index (`WHERE isSelf = true`).
 - `voiceProfile` — canonical vocabulary, tone, quirks, and sample turns, extracted from how this person actually communicates. Aggregated across every storyline they've appeared in.
+- `pronouns` — `he` / `she` / `they`, when the reader said which (the iPhone's naming screen does; a skipped choice is stored as `they`). Null for people an import created. Rendered into the turn and consequence prompts' cast lists.
 
 ### `personRelationships`
 
 The **structural, persistent** fact of what two real people are to each other — siblings, coworkers, close friends. Set once per pair, true regardless of which storyline you're looking at. Deliberately separate from the _narrative_ dynamic (see `characterRelationships` below), the same way `voiceProfile` lives on `persons` while storyline-specific voice deviation lives on `characters`.
 
 - `personAId` / `personBId` — the pair. A `CHECK` constraint (`personAId < personBId`) plus a unique index guarantees the database itself rejects a reversed-duplicate insert — the app must sort the two UUIDs before writing.
-- `relationshipType` — "siblings," "coworkers," etc.
+- `relationshipType` — "siblings," "coworkers," etc. For a person named in iPhone onboarding, the chip the reader picked: `ex`, `old_friend`, `crush`, `boss` or `sibling`.
 
 ---
 

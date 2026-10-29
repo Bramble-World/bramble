@@ -25,11 +25,16 @@ export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutc
     case 'user.updated': {
       const identity = identityFromWebhookData(event.data);
       if (!identity) {
-        // A Clerk account with no email cannot satisfy users.email NOT NULL.
-        // Skip rather than fail: retrying will not conjure an address.
+        // A Clerk account with no email cannot satisfy chk_users_account_identity
+        // (only a guest may lack one). Skip rather than fail: retrying will not
+        // conjure an address.
         return { handled: true, event: event.type, action: 'noop' };
       }
 
+      // Racing a guest's claim is safe in both orders. Land first and the claim
+      // finds this row and merges the guest into it; land second and the claim
+      // has already put this clerk id on the guest's row, so the insert below
+      // is a no-op.
       if (event.type === 'user.created') {
         const inserted = await writer.insertUserIfAbsent({
           clerkId: event.data.id,

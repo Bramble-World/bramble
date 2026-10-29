@@ -110,6 +110,12 @@ derive the children, rather than accepting both ids from a caller.
 
 ## 4. Conditional columns — nullable, but required in some states
 
+`users.clerkId` and `users.email` are nullable **only for a guest**. That one is
+enforced: `chk_users_account_identity` requires both on any row that is not
+`isGuest`, and `chk_users_guest_expiry` requires a guest to have an expiry. Code
+reading a `PublicUser` must still handle `null` for both, because a guest is a
+user like any other on every route that takes one.
+
 Nothing ties these columns to the state that makes them meaningful.
 
 | Column                             | Must be set when                               | Must be null when            |
@@ -170,11 +176,33 @@ not met yet — the same leak the playhead exists to stop.
 
 **Every user needs exactly one `isSelf` person.** The partial unique index stops
 a _second_ one, but nothing creates the first. Provision it when the user is
-provisioned.
+provisioned. Guests are: `createGuest` writes the self person (named "You") in
+the same transaction as the row. Clerk-provisioned accounts still are not —
+extraction and the seed create it — so code must not assume an account has one.
+A guest claimed into an account that has a self person is merged into it
+(`guests.claim.ts`); into one that has none, the guest's simply becomes the
+account's.
+
+**Moving a guest into an account touches every table with a `user_id`.**
+`USER_OWNED_TABLES` in `guests.claim.ts` lists them, and a test compares that
+list with the live schema. A new table with a `user_id` that is not added there
+is rows silently left on a guest that is then deleted — and they go with it.
+Swapping the self person also re-sorts `person_relationships` (the CHECK in §2)
+and re-points `characters.personId` and `motif_participants`.
 
 ---
 
 ## 6. Conventions with no enforcement
+
+- **A guest token is only as good as its row.** Guest tokens are long-lived
+  (seven days) and signed by us; what ends one is `getLiveGuest` failing on the
+  next request — deleted, claimed or expired. Anything that authenticates a
+  guest token without that read would let a claimed or swept guest keep playing.
+  `requireCurrentUser` and `requireGuestFromHeader` both do it.
+- **A guest's limit is beats, not energy**, and `assertMayPlay` is the only
+  place that decides which applies. Calling `assertEnergy` directly on a path a
+  guest can reach would charge them energy they have no screen for and skip the
+  beat limit.
 
 - **`narrativeOrder` uses gaps of 1000** (1000, 2000, 3000…) so a mid-story
   insert can take 1500 without renumbering. Gaps of 10 were the original

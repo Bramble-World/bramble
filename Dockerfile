@@ -1,5 +1,5 @@
 # One image, three ways to run it: the web server, the import worker, and one-off
-# commands (migrations, the two sweeps). Building one image rather than three
+# commands (migrations, the sweeps). Building one image rather than three
 # means the worker cannot be running different code from the server that queued
 # its work, which is the failure that a separate worker image invites.
 #
@@ -118,5 +118,5 @@ EXPOSE 3000
 # The web server. The worker and the one-off commands override this:
 #   worker:  node dist/worker/import-worker.js
 #   migrate: node dist/db/migrate.js
-#   sweeps:  node dist/sweeps/arc-sweep.js | node dist/sweeps/import-sweep.js
+#   sweeps:  node dist/sweeps/{arc,import,guest}-sweep.js
 CMD ["node", "server.js"]

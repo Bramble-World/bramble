@@ -31,8 +31,8 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploying
 
-The backend runs on **Porter** (AWS EKS) from one Docker image started four ways —
-the web server, the import worker, and two cron sweeps. `porter.yaml` is the
+The backend runs on **Porter** (AWS EKS) from one Docker image started five ways —
+the web server, the import worker, and three cron sweeps. `porter.yaml` is the
 deployment; **[docs/deployment.md](docs/deployment.md)** lists every production
 environment variable, where it comes from, and which ones are needed at build time
 rather than at runtime.
@@ -41,7 +41,7 @@ rather than at runtime.
 docker build -t bramble:local .          # builds with nothing configured
 pnpm dev:all                             # Next dev server + import worker
 pnpm worker                              # the worker alone
-pnpm sweep:arc | pnpm sweep:imports      # a sweep on demand
+pnpm sweep:arc | pnpm sweep:imports | pnpm sweep:guests   # a sweep on demand
 ```
 
 ## Promoting a change

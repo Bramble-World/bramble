@@ -1,9 +1,9 @@
 import { withUser } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { uuidParam } from '@/lib/api/params';
-import { energyView, turnView } from '@/lib/api/views';
+import { turnView } from '@/lib/api/views';
+import { readerEnergy } from '@/lib/api/energy';
 import { advanceSession } from '@/lib/services/generation/turns.service';
-import { energyFor } from '@/lib/services/sessions/energy.service';
 import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
 
 type Params = { params: Promise<{ sessionId: string }> };
@@ -50,5 +50,8 @@ export const POST = withUser(async (user, request, { params }: Params) => {
   // Read after the turn is written, so the balance in this response already
   // reflects the point this request just spent. A client that rendered a stale
   // balance here would show a reader energy they no longer have.
-  return json({ turn: turnView(turn), energy: energyView(await energyFor(user.id)) });
+  //
+  // Null for a guest: their limit is beats, not energy, and past it this route
+  // answers 403 SIGNUP_REQUIRED instead of 429. See `assertMayPlay`.
+  return json({ turn: turnView(turn), energy: await readerEnergy(user) });
 });
