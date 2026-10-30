@@ -52,6 +52,18 @@ export class SignupRequiredError extends AppError {
   }
 }
 
+/**
+ * Something that can't be undone needs a sign-in from the last few minutes —
+ * deleting an account, so far. 403, not 401: the session is valid, and a
+ * client that refreshed its token on 401 would change nothing. The remedy is
+ * to confirm with Face ID or the player's sign-in, then send the request again.
+ */
+export class ReverificationRequiredError extends AppError {
+  constructor(message = 'Confirm it is you, then try again.') {
+    super(message, 'REVERIFICATION_REQUIRED', 403);
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(
     message: string,

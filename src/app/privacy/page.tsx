@@ -9,7 +9,7 @@ import { LEGAL_ENTITY, LegalPage, Mail } from '@/components/legal/legal-page';
  * enforced or tested somewhere: the transcript's 30-minute life and the "never
  * written to the database" rule (src/docs/invariants.md §1 and the scan in
  * import-runner.integration.test.ts), account deletion
- * (purge.integration.test.ts), the analytics allow-lists (src/lib/analytics and
+ * (purge.integration.test.ts and account-deletion.routes.integration.test.ts), the analytics allow-lists (src/lib/analytics and
  * the Mac's Analytics.swift), and a guest's seven days, App Attest key and
  * per-address count (GUEST_LIFETIME_MS, guest-sweep.ts, attestation.ts,
  * ip-limit.ts, and guests.routes.integration.test.ts). Change the behaviour and this page has to change
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="October 29, 2026">
+    <LegalPage title="Privacy Policy" effective="October 30, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -58,7 +58,10 @@ export default function Privacy() {
           and deleted automatically unless you save it by signing up.
         </li>
         <li>We don&rsquo;t sell your data, and we don&rsquo;t use it for advertising.</li>
-        <li>Email us and we&rsquo;ll delete your account and everything in it.</li>
+        <li>
+          You can delete your account and everything in it from Settings in the iPhone app, or by
+          emailing us.
+        </li>
       </ul>
 
       <h2>What we collect, and why</h2>
@@ -209,7 +212,9 @@ export default function Privacy() {
         </li>
         <li>
           <strong>Apple</strong>: App Attest, on iPhone, as described above. Apple certifies the key
-          the app creates; we don&rsquo;t send Apple anything about you or your story.
+          the app creates; we don&rsquo;t send Apple anything about you or your story. If you signed
+          in with Apple and delete your account, we also ask Apple to revoke Bramble&rsquo;s Sign in
+          with Apple for your Apple ID, as described below.
         </li>
         <li>
           <strong>Amazon Web Services</strong>: hosts our website, our servers and our database, in
@@ -250,7 +255,7 @@ export default function Privacy() {
           automatically.
         </li>
         <li>Counts of guest accounts created per IP address: 1 hour.</li>
-        <li>Your account and stories: until you ask us to delete them.</li>
+        <li>Your account and stories: until you delete them, or ask us to.</li>
         <li>Download-page IP addresses: 15 minutes.</li>
         <li>
           Usage data and crash reports: for as long as our providers keep them for us, after which
@@ -261,16 +266,27 @@ export default function Privacy() {
 
       <h2>Deleting your account</h2>
       <p>
-        Email <Mail /> from the address you use for Bramble and ask us to delete your account.
-        Within 30 days we&rsquo;ll delete your account, your stories and everything else we hold
-        about you in our database, your Clerk account, and your usage data in PostHog, and confirm
-        when it&rsquo;s done. Copies in our database backups disappear as those backups expire.
-        Deleting your account does not delete anything on your Mac; to remove that, delete the app.
+        In the iPhone app, go to Settings and tap &ldquo;delete my account&rdquo;. You confirm with
+        Face ID or your sign-in first, so nobody else can do it from your phone. It happens straight
+        away: we delete your account, your stories, the people you added and everything else we hold
+        about you in our database, your Clerk account and passkeys, and your usage data in PostHog.
+        If you signed in with Apple, we also revoke Bramble&rsquo;s Sign in with Apple, so Bramble
+        no longer appears under your Apple ID. Passkeys saved in your iCloud Keychain or password
+        manager stay there until you delete them yourself.
+      </p>
+      <p>
+        You can also email <Mail /> from the address you use for Bramble and ask us to delete your
+        account, for example if you no longer have the app or can&rsquo;t sign in. We&rsquo;ll do
+        the same within 30 days and confirm when it&rsquo;s done.
+      </p>
+      <p>
+        Either way, copies in our database backups disappear as those backups expire. Deleting your
+        account does not delete anything on your Mac; to remove that, delete the app.
       </p>
       <p>
         A guest account has no email address, so we can&rsquo;t find one from an email. You
         don&rsquo;t need to ask: it&rsquo;s deleted automatically, with its story, 7 days after it
-        was created. Once you sign up, your account is deleted like any other, by emailing us.
+        was created. Once you sign up, your account is deleted like any other.
       </p>
 
       <h2>Your rights</h2>

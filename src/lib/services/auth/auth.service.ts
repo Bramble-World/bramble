@@ -56,6 +56,25 @@ export async function requireClerkUserId(request: Request): Promise<string> {
 }
 
 /**
+ * How many minutes ago this session's player last proved who they are with a
+ * first factor (a passkey, an email code, a sign-in), or null when Clerk
+ * doesn't say.
+ *
+ * Read from the session token's `fva` claim, which Clerk resets when the app
+ * re-verifies the session (`Session.verifyWithPasskey` and friends on iOS) and
+ * the app then fetches a fresh token. Verified the same way
+ * `requireClerkUserId` verifies, so a forged claim fails the signature first.
+ */
+export async function clerkFirstFactorAgeMinutes(request: Request): Promise<number | null> {
+  if (!clerkEnabled) throw new UnauthorizedError();
+  const state = await clerkBackend.authenticateRequest(request, {
+    acceptsToken: 'session_token',
+  });
+  if (!state.isAuthenticated) throw new UnauthorizedError();
+  return state.toAuth().factorVerificationAge?.[0] ?? null;
+}
+
+/**
  * The full identity: verifies the bearer token and resolves it to a local users
  * row, provisioning one on first sight.
  *
