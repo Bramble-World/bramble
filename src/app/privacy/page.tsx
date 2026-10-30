@@ -180,9 +180,10 @@ export default function Privacy() {
       <h3>Notifications</h3>
       <p>
         If you allow notifications, Bramble shows them on your Mac when a story you imported is
-        ready, and when your energy is back after running out. They&rsquo;re created on your Mac,
-        never name the people in your stories, and send nothing to us or anyone else. Turn energy
-        reminders off in Bramble&rsquo;s Settings, or all of them in macOS&rsquo;s System Settings.
+        ready, and on your Mac or iPhone when your energy is back after running out. They&rsquo;re
+        created on your device, say they&rsquo;re from Bramble, never name the people in your
+        stories, and send nothing to us or anyone else. Turn energy reminders off in Bramble&rsquo;s
+        Settings, or all of them in your device&rsquo;s Settings.
       </p>
 
       <h3>Updates and downloads</h3>
