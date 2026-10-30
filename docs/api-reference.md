@@ -704,6 +704,23 @@ Senders are always people the reader has already met in this playthrough, and
 never the reader. A sender whose person has since been deleted is dropped, and a
 surface left with no notifications is dropped with it.
 
+#### Proposed surfaces (not served yet)
+
+The iPhone's desk has close-ups for an email on the laptop and a boarding pass
+by the passport, built against these shapes from debug data. **Neither is
+generated or served yet.** When the backend adds them, it should match these
+fields, or update the iPhone in the same change: a payload in another shape is
+skipped like an unknown type, so the beat falls back to the notebook rather
+than failing.
+
+| `type`          | Fields                                                                                                                                                                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `email`         | `from` (who it's from, as an inbox shows it: `"study abroad office"`), `timeLabel` (`"1:31 am"` or null), `subject`, `body`                                                                                                                                             |
+| `boarding_pass` | `fromCode`, `fromCity`, `toCode`, `toCity` (`"JFK"`, `"new york"` → `"LIS"`, `"lisbon"`), `dateLabel` (`"FRI 10/03"`), `boardsLabel` (`"9:40 PM"`), `gate`, `seat`, `flight` (`"BR 214"`), `whenLabel` (how far off it is in the story: `"six days from now"`, or null) |
+
+Labels arrive formatted, as `clockTime` does on texts. An email's `from` is a
+name in the story, not a person the reader has met, so it is not a `PersonView`.
+
 ### `POST /api/v1/sessions/{sessionId}/turn`
 
 The only paid endpoint. Settles any owed consequences, then generates.
