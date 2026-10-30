@@ -22,7 +22,7 @@ vi.mock('@/env', async (importOriginal) => {
 vi.mock('@/lib/services/auth/auth.service', () => ({ requireCurrentUser: vi.fn() }));
 
 const { db } = await import('@/index');
-const { storylines: storylineTable, users } = await import('@/db/schema/tables');
+const { storylines: storylineTable, storylineSessions, users } = await import('@/db/schema/tables');
 const auth = vi.mocked(await import('@/lib/services/auth/auth.service'));
 const persons = await import('@/lib/services/persons/persons.service');
 const storylines = await import('@/lib/services/storylines/storylines.service');
@@ -317,7 +317,38 @@ describe('GET /api/v1/world', () => {
     expect(body.events).toStrictEqual([]);
     expect(body.truncated).toBe(false);
     // A reader with nothing has spent nothing, so a full balance and no reset.
-    expect(body.energy).toStrictEqual({ remaining: 20, limit: 20, resetsAt: null });
+    expect(body.energy).toStrictEqual({ remaining: 20, limit: 20, resetsAt: null, fullAt: null });
+    expect(body.current).toBeNull();
+  });
+
+  /**
+   * The story the reader is in now, for the iPhone's desk: the most recently
+   * active session, whatever it was opened from.
+   */
+  it('names the reader current story: their most recently active session', async () => {
+    asOwner();
+    const older = await sessions.startSession(ownerId, storylineId);
+    const newer = await sessions.startSession(ownerId, storylineId);
+    // Apart in time, so "most recent" isn't decided by a tie in the same millisecond.
+    await db
+      .update(storylineSessions)
+      .set({ lastActiveAt: new Date(Date.now() - 60 * 60 * 1000) })
+      .where(eq(storylineSessions.id, older.id));
+
+    const body = await (await world.GET(get('/api/v1/world'), undefined)).json();
+
+    expect(newer.id).not.toBe(older.id);
+    expect(body.current).toMatchObject({
+      sessionId: newer.id,
+      storylineId,
+      turnsAnswered: 0,
+    });
+    expect(typeof body.current.storylineTitle).toBe('string');
+    expect(typeof body.current.lastActiveAt).toBe('string');
+
+    asStranger();
+    const theirs = await (await world.GET(get('/api/v1/world'), undefined)).json();
+    expect(theirs.current).toBeNull();
   });
 
   it('never serves one reader another reader moments', async () => {
@@ -821,6 +852,7 @@ describe('the play loop', () => {
     expect(body.energy.remaining).toBe(before.energy.remaining - 1);
     expect(body.energy.limit).toBe(20);
     expect(typeof body.energy.resetsAt).toBe('string');
+    expect(typeof body.energy.fullAt).toBe('string');
   });
 
   it('records an answer and moves the session on', async () => {

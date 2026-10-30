@@ -474,7 +474,15 @@ Query: `?limit=` — optional, clamped to 20.
       }
     }
   ],
-  "truncated": true
+  "truncated": true,
+  "current": {
+    "sessionId": "uuid",
+    "storylineId": "uuid",
+    "storylineTitle": "the night before",
+    "turnsAnswered": 4,
+    "lastActiveAt": "2026-10-30T19:58:00.000Z"
+  },
+  "energy": { "remaining": 14, "limit": 20, "resetsAt": "…", "fullAt": "…" }
 }
 ```
 
@@ -491,6 +499,11 @@ Query: `?limit=` — optional, clamped to 20.
   branch on the value rather than on a missing key. Loaded for the whole page in
   one query.
 - **`truncated`** — more rankable beats exist than were returned.
+- **`current`** — the story the reader is in now: their most recently active
+  session, whatever it was opened from, or `null` if they have never played.
+  `{ "sessionId", "storylineId", "storylineTitle", "turnsAnswered", "lastActiveAt" }`.
+  The iPhone's desk resumes it (`GET /api/v1/sessions/{id}`) to light the phone
+  for its waiting beat. Always present; branch on the value.
 
 A reader with nothing gets `{ "events": [], "truncated": false }` and **200,
 never 404**. Empty is an invitation, not an error.
@@ -837,7 +850,12 @@ Playing a turn costs one point from a daily allowance. Imports have their own
 separate limit — three per account, ever.
 
 ```json
-"energy": { "remaining": 14, "limit": 20, "resetsAt": "2026-10-03T09:12:04.000Z" }
+"energy": {
+  "remaining": 14,
+  "limit": 20,
+  "resetsAt": "2026-10-03T09:12:04.000Z",
+  "fullAt": "2026-10-03T23:40:51.000Z"
+}
 ```
 
 It rides as a **top-level sibling key**, never inside a resource, because it is
@@ -852,6 +870,8 @@ beats instead of energy (see _Guests and onboarding_):
 
 - **`remaining`** — turns the reader may start right now, 0..`limit`.
 - **`resetsAt`** — when the next point returns, or `null` at a full balance.
+- **`fullAt`** — when the balance is full again: the last point spent coming
+  back. `null` at a full balance. The iPhone's battery shows it as "full again".
 
 **A sliding window, not a daily reset.** Each point returns exactly 24 hours
 after it was spent, so energy trickles back through the day rather than arriving

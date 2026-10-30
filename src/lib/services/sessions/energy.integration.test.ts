@@ -87,6 +87,7 @@ describe('the balance', () => {
       remaining: TURN_ENERGY_PER_DAY,
       limit: TURN_ENERGY_PER_DAY,
       resetsAt: null,
+      fullAt: null,
     });
   });
 
@@ -115,6 +116,7 @@ describe('the balance', () => {
     expect(await energyFor(userId)).toMatchObject({
       remaining: TURN_ENERGY_PER_DAY,
       resetsAt: null,
+      fullAt: null,
     });
   });
 
@@ -130,6 +132,29 @@ describe('the balance', () => {
       .where(eq(storylineSessions.userId, userId));
 
     expect(resetsAt!.getTime()).toBe(row.createdAt.getTime() + ENERGY_WINDOW_MS);
+  });
+
+  /**
+   * "full again": the last point spent is the last to come back, so it is the
+   * newest turn plus the window, while the next point back is the oldest.
+   */
+  it('reports when the balance is full again', async () => {
+    const session = await sessions.startSession(userId, storylineId);
+    await playOneTurn(session.id);
+    await ageAllTurnsBy(60 * 60 * 1000);
+    await playOneTurn(session.id);
+
+    const { resetsAt, fullAt } = await energyFor(userId);
+    const rows = await db
+      .select({ createdAt: storyTurns.createdAt })
+      .from(storyTurns)
+      .innerJoin(storylineSessions, eq(storylineSessions.id, storyTurns.sessionId))
+      .where(eq(storylineSessions.userId, userId));
+    const times = rows.map((r) => r.createdAt.getTime());
+
+    expect(resetsAt!.getTime()).toBe(Math.min(...times) + ENERGY_WINDOW_MS);
+    expect(fullAt!.getTime()).toBe(Math.max(...times) + ENERGY_WINDOW_MS);
+    expect(fullAt!.getTime()).toBeGreaterThan(resetsAt!.getTime());
   });
 
   // Energy is per account. Another reader playing must not cost this one a thing.

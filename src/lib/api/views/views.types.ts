@@ -218,6 +218,24 @@ export type EnergyView = {
    * so this is the oldest spent point ageing out rather than a daily reset.
    */
   resetsAt: string | null;
+  /**
+   * When the balance is full again, ISO, or null at a full balance: the newest
+   * spent point ageing out. Additive, so older clients ignore it.
+   */
+  fullAt: string | null;
+};
+
+/**
+ * The reader's current story, on `GET /api/v1/world`: their most recently
+ * active session. The iPhone's desk resumes it (`GET /api/v1/sessions/{id}`)
+ * to light the phone for its waiting beat.
+ */
+export type CurrentPlaythroughView = {
+  sessionId: string;
+  storylineId: string;
+  storylineTitle: string;
+  turnsAnswered: number;
+  lastActiveAt: string;
 };
 
 export type SessionView = {
