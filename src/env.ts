@@ -134,6 +134,39 @@ export const env = createEnv({
      * 'production' (the default) accepts only TestFlight and App Store builds.
      */
     APP_ATTEST_ENVIRONMENT: z.enum(['production', 'development']).default('production'),
+    /**
+     * Sign in with Apple, for revoking a player's Apple sign-in when they
+     * delete their account (App Store guideline 5.1.1(v)).
+     *
+     * The iPhone signs in natively, so Clerk only ever sees Apple's identity
+     * token and holds nothing that could be revoked. Instead the app re-signs
+     * in with Apple to confirm the deletion and sends that authorization code;
+     * the server trades it for a refresh token at Apple and revokes it at once.
+     * Trading a code needs a client secret, which is a JWT signed with this key.
+     *
+     * Optional like the rest so a bare checkout builds. Without them, deleting
+     * an account that has Apple on it fails closed — nothing is deleted —
+     * rather than leaving Bramble connected to the player's Apple ID.
+     */
+    APPLE_TEAM_ID: z.string().optional(),
+    APPLE_SIGN_IN_KEY_ID: z.string().optional(),
+    /** The .p8 key's PEM, as Apple issues it. */
+    APPLE_SIGN_IN_PRIVATE_KEY: z.string().optional(),
+    /** The iPhone app's bundle id: native sign-in uses it as the client id. */
+    APPLE_SIGN_IN_CLIENT_ID: z.string().default('com.brambleworld.BrambleMobile'),
+    /**
+     * PostHog's private API, for deleting a person and their events when their
+     * account is deleted. A personal API key with `person:write` on this one
+     * project, and the project's numeric id. The private API lives on the app
+     * host (https://us.posthog.com), not the ingestion host in POSTHOG_HOST.
+     *
+     * Absent everywhere POSTHOG_PROJECT_TOKEN is: with no events sent there is
+     * no person to delete. Set the token without these and account deletion
+     * fails closed.
+     */
+    POSTHOG_PERSONAL_API_KEY: z.string().startsWith('phx_').optional(),
+    POSTHOG_PROJECT_ID: z.string().optional(),
+    POSTHOG_API_HOST: z.url().default('https://us.posthog.com'),
   },
 
   /**
@@ -169,6 +202,13 @@ export const env = createEnv({
     GUEST_TOKEN_SECRET: process.env.GUEST_TOKEN_SECRET,
     GUEST_ATTESTATION: process.env.GUEST_ATTESTATION,
     APP_ATTEST_ENVIRONMENT: process.env.APP_ATTEST_ENVIRONMENT,
+    APPLE_TEAM_ID: process.env.APPLE_TEAM_ID,
+    APPLE_SIGN_IN_KEY_ID: process.env.APPLE_SIGN_IN_KEY_ID,
+    APPLE_SIGN_IN_PRIVATE_KEY: process.env.APPLE_SIGN_IN_PRIVATE_KEY,
+    APPLE_SIGN_IN_CLIENT_ID: process.env.APPLE_SIGN_IN_CLIENT_ID,
+    POSTHOG_PERSONAL_API_KEY: process.env.POSTHOG_PERSONAL_API_KEY,
+    POSTHOG_PROJECT_ID: process.env.POSTHOG_PROJECT_ID,
+    POSTHOG_API_HOST: process.env.POSTHOG_API_HOST,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },

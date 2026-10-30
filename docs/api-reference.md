@@ -104,25 +104,28 @@ One envelope, every failure:
 `retryAfter` (seconds) appears on `RATE_LIMITED`, `UPSTREAM_BUSY` and
 `GENERATION_TIMEOUT`.
 
-| Status | Code                     | Meaning                                                                              |
-| ------ | ------------------------ | ------------------------------------------------------------------------------------ |
-| 400    | `VALIDATION_ERROR`       | Malformed body or a path id that is not a uuid                                       |
-| 401    | `UNAUTHORIZED`           | Missing, malformed or rejected bearer token                                          |
-| 403    | `FORBIDDEN`              | Account deleted; device not verified (guest creation); onboarding as an account      |
-| 403    | `SIGNUP_REQUIRED`        | A guest asked for an account-only thing: a fourth beat, or an import                 |
-| 404    | `NOT_FOUND`              | Unknown id — **or someone else's**. Never 403                                        |
-| 409    | `CONFLICT`               | A turn already answered with a _different_ choice; an attested key with a live guest |
-| 409    | `STORYLINE_NOT_READY`    | Storyline is not `ready` to play                                                     |
-| 409    | `IMPORT_LIMIT_REACHED`   | All three conversation slots are spent                                               |
-| 409    | `GENERATION_IN_PROGRESS` | Another generation holds this session                                                |
-| 410    | `TRANSCRIPT_EXPIRED`     | Transcript gone before the worker read it. Re-send                                   |
-| 413    | `TRANSCRIPT_TOO_LARGE`   | Over 400,000 characters                                                              |
-| 429    | `RATE_LIMITED`           | Out of energy — or, on the guest routes, too many from one address. `Retry-After`    |
-| 429    | `UPSTREAM_BUSY`          | The model provider throttled us. Clears on its own                                   |
-| 500    | `GENERATION_UNUSABLE`    | Model output did not match the schema. Retrying burns money for the same failure     |
-| 500    | `INTERNAL_SERVER_ERROR`  | Unexpected                                                                           |
-| 503    | `GENERATION_FAILED`      | Provider failure. Retryable                                                          |
-| 504    | `GENERATION_TIMEOUT`     | Our own 60s deadline. Safe to retry                                                  |
+| Status | Code                        | Meaning                                                                              |
+| ------ | --------------------------- | ------------------------------------------------------------------------------------ |
+| 400    | `VALIDATION_ERROR`          | Malformed body or a path id that is not a uuid                                       |
+| 401    | `UNAUTHORIZED`              | Missing, malformed or rejected bearer token                                          |
+| 403    | `FORBIDDEN`                 | Account deleted; device not verified (guest creation); onboarding as an account      |
+| 403    | `SIGNUP_REQUIRED`           | A guest asked for an account-only thing: a fourth beat, an import, account deletion  |
+| 403    | `REVERIFICATION_REQUIRED`   | Deleting an account needs a sign-in from the last 10 minutes. Re-verify, then resend |
+| 404    | `NOT_FOUND`                 | Unknown id — **or someone else's**. Never 403                                        |
+| 409    | `CONFLICT`                  | A turn already answered with a _different_ choice; an attested key with a live guest |
+| 409    | `STORYLINE_NOT_READY`       | Storyline is not `ready` to play                                                     |
+| 409    | `IMPORT_LIMIT_REACHED`      | All three conversation slots are spent                                               |
+| 409    | `GENERATION_IN_PROGRESS`    | Another generation holds this session                                                |
+| 410    | `TRANSCRIPT_EXPIRED`        | Transcript gone before the worker read it. Re-send                                   |
+| 413    | `TRANSCRIPT_TOO_LARGE`      | Over 400,000 characters                                                              |
+| 429    | `RATE_LIMITED`              | Out of energy — or, on the guest routes, too many from one address. `Retry-After`    |
+| 429    | `UPSTREAM_BUSY`             | The model provider throttled us. Clears on its own                                   |
+| 500    | `GENERATION_UNUSABLE`       | Model output did not match the schema. Retrying burns money for the same failure     |
+| 500    | `INTERNAL_SERVER_ERROR`     | Unexpected                                                                           |
+| 502    | `APPLE_REVOCATION_FAILED`   | Account deletion: Apple refused the code. Nothing was deleted                        |
+| 502    | `ANALYTICS_DELETION_FAILED` | Account deletion: PostHog refused. The account is not deleted                        |
+| 503    | `GENERATION_FAILED`         | Provider failure. Retryable                                                          |
+| 504    | `GENERATION_TIMEOUT`        | Our own 60s deadline. Safe to retry                                                  |
 
 **404 and not 403 for another account's ids, everywhere.** "Not yours" and "no
 such thing" are the same answer, or the error itself confirms the id exists.
@@ -173,6 +176,48 @@ counts, durations and enums about the app's own behaviour, never anything the
 reader wrote.
 
 A non-boolean is a **400** with `fields.shareUsage`. Works for a guest too.
+
+### `DELETE /api/v1/me`
+
+Deletes the reader's account, now and for good: every row they own (the
+`users` row and everything that cascades from it), their Clerk user with its
+passkeys and sessions, their PostHog person and its events, and — when the
+account has Apple on it — their Sign in with Apple, revoked at Apple.
+**204** with no body. The session token stops working.
+
+Accounts only: a guest gets **403 `SIGNUP_REQUIRED`**.
+
+**The player proves it's them first, and nothing is deleted until they have.**
+
+- **An account with Apple** (a Clerk external account for Apple) sends a fresh
+  Sign in with Apple authorization code. The app signs in with Apple again
+  (`ASAuthorizationAppleIDProvider`, no scopes) and sends
+  `authorizationCode`:
+
+  ```json
+  { "appleAuthorizationCode": "c1a2…" }
+  ```
+
+  The server trades it at Apple for a refresh token, checks it is the same
+  Apple ID as the account's, and revokes it. Codes are single-use and live five
+  minutes, so this is the re-verification too. Clerk can't re-verify with Apple,
+  and Clerk holds no Apple token from a native sign-in, so there is no other way
+  to revoke. Without a code: **403 `REVERIFICATION_REQUIRED`**. A code for a
+  different Apple ID: the same 403. A code Apple refuses: **502
+  `APPLE_REVOCATION_FAILED`**.
+
+- **Any other account** sends no body. Its session must have re-verified a first
+  factor in the last **10 minutes** — read from the session token's `fva` claim.
+  On iOS: `Session.verifyWithPasskey()` or `sendEmailCode` /
+  `verifyWithEmailCode`, then a fresh token (`skipCache`). Otherwise **403
+  `REVERIFICATION_REQUIRED`**.
+
+**Order, and what a failure leaves.** Apple is revoked, then the PostHog person
+deleted, then the rows and the Clerk user go in one transaction — Clerk's delete
+runs inside it, so if Clerk refuses, the rows roll back. A failure at any step
+leaves the account in place and signed in, and the request can be retried with
+fresh proof; the steps already done are harmless to repeat. A body with any
+other field is a **400**.
 
 ---
 
