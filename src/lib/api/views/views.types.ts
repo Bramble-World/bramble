@@ -218,6 +218,11 @@ export type EnergyView = {
    * so this is the oldest spent point ageing out rather than a daily reset.
    */
   resetsAt: string | null;
+  /**
+   * When the balance is full again, ISO, or null at a full balance: the newest
+   * spent point ageing out. Additive, so older clients ignore it.
+   */
+  fullAt: string | null;
 };
 
 export type SessionView = {

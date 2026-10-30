@@ -837,7 +837,12 @@ Playing a turn costs one point from a daily allowance. Imports have their own
 separate limit — three per account, ever.
 
 ```json
-"energy": { "remaining": 14, "limit": 20, "resetsAt": "2026-10-03T09:12:04.000Z" }
+"energy": {
+  "remaining": 14,
+  "limit": 20,
+  "resetsAt": "2026-10-03T09:12:04.000Z",
+  "fullAt": "2026-10-03T23:40:51.000Z"
+}
 ```
 
 It rides as a **top-level sibling key**, never inside a resource, because it is
@@ -852,6 +857,8 @@ beats instead of energy (see _Guests and onboarding_):
 
 - **`remaining`** — turns the reader may start right now, 0..`limit`.
 - **`resetsAt`** — when the next point returns, or `null` at a full balance.
+- **`fullAt`** — when the balance is full again: the last point spent coming
+  back. `null` at a full balance. The iPhone's battery shows it as "full again".
 
 **A sliding window, not a daily reset.** Each point returns exactly 24 hours
 after it was spent, so energy trickles back through the day rather than arriving

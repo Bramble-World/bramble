@@ -218,6 +218,7 @@ export function energyView(energy: Energy): EnergyView {
     remaining: energy.remaining,
     limit: energy.limit,
     resetsAt: iso(energy.resetsAt),
+    fullAt: iso(energy.fullAt),
   };
 }
 

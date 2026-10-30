@@ -511,15 +511,20 @@ export async function listAnsweredTurns(
 export async function turnsCreatedSince(
   userId: string,
   since: Date
-): Promise<{ used: number; oldest: Date | null }> {
+): Promise<{ used: number; oldest: Date | null; newest: Date | null }> {
   const [row] = await db
     .select({
       used: sql<number>`count(*)::int`,
       oldest: sql<Date | null>`min(${storyTurns.createdAt})`,
+      newest: sql<Date | null>`max(${storyTurns.createdAt})`,
     })
     .from(storyTurns)
     .innerJoin(storylineSessions, eq(storylineSessions.id, storyTurns.sessionId))
     .where(and(eq(storylineSessions.userId, userId), gte(storyTurns.createdAt, since)));
 
-  return { used: row?.used ?? 0, oldest: row?.oldest ? new Date(row.oldest) : null };
+  return {
+    used: row?.used ?? 0,
+    oldest: row?.oldest ? new Date(row.oldest) : null,
+    newest: row?.newest ? new Date(row.newest) : null,
+  };
 }
