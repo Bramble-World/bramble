@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { StorylineContext } from '@/lib/services/generation/generation.types';
 import { ENGAGEMENT_RUBRIC, renderTimeline } from './timeline';
+import { PRONOUN_LABELS } from './turn.prompt';
 
 export type ConsequenceVars = {
   storyline: StorylineContext;
@@ -144,7 +145,8 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       '',
       '## Cast',
       ...storyline.characters.map(
-        (c) => `- ${c.id} — ${c.name}${c.isSelf ? ' (the reader)' : ''}, ${c.role}`
+        (c) =>
+          `- ${c.id} — ${c.name}${c.isSelf ? ' (the reader)' : ''}, ${c.role}${c.pronouns ? ` (${PRONOUN_LABELS[c.pronouns]})` : ''}`
       ),
       '',
       '## Relationships',

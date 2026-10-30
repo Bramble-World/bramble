@@ -218,6 +218,20 @@ describe('sweepIdleSessions', () => {
     expect(storyline!.arcSummary).not.toBeNull();
   });
 
+  it("leaves a guest's idle story alone: it's usually deleted unsaved", async () => {
+    await db
+      .update(users)
+      .set({ isGuest: true, guestExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000) })
+      .where(eq(users.id, userId));
+    await sessions.startSession(userId, storylineId);
+
+    await sweepIdleSessions(-60_000, { generator: fake });
+
+    expect(callsForOurStoryline()).toHaveLength(0);
+    const storyline = await storylineReader.getStoryline(userId, storylineId);
+    expect(storyline!.arcSummary).toBeNull();
+  });
+
   it('summarises a storyline once however many sessions it has', async () => {
     await sessions.startSession(userId, storylineId);
     await sessions.startSession(userId, storylineId);

@@ -4,7 +4,7 @@ import { build } from 'esbuild';
 /**
  * Bundles everything in the image that is not the Next.js app.
  *
- * The worker, the two sweeps and the migrator all run from the same container as
+ * The worker, the sweeps and the migrator all run from the same container as
  * the web process — one image, three ways to start it — and that image has no dev
  * dependencies in it. Without a bundle each of those entrypoints would need
  * `tsx`, `typescript` and the whole dependency tree present at runtime, which is
@@ -22,6 +22,7 @@ const ENTRIES = {
   'src/worker/main.ts': `${OUT}/worker/import-worker.js`,
   'src/sweeps/arc-sweep.ts': `${OUT}/sweeps/arc-sweep.js`,
   'src/sweeps/import-sweep.ts': `${OUT}/sweeps/import-sweep.js`,
+  'src/sweeps/guest-sweep.ts': `${OUT}/sweeps/guest-sweep.js`,
   'src/db/migrate.ts': `${OUT}/db/migrate.js`,
   'src/scripts/delete-account.ts': `${OUT}/scripts/delete-account.js`,
 };

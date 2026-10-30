@@ -108,6 +108,27 @@ order by n desc;
 than extraction being bad at its job — a queue problem wearing a generation
 problem's clothes.
 
+## Guest onboarding (PostHog)
+
+The iPhone's first-run funnel, from the server's side. A guest is identified by
+their `users.id` from the first request, so no event needs re-attributing when
+they sign up as a new account; a guest who joins an **existing** account is
+aliased into it (`trackAlias`), so their beats follow them.
+
+| Event               | Properties                                    | Fired when                                              |
+| ------------------- | --------------------------------------------- | ------------------------------------------------------- |
+| `onboarding_opened` | `opening_id`                                  | `GET /api/v1/onboarding/opening` is served              |
+| `person_named`      | `relationship`, `pronouns_given` (`yes`/`no`) | the guest's story is written                            |
+| `guest_beat_played` | `n` (1–3)                                     | beat 1 is written (scripted), and beats 2 and 3 (model) |
+| `signup_completed`  | `merged`, `method` when the app sent one      | `POST /api/v1/guests/claim` succeeds                    |
+
+`save_shown` and `save_not_now` are sent by the app, which is the only place
+they happen. Live guests right now, from the database:
+
+```sql
+select count(*) from users where is_guest and guest_expires_at > now();
+```
+
 ## What is deliberately not here
 
 **Cost.** `GenerationMeta` carries `inputTokens` and `outputTokens` and every

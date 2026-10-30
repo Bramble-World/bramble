@@ -9,8 +9,10 @@ import { LEGAL_ENTITY, LegalPage, Mail } from '@/components/legal/legal-page';
  * enforced or tested somewhere: the transcript's 30-minute life and the "never
  * written to the database" rule (src/docs/invariants.md §1 and the scan in
  * import-runner.integration.test.ts), account deletion
- * (purge.integration.test.ts), the analytics allow-lists (src/lib/analytics and
- * the Mac's Analytics.swift). Change the behaviour and this page has to change
+ * (purge.integration.test.ts and account-deletion.routes.integration.test.ts), the analytics allow-lists (src/lib/analytics and
+ * the Mac's Analytics.swift), and a guest's seven days, App Attest key and
+ * per-address count (GUEST_LIFETIME_MS, guest-sweep.ts, attestation.ts,
+ * ip-limit.ts, and guests.routes.integration.test.ts). Change the behaviour and this page has to change
  * with it, in the same PR.
  */
 export const metadata: Metadata = {
@@ -20,15 +22,16 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="October 13, 2026">
+    <LegalPage title="Privacy Policy" effective="October 30, 2026">
       <p>
-        Bramble turns conversations you choose into interactive stories you can play. That means
-        handling some of the most personal data there is, so this policy explains exactly what we
-        collect, what we do with it, who else touches it, and how to have it deleted.
+        Bramble turns conversations you choose, or on iPhone the people you name, into interactive
+        stories you can play. That means handling some of the most personal data there is, so this
+        policy explains exactly what we collect, what we do with it, who else touches it, and how to
+        have it deleted.
       </p>
       <p>
         Bramble is operated by {LEGAL_ENTITY} (&ldquo;Bramble&rdquo;, &ldquo;we&rdquo;,
-        &ldquo;us&rdquo;). This policy covers the Bramble app for Mac and the website at
+        &ldquo;us&rdquo;). This policy covers the Bramble apps for Mac and iPhone and the website at
         brambleworld.com. Questions go to <Mail />.
       </p>
 
@@ -50,8 +53,15 @@ export default function Privacy() {
           We keep the story: the characters, events and relationships an AI model wrote from your
           conversation, and the choices you make while playing.
         </li>
+        <li>
+          On iPhone you can play before signing up. What you enter and play then is kept for 7 days
+          and deleted automatically unless you save it by signing up.
+        </li>
         <li>We don&rsquo;t sell your data, and we don&rsquo;t use it for advertising.</li>
-        <li>Email us and we&rsquo;ll delete your account and everything in it.</li>
+        <li>
+          You can delete your account and everything in it from Settings in the iPhone app, or by
+          emailing us.
+        </li>
       </ul>
 
       <h2>What we collect, and why</h2>
@@ -65,6 +75,36 @@ export default function Privacy() {
         We keep a copy of your email address with your account so we can recognise you and contact
         you about your account. Clerk also records sign-in activity, such as your device, browser
         and IP address, to keep your account secure.
+      </p>
+
+      <h3>Playing before you sign up (iPhone)</h3>
+      <p>
+        On iPhone you can start a story without an account. When you do, we create a temporary guest
+        account, known to us only by a random ID; it has no email address or password. We keep what
+        you enter and play as a guest:
+      </p>
+      <ul>
+        <li>the name you give the person in your story, and the pronouns you choose for them;</li>
+        <li>
+          who they are to you, from the options we offer (for example, an ex or a sibling); and
+        </li>
+        <li>the story, the scenes the AI model writes, and the choices you make.</li>
+      </ul>
+      <p>
+        The name, the pronouns and the story so far are sent to our AI provider, OpenAI, to write
+        each new scene. A guest account and everything in it is deleted automatically{' '}
+        <strong>7 days</strong> after it was created, unless you save your story by signing up. When
+        you sign up, the story becomes part of your new account; if you sign in to an account you
+        already have, the story is added to it and the guest account is deleted.
+      </p>
+      <p>
+        To limit how many guest accounts can be created, the app uses Apple&rsquo;s App Attest,
+        which lets our server check that a request comes from a genuine copy of Bramble on a real
+        Apple device. The app creates a key for this on your iPhone, and we keep that key&rsquo;s
+        identifier with the guest account until you sign up or the guest account is deleted. It
+        identifies that key, not you or your device, and we don&rsquo;t use your device&rsquo;s
+        advertising identifier. We also count how many guest accounts are created from each IP
+        address, and keep that count for an hour.
       </p>
 
       <h3>Messages and contacts on your Mac</h3>
@@ -125,20 +165,25 @@ export default function Privacy() {
       <p>
         Unless you turn it off, the app sends usage events (for example, which step of signing in or
         onboarding you reached, or that you made the second of three choices) to PostHog, and crash
-        reports (what the app was doing when it crashed, your Mac model, macOS version and Bramble
-        version) to Sentry. Our server also records a few events, such as that a story finished
-        being written and how long it took. These are tied to a random account ID, not your name or
-        email, and never include your messages, the names of people in them, or your stories. Turn
-        them off in Bramble&rsquo;s Settings, with &ldquo;Share anonymous usage data and crash
-        reports&rdquo;; that stops both the app and our server from sending them.
+        reports (what the app was doing when it crashed, your Mac or iPhone model, its system
+        version and Bramble version) to Sentry. Our server also records a few events, such as that a
+        story finished being written and how long it took. These are tied to a random account ID,
+        not your name or email, and never include your messages, the names of people in them, or
+        your stories. On iPhone they start before you sign up, under your guest account&rsquo;s
+        random ID; for a guest, the server records which opening you saw, who the person you named
+        is to you (for example, an ex), whether you chose pronouns, and how many scenes you played
+        &mdash; never the name or the pronouns themselves. Turn them off in Bramble&rsquo;s
+        Settings, with &ldquo;Share anonymous usage data and crash reports&rdquo;; that stops both
+        the app and our server from sending them.
       </p>
 
       <h3>Notifications</h3>
       <p>
         If you allow notifications, Bramble shows them on your Mac when a story you imported is
-        ready, and when your energy is back after running out. They&rsquo;re created on your Mac,
-        never name the people in your stories, and send nothing to us or anyone else. Turn energy
-        reminders off in Bramble&rsquo;s Settings, or all of them in macOS&rsquo;s System Settings.
+        ready, and on your Mac or iPhone when your energy is back after running out. They&rsquo;re
+        created on your device, say they&rsquo;re from Bramble, never name the people in your
+        stories, and send nothing to us or anyone else. Turn energy reminders off in Bramble&rsquo;s
+        Settings, or all of them in your device&rsquo;s Settings.
       </p>
 
       <h3>Updates and downloads</h3>
@@ -159,12 +204,18 @@ export default function Privacy() {
       <ul>
         <li>
           <strong>OpenAI</strong>: writes stories. It receives the conversations you send (to create
-          a story) and the story so far (to write each scene). Under OpenAI&rsquo;s terms for its
-          API, it doesn&rsquo;t train its models on this data; it may keep it for up to 30 days to
-          detect abuse.
+          a story) and the story so far, including the names and pronouns you give people, to write
+          each scene. Under OpenAI&rsquo;s terms for its API, it doesn&rsquo;t train its models on
+          this data; it may keep it for up to 30 days to detect abuse.
         </li>
         <li>
           <strong>Clerk</strong>: sign-in and account security.
+        </li>
+        <li>
+          <strong>Apple</strong>: App Attest, on iPhone, as described above. Apple certifies the key
+          the app creates; we don&rsquo;t send Apple anything about you or your story. If you signed
+          in with Apple and delete your account, we also ask Apple to revoke Bramble&rsquo;s Sign in
+          with Apple for your Apple ID, as described below.
         </li>
         <li>
           <strong>Amazon Web Services</strong>: hosts our website, our servers and our database, in
@@ -189,16 +240,23 @@ export default function Privacy() {
       <p>
         Your conversations include other people. When you send one, we process what it says about
         them, and the stories keep a model-written version of it, under the name you have for them.
-        We never receive their phone numbers or email addresses. Stories are only shown to the
-        account that created them. If you think you&rsquo;re in someone&rsquo;s Bramble story and
-        want something removed, email <Mail />. Because we never receive phone numbers or email
-        addresses, we may need help from the person who imported the conversation to find it.
+        We never receive their phone numbers or email addresses. The same goes for someone you name
+        when playing on iPhone: we keep the name and pronouns you give them, with your story, and
+        nothing else about them. Stories are only shown to the account that created them. If you
+        think you&rsquo;re in someone&rsquo;s Bramble story and want something removed, email{' '}
+        <Mail />. Because we never receive phone numbers or email addresses, we may need help from
+        the person who imported the conversation to find it.
       </p>
 
       <h2>How long we keep it</h2>
       <ul>
         <li>Conversations you send: at most 30 minutes.</li>
-        <li>Your account and stories: until you ask us to delete them.</li>
+        <li>
+          A guest account on iPhone and its story, if you don&rsquo;t sign up: 7 days, then deleted
+          automatically.
+        </li>
+        <li>Counts of guest accounts created per IP address: 1 hour.</li>
+        <li>Your account and stories: until you delete them, or ask us to.</li>
         <li>Download-page IP addresses: 15 minutes.</li>
         <li>
           Usage data and crash reports: for as long as our providers keep them for us, after which
@@ -209,11 +267,27 @@ export default function Privacy() {
 
       <h2>Deleting your account</h2>
       <p>
-        Email <Mail /> from the address you use for Bramble and ask us to delete your account.
-        Within 30 days we&rsquo;ll delete your account, your stories and everything else we hold
-        about you in our database, your Clerk account, and your usage data in PostHog, and confirm
-        when it&rsquo;s done. Copies in our database backups disappear as those backups expire.
-        Deleting your account does not delete anything on your Mac; to remove that, delete the app.
+        In the iPhone app, go to Settings and tap &ldquo;delete my account&rdquo;. You confirm with
+        Face ID or your sign-in first, so nobody else can do it from your phone. It happens straight
+        away: we delete your account, your stories, the people you added and everything else we hold
+        about you in our database, your Clerk account and passkeys, and your usage data in PostHog.
+        If you signed in with Apple, we also revoke Bramble&rsquo;s Sign in with Apple, so Bramble
+        no longer appears under your Apple ID. Passkeys saved in your iCloud Keychain or password
+        manager stay there until you delete them yourself.
+      </p>
+      <p>
+        You can also email <Mail /> from the address you use for Bramble and ask us to delete your
+        account, for example if you no longer have the app or can&rsquo;t sign in. We&rsquo;ll do
+        the same within 30 days and confirm when it&rsquo;s done.
+      </p>
+      <p>
+        Either way, copies in our database backups disappear as those backups expire. Deleting your
+        account does not delete anything on your Mac; to remove that, delete the app.
+      </p>
+      <p>
+        A guest account has no email address, so we can&rsquo;t find one from an email. You
+        don&rsquo;t need to ask: it&rsquo;s deleted automatically, with its story, 7 days after it
+        was created. Once you sign up, your account is deleted like any other.
       </p>
 
       <h2>Your rights</h2>

@@ -36,6 +36,34 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/**
+ * A guest has reached something only an account can do: a fourth beat, or an
+ * import.
+ *
+ * 403 rather than 401, because the guest token is perfectly valid and
+ * refreshing it would change nothing — and a client that read this as an auth
+ * failure would throw away the token that holds the story it is about to save.
+ * Its own code, because the remedy is a screen (save your story) rather than an
+ * error message.
+ */
+export class SignupRequiredError extends AppError {
+  constructor(message = 'Sign up to keep playing.') {
+    super(message, 'SIGNUP_REQUIRED', 403);
+  }
+}
+
+/**
+ * Something that can't be undone needs a sign-in from the last few minutes —
+ * deleting an account, so far. 403, not 401: the session is valid, and a
+ * client that refreshed its token on 401 would change nothing. The remedy is
+ * to confirm with Face ID or the player's sign-in, then send the request again.
+ */
+export class ReverificationRequiredError extends AppError {
+  constructor(message = 'Confirm it is you, then try again.') {
+    super(message, 'REVERIFICATION_REQUIRED', 403);
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(
     message: string,

@@ -59,6 +59,7 @@ export async function assembleStorylineContext(
     want: character.want,
     avoids: character.avoids,
     isSelf: character.person.isSelf,
+    pronouns: character.person.pronouns ?? null,
   }));
 
   const relationships = await withStructuralTypes(

@@ -1,10 +1,14 @@
 export type User = {
   id: string;
-  clerkId: string;
-  email: string;
+  /** Null only for a guest. A CHECK constraint holds an account to both. */
+  clerkId: string | null;
+  /** Null only for a guest. */
+  email: string | null;
   emailVerifiedAt: Date | null;
   /** Whether this reader lets us record how they use the app. */
   shareUsage: boolean;
+  /** Playing before signing up. See `users.isGuest` in the schema. */
+  isGuest: boolean;
   deletedAt: Date | null;
 };
 
@@ -26,5 +30,11 @@ export type UserPatch = {
   shareUsage?: boolean;
 };
 
-/** What every reader projects. clerkId is an internal join key, never returned to a client. */
-export type PublicUser = Pick<User, 'id' | 'clerkId' | 'email' | 'shareUsage'>;
+/**
+ * What every reader projects. clerkId is an internal join key, never returned to a client.
+ *
+ * `isGuest` rides along because handlers branch on it — a guest has no energy
+ * balance, and cannot import — and a second read per request to find out would
+ * be the same row twice.
+ */
+export type PublicUser = Pick<User, 'id' | 'clerkId' | 'email' | 'shareUsage' | 'isGuest'>;

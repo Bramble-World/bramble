@@ -1,4 +1,13 @@
-import { pgTable, uuid, index, uniqueIndex, jsonb, text, boolean } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  index,
+  uniqueIndex,
+  jsonb,
+  text,
+  boolean,
+  check,
+} from 'drizzle-orm/pg-core';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
 import { sql } from 'drizzle-orm/sql/sql';
@@ -19,6 +28,15 @@ export const persons = pgTable(
     // voice profile, and participate in relationships like anyone else.
     isSelf: boolean('is_self').notNull().default(false),
 
+    /**
+     * How the story refers to them: 'he', 'she' or 'they'. Null when nobody
+     * said — every person an import created — and the model is then left to
+     * read it from the story. Set by the iPhone's naming screen, where a skipped
+     * choice is stored as 'they' because that is what the reader was told the
+     * story would use.
+     */
+    pronouns: text().$type<'he' | 'she' | 'they'>(),
+
     // Canonical voice, aggregated across all storylines this person appears in.
     voiceProfile: jsonb('voice_profile').$type<{
       vocabulary?: string[];
@@ -35,5 +53,6 @@ export const persons = pgTable(
     uniqueIndex('idx_persons_one_self_per_user')
       .on(table.userId)
       .where(sql`${table.isSelf} = true`),
+    check('chk_persons_pronouns', sql`${table.pronouns} IN ('he', 'she', 'they')`),
   ]
 );

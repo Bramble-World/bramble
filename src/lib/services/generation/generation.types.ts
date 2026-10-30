@@ -52,6 +52,12 @@ export type CharacterContext = {
   want: string | null;
   avoids: string | null;
   isSelf: boolean;
+  /**
+   * 'he', 'she' or 'they' when the reader said which — the iPhone's naming
+   * screen does. Null for everyone an import created, and the model then reads
+   * it from the story as it always has.
+   */
+  pronouns?: 'he' | 'she' | 'they' | null;
 };
 
 export type RelationshipContext = {

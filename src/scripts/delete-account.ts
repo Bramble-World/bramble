@@ -1,8 +1,9 @@
 /**
  * Deletes a person's Bramble account and all of their data, on request.
  *
- * The privacy policy promises that emailing us deletes an account within 30
- * days. Deleting the user in Clerk is not enough: its webhook only soft-deletes,
+ * For a player who can't delete in the app (DELETE /api/v1/me): no app, or no
+ * way to sign in. The privacy policy promises that emailing us deletes an
+ * account within 30 days. Deleting the user in Clerk is not enough: its webhook only soft-deletes,
  * so every story would stay. This removes the user rows (everything they own
  * cascades) and then the Clerk accounts with that email.
  *
@@ -47,7 +48,14 @@ async function main() {
     : [{ count: 0 }];
 
   const clerkUsers = (await clerkBackend.users.getUserList({ emailAddress: [normalized] })).data;
-  const clerkIds = [...new Set([...rows.map((r) => r.clerkId), ...clerkUsers.map((u) => u.id)])];
+  // A row found by email is never a guest — guests have no email — so every
+  // clerkId here is set; the filter is for the type, which allows a guest's null.
+  const clerkIds = [
+    ...new Set([
+      ...rows.flatMap((r) => (r.clerkId ? [r.clerkId] : [])),
+      ...clerkUsers.map((u) => u.id),
+    ]),
+  ];
 
   console.log(`database users: ${rows.length} (${ids.join(', ') || 'none'})`);
   console.log(`storylines:     ${storylineCount}`);

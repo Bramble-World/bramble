@@ -1,5 +1,6 @@
-import { RateLimitError } from '@/lib/utils/errors';
+import { RateLimitError, SignupRequiredError } from '@/lib/utils/errors';
 import * as reader from './sessions.reader';
+import * as userReader from '../users/users.reader';
 import { track } from '@/lib/analytics/analytics';
 
 /**
@@ -95,4 +96,44 @@ export async function assertEnergy(userId: string): Promise<Energy> {
   });
 
   throw new RateLimitError(seconds);
+}
+
+/**
+ * Beats a guest may play before signing up: the scripted first one and two the
+ * model writes.
+ *
+ * Enough to reach the cliffhanger the save prompt is built around, and few
+ * enough that a guest — free and unauthenticated by design — costs at most two
+ * turn generations and their consequences.
+ */
+export const GUEST_BEAT_LIMIT = 3;
+
+/**
+ * Refuses a new turn the reader may not have, by whichever rule applies to them.
+ *
+ * - **An account** spends energy, exactly as `assertEnergy` describes.
+ * - **A guest** has no energy at all and is never told `RATE_LIMITED`. They
+ *   have a fixed number of beats instead, counted the same way energy is — from
+ *   the turns actually written, across everything they own, so a second
+ *   playthrough cannot reset it — and past it they get `SIGNUP_REQUIRED`.
+ *
+ * The one place both rules are decided, so a caller cannot charge a guest energy
+ * or let one past the limit by calling the wrong check. Read from the row rather
+ * than taken from the caller: whether someone is a guest is the database's
+ * answer, and it changes the instant they claim an account.
+ *
+ * Returns which guest beat the next turn will be, or null for an account, so the
+ * caller can report `guest_beat_played` without counting again.
+ */
+export async function assertMayPlay(userId: string): Promise<{ guestBeat: number | null }> {
+  const user = await userReader.getUserById(userId);
+
+  if (user?.isGuest) {
+    const { used } = await reader.turnsCreatedSince(userId, new Date(0));
+    if (used >= GUEST_BEAT_LIMIT) throw new SignupRequiredError();
+    return { guestBeat: used + 1 };
+  }
+
+  await assertEnergy(userId);
+  return { guestBeat: null };
 }

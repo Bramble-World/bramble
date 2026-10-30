@@ -26,6 +26,9 @@ export type TurnVars = {
  * expresses "absent" as null. An `.optional()` field either gets rejected or
  * silently never appears, so the schema says nullable and the caller normalises.
  */
+/** How a cast line states someone's pronouns. Shared with the consequence prompt. */
+export const PRONOUN_LABELS = { he: 'he/him', she: 'she/her', they: 'they/them' } as const;
+
 export const turnOutputSchema = z.object({
   headline: z
     .string()
@@ -174,6 +177,9 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         ...storyline.characters.map((character) =>
           [
             `- ${character.name}${character.isSelf ? ' (you)' : ''} [${character.id}] — ${character.role}`,
+            // The reader said how to refer to them, so it is not the model's to
+            // guess from a name.
+            character.pronouns ? `  Pronouns: ${PRONOUN_LABELS[character.pronouns]}` : null,
             character.description ? `  ${character.description}` : null,
             character.voice?.tone ? `  Voice: ${character.voice.tone}` : null,
             character.voice?.quirks?.length

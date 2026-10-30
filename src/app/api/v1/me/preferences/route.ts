@@ -24,9 +24,9 @@ const bodySchema = z.object({
 export const PUT = withUser(async (user, request) => {
   const { shareUsage } = await parseBody(request, bodySchema);
 
-  // Keyed on clerkId because that is what the writer takes, and the guard it
-  // carries (`deleted_at IS NULL`) is the one that matters here.
-  const updated = await userWriter.updateUserByClerkId(user.clerkId, { shareUsage });
+  // Keyed on the row id, not clerkId: a guest has no clerk id, and the opt-out
+  // has to work from the first screen, before anyone signs up.
+  const updated = await userWriter.updatePreferencesById(user.id, { shareUsage });
   if (!updated) throw new InternalServerError('That preference could not be saved.');
 
   return json({ shareUsage: updated.shareUsage });
