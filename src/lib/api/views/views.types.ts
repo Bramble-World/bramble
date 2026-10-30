@@ -225,6 +225,19 @@ export type EnergyView = {
   fullAt: string | null;
 };
 
+/**
+ * The reader's current story, on `GET /api/v1/world`: their most recently
+ * active session. The iPhone's desk resumes it (`GET /api/v1/sessions/{id}`)
+ * to light the phone for its waiting beat.
+ */
+export type CurrentPlaythroughView = {
+  sessionId: string;
+  storylineId: string;
+  storylineTitle: string;
+  turnsAnswered: number;
+  lastActiveAt: string;
+};
+
 export type SessionView = {
   id: string;
   storylineId: string;

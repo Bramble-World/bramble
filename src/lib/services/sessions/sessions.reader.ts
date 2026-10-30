@@ -351,6 +351,44 @@ export async function lastPlayedByStoryline(
 }
 
 /**
+ * The reader's current story: their most recently active session, whatever it
+ * was opened from, or null when they have never played.
+ *
+ * What the iPhone's desk is built around — the story whose next beat lights the
+ * phone. `playthroughsForEvents` cannot answer it, because it only knows
+ * sessions opened at a ranked beat, and an iPhone story is not one.
+ */
+export async function currentPlaythrough(userId: string): Promise<{
+  sessionId: string;
+  storylineId: string;
+  storylineTitle: string;
+  turnsAnswered: number;
+  lastActiveAt: Date;
+} | null> {
+  const [row] = await db
+    .select({
+      sessionId: storylineSessions.id,
+      storylineId: storylineSessions.storylineId,
+      storylineTitle: storylines.title,
+      lastActiveAt: storylineSessions.lastActiveAt,
+      // Literal identifiers for the correlation, for the reason given in
+      // playthroughsForEvents: the column helpers drop the outer table's prefix.
+      turnsAnswered: sql<number>`(
+        select count(*)::int from story_turns t
+        where t.session_id = storyline_sessions.id
+          and t.selected_choice_id is not null
+      )`,
+    })
+    .from(storylineSessions)
+    .innerJoin(storylines, eq(storylines.id, storylineSessions.storylineId))
+    .where(eq(storylineSessions.userId, userId))
+    .orderBy(desc(storylineSessions.lastActiveAt))
+    .limit(1);
+
+  return row ? { ...row, lastActiveAt: new Date(row.lastActiveAt) } : null;
+}
+
+/**
  * The reader's most recent playthrough of one storyline opened at one beat.
  *
  * The resume key is `startedFromEventId`, not the playhead. The playhead moves as

@@ -474,7 +474,15 @@ Query: `?limit=` — optional, clamped to 20.
       }
     }
   ],
-  "truncated": true
+  "truncated": true,
+  "current": {
+    "sessionId": "uuid",
+    "storylineId": "uuid",
+    "storylineTitle": "the night before",
+    "turnsAnswered": 4,
+    "lastActiveAt": "2026-10-30T19:58:00.000Z"
+  },
+  "energy": { "remaining": 14, "limit": 20, "resetsAt": "…", "fullAt": "…" }
 }
 ```
 
@@ -491,6 +499,11 @@ Query: `?limit=` — optional, clamped to 20.
   branch on the value rather than on a missing key. Loaded for the whole page in
   one query.
 - **`truncated`** — more rankable beats exist than were returned.
+- **`current`** — the story the reader is in now: their most recently active
+  session, whatever it was opened from, or `null` if they have never played.
+  `{ "sessionId", "storylineId", "storylineTitle", "turnsAnswered", "lastActiveAt" }`.
+  The iPhone's desk resumes it (`GET /api/v1/sessions/{id}`) to light the phone
+  for its waiting beat. Always present; branch on the value.
 
 A reader with nothing gets `{ "events": [], "truncated": false }` and **200,
 never 404**. Empty is an invitation, not an error.
