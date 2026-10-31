@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="October 30, 2026">
+    <LegalPage title="Privacy Policy" effective="October 31, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -188,8 +188,15 @@ export default function Privacy() {
 
       <h3>Updates and downloads</h3>
       <p>
-        Bramble is downloaded from, and checks for updates at, GitHub. Like any website, GitHub
-        receives your IP address and the version of Bramble you have when it does.
+        Bramble for Mac is downloaded from, and checks for updates at, GitHub. Like any website,
+        GitHub receives your IP address and the version of Bramble you have when it does.
+      </p>
+      <p>
+        The iPhone beta is installed through Apple&rsquo;s TestFlight. Apple shares with us what
+        TestFlight collects from beta testers: your device model and iOS version, when you install
+        and open the beta, crash reports, and any feedback or screenshots you choose to send through
+        TestFlight. Apple&rsquo;s TestFlight privacy notice in the TestFlight app describes what
+        Apple itself keeps.
       </p>
 
       <h3>Our website</h3>
@@ -213,9 +220,10 @@ export default function Privacy() {
         </li>
         <li>
           <strong>Apple</strong>: App Attest, on iPhone, as described above. Apple certifies the key
-          the app creates; we don&rsquo;t send Apple anything about you or your story. If you signed
-          in with Apple and delete your account, we also ask Apple to revoke Bramble&rsquo;s Sign in
-          with Apple for your Apple ID, as described below.
+          the app creates; we don&rsquo;t send Apple anything about you or your story. Apple also
+          runs TestFlight, which installs the iPhone beta, as described above. If you signed in with
+          Apple and delete your account, we also ask Apple to revoke Bramble&rsquo;s Sign in with
+          Apple for your Apple ID, as described below.
         </li>
         <li>
           <strong>Amazon Web Services</strong>: hosts our website, our servers and our database, in

@@ -25,6 +25,36 @@ export async function macBuild(): Promise<MacBuild | null> {
 }
 
 /**
+ * The iPhone beta's TestFlight link, or `null` until there is one.
+ *
+ * Read at request time for the same reason as `macBuild`: the link appears when
+ * `IOS_TESTFLIGHT_URL` is set, without a rebuild.
+ */
+export async function iPhoneBeta(): Promise<string | null> {
+  await connection();
+
+  return env.IOS_TESTFLIGHT_URL ?? null;
+}
+
+/**
+ * The iPhone beta: one link to its TestFlight page, which installs TestFlight
+ * first if needed and then Bramble.
+ */
+export function IPhoneBetaButton({ url }: { url: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <a
+        href={url}
+        className="rounded-full bg-black px-8 py-4 text-center text-xl font-bold text-[#FFFFFB] sm:text-2xl"
+      >
+        get the iPhone beta
+      </a>
+      <p className="text-center text-sm text-black/60">on TestFlight · iOS 18 or later</p>
+    </div>
+  );
+}
+
+/**
  * The download itself: one link straight to the build, and what you need to run
  * it. No interstitial and no form — the link is public, so anything in front of
  * it would only be in the reader's way.

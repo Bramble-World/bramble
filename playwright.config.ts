@@ -57,6 +57,8 @@ export default defineConfig({
        */
       MACOS_DOWNLOAD_URL: 'https://downloads.example.test/Bramble-test.dmg',
       MACOS_BUILD_LABEL: '0.0.0 (test)',
+      /** A stand-in TestFlight link, for the same reason. */
+      IOS_TESTFLIGHT_URL: 'https://testflight.example.test/join/TEST',
     },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
