@@ -11,6 +11,7 @@ import type {
   ArcView,
   ChoiceView,
   EnergyView,
+  CurrentPlaythroughView,
   ImportView,
   PersonDetailView,
   PersonView,
@@ -213,11 +214,28 @@ export function answeredTurnView(turn: TurnWithChoices): AnsweredTurnView {
   // log, and a timestamp per decision invites a timeline nobody asked for.
 }
 
+export function currentPlaythroughView(current: {
+  sessionId: string;
+  storylineId: string;
+  storylineTitle: string;
+  turnsAnswered: number;
+  lastActiveAt: Date;
+}): CurrentPlaythroughView {
+  return {
+    sessionId: current.sessionId,
+    storylineId: current.storylineId,
+    storylineTitle: current.storylineTitle,
+    turnsAnswered: current.turnsAnswered,
+    lastActiveAt: current.lastActiveAt.toISOString(),
+  };
+}
+
 export function energyView(energy: Energy): EnergyView {
   return {
     remaining: energy.remaining,
     limit: energy.limit,
     resetsAt: iso(energy.resetsAt),
+    fullAt: iso(energy.fullAt),
   };
 }
 

@@ -252,12 +252,20 @@ describe('views', () => {
         remaining: 7,
         limit: 20,
         resetsAt: new Date('2026-10-03T09:00:00.000Z'),
+        fullAt: new Date('2026-10-03T21:30:00.000Z'),
       })
-    ).toStrictEqual({ remaining: 7, limit: 20, resetsAt: '2026-10-03T09:00:00.000Z' });
+    ).toStrictEqual({
+      remaining: 7,
+      limit: 20,
+      resetsAt: '2026-10-03T09:00:00.000Z',
+      fullAt: '2026-10-03T21:30:00.000Z',
+    });
   });
 
   it('says null rather than inventing a reset when nothing is spent', () => {
-    expect(energyView({ remaining: 20, limit: 20, resetsAt: null }).resetsAt).toBeNull();
+    const full = energyView({ remaining: 20, limit: 20, resetsAt: null, fullAt: null });
+    expect(full.resetsAt).toBeNull();
+    expect(full.fullAt).toBeNull();
   });
 
   it('keeps a missing choice description as null', () => {

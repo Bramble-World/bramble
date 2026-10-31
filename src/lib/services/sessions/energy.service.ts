@@ -51,11 +51,18 @@ export type Energy = {
    * regenerating to report.
    */
   resetsAt: Date | null;
+  /**
+   * When the balance is full again, or null when it already is.
+   *
+   * The newest turn in the window plus the window: the last point spent is the
+   * last to return. The iPhone's battery shows it as "full again".
+   */
+  fullAt: Date | null;
 };
 
 export async function energyFor(userId: string): Promise<Energy> {
   const since = new Date(Date.now() - ENERGY_WINDOW_MS);
-  const { used, oldest } = await reader.turnsCreatedSince(userId, since);
+  const { used, oldest, newest } = await reader.turnsCreatedSince(userId, since);
 
   // Clamped at zero: the check cannot be held in a transaction across a model
   // call, so a burst of concurrent requests can overshoot the cap slightly. A
@@ -66,6 +73,7 @@ export async function energyFor(userId: string): Promise<Energy> {
     remaining,
     limit: TURN_ENERGY_PER_DAY,
     resetsAt: oldest ? new Date(oldest.getTime() + ENERGY_WINDOW_MS) : null,
+    fullAt: newest ? new Date(newest.getTime() + ENERGY_WINDOW_MS) : null,
   };
 }
 

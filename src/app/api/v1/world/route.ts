@@ -2,7 +2,8 @@ import { withUser } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { getWorld, weightsFor } from '@/lib/services/world/world.service';
 import { MAX_WORLD_EVENTS } from '@/lib/services/world/world.types';
-import { worldEventView } from '@/lib/api/views';
+import { currentPlaythroughView, worldEventView } from '@/lib/api/views';
+import { currentPlaythrough } from '@/lib/services/sessions/sessions.reader';
 import { readerEnergy } from '@/lib/api/energy';
 import type { WorldEventView } from '@/lib/api/views';
 
@@ -33,7 +34,10 @@ export const GET = withUser(async (user, request) => {
   const requested = Number(new URL(request.url).searchParams.get('limit'));
   const limit = Number.isFinite(requested) && requested > 0 ? requested : MAX_WORLD_EVENTS;
 
-  const world = await getWorld(user.id, limit);
+  const [world, current] = await Promise.all([
+    getWorld(user.id, limit),
+    currentPlaythrough(user.id),
+  ]);
   const weights = weightsFor(world.events);
 
   const events: WorldEventView[] = world.events.map((event) =>
@@ -45,5 +49,13 @@ export const GET = withUser(async (user, request) => {
   // Account state, beside the resource rather than inside it — the same shape
   // `GET /api/v1/imports` uses for its allowance. The home screen is where a
   // reader decides whether to play, so it is where the balance is worth having.
-  return json({ events, truncated: world.truncated, energy: await readerEnergy(user) });
+  //
+  // `current` is the story the reader is in now, so the iPhone's desk can light
+  // the phone for its waiting beat on any phone, after a reinstall too.
+  return json({
+    events,
+    truncated: world.truncated,
+    current: current ? currentPlaythroughView(current) : null,
+    energy: await readerEnergy(user),
+  });
 });
