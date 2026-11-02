@@ -49,16 +49,16 @@ export default defineConfig({
     env: {
       BRAMBLE_AI_MODE: 'fake',
       /**
-       * A stand-in build, so the landing page's download link is exercised.
+       * A stand-in TestFlight link, so the landing page's button is exercised.
        *
        * The link is read per request rather than baked in at build time, and the
        * failure mode when that breaks is silent: the page renders, the button
        * simply is not there. Nothing else in the suite would notice.
        */
-      MACOS_DOWNLOAD_URL: 'https://downloads.example.test/Bramble-test.dmg',
-      MACOS_BUILD_LABEL: '0.0.0 (test)',
-      /** A stand-in TestFlight link, for the same reason. */
       IOS_TESTFLIGHT_URL: 'https://testflight.example.test/join/TEST',
+      /** Website analytics, pointed at a host the specs intercept. */
+      NEXT_PUBLIC_POSTHOG_KEY: 'phc_test',
+      NEXT_PUBLIC_POSTHOG_HOST: 'https://posthog.example.test',
     },
     url: baseURL,
     reuseExistingServer: !process.env.CI,

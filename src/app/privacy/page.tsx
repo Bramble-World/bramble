@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="October 31, 2026">
+    <LegalPage title="Privacy Policy" effective="November 2, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -211,9 +211,13 @@ export default function Privacy() {
 
       <h3>Our website</h3>
       <p>
-        brambleworld.com doesn&rsquo;t use analytics or advertising cookies. Our hosting providers
-        keep standard server logs, including IP addresses. If something breaks on the site, we
-        record the error, without your IP address.
+        brambleworld.com doesn&rsquo;t use analytics or advertising cookies. We use PostHog to count
+        visits and see which links on the site are pressed, without cookies and without recognising
+        you from one visit to the next. Each visit tells PostHog the page, the site you came from,
+        your browser and device type and, as with any web request, your IP address, which it may use
+        to estimate your approximate location. We don&rsquo;t record what you type on the site, or
+        your screen. Our hosting providers keep standard server logs, including IP addresses. If
+        something breaks on the site, we record the error, without your IP address.
       </p>
 
       <h2>Who else handles your data</h2>
