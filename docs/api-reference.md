@@ -177,6 +177,35 @@ reader wrote.
 
 A non-boolean is a **400** with `fields.shareUsage`. Works for a guest too.
 
+### `PUT /api/v1/me/devices`
+
+Registers this install for push notifications. Send it whenever iOS hands the app
+a token, and after signing in.
+
+```json
+{ "token": "<hex from iOS>", "environment": "production", "timeZone": "America/New_York" }
+→ 200 { "registered": true }
+```
+
+`environment` is `sandbox` for a Debug build and `production` for TestFlight and
+the App Store. `timeZone` is an IANA name. Sending it again updates the row, and a
+token already registered to someone else moves to this account.
+
+A malformed field is a **400** with `fields`. A guest gets **403
+`SIGNUP_REQUIRED`**: notifications are for accounts.
+
+### `DELETE /api/v1/me/devices`
+
+Stops notifications to this install. Send it **before** signing out, while the
+session still authenticates. The token goes in the body, not the URL, so it stays
+out of access logs.
+
+```json
+{ "token": "<hex from iOS>" }   →   200 { "removed": true }
+```
+
+`removed` is `false` if this account didn't have that token, which is not an error.
+
 ### `DELETE /api/v1/me`
 
 Deletes the reader's account, now and for good: every row they own (the

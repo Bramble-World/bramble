@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/index';
-import { imports, users } from '@/db/schema/tables';
+import { imports, pushDevices, users } from '@/db/schema/tables';
 import { createFakeGenerator } from '@/lib/ai';
 import { registerFixtures } from '@/lib/ai/fixtures';
 import * as persons from '../persons/persons.service';
@@ -61,6 +61,12 @@ async function makeAccount(clerkId: string, email: string) {
   await db
     .insert(imports)
     .values({ userId, conversationKey: 'conv-purge', storylineId: storyline.id });
+  await db.insert(pushDevices).values({
+    userId,
+    token: clerkId,
+    environment: 'production',
+    timeZone: 'UTC',
+  });
 
   const fake = createFakeGenerator();
   registerFixtures(fake);
