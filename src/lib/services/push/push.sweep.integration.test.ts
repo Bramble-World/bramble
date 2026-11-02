@@ -26,13 +26,15 @@ let sessionId: string;
 
 /** Answered, because a session can only have one open turn. */
 async function addTurn(createdAt: Date, turnOrder: number) {
-  await db.insert(storyTurns).values({
-    sessionId,
-    turnOrder,
-    narrativeContent: 'x',
-    createdAt,
-    respondedAt: createdAt,
-  });
+  const [{ id }] = await db
+    .insert(storyTurns)
+    .values({ sessionId, turnOrder, narrativeContent: 'x', createdAt, selectedChoiceId: null })
+    .returning({ id: storyTurns.id });
+  const [choice] = await db
+    .insert(turnChoices)
+    .values({ turnId: id, label: 'x', orderIndex: 0 })
+    .returning({ id: turnChoices.id });
+  await db.update(storyTurns).set({ selectedChoiceId: choice.id }).where(eq(storyTurns.id, id));
 }
 
 beforeAll(async () => {
