@@ -19,6 +19,11 @@ export function withRequestClient<T>(request: Request, run: () => T): T {
   return storage.run(client?.platform ?? null, run);
 }
 
+/** For the push sweep: every notification goes to an iPhone. */
+export function withIosClient<T>(run: () => T): T {
+  return storage.run('ios', run);
+}
+
 export function isIosRequest(): boolean {
   return storage.getStore() === 'ios';
 }

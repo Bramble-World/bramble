@@ -166,6 +166,8 @@ export const env = createEnv({
     APNS_KEY_ID: z.string().optional(),
     /** The .p8 key's PEM, as Apple issues it. */
     APNS_PRIVATE_KEY: z.string().optional(),
+    /** `true` lets the push sweep send. Anything else stops it, at the next run. */
+    PUSH_ENABLED: z.string().optional(),
     /**
      * PostHog's private API, for deleting a person and their events when their
      * account is deleted. A personal API key with `person:write` on this one
@@ -221,6 +223,7 @@ export const env = createEnv({
     APPLE_SIGN_IN_CLIENT_ID: process.env.APPLE_SIGN_IN_CLIENT_ID,
     APNS_KEY_ID: process.env.APNS_KEY_ID,
     APNS_PRIVATE_KEY: process.env.APNS_PRIVATE_KEY,
+    PUSH_ENABLED: process.env.PUSH_ENABLED,
     POSTHOG_PERSONAL_API_KEY: process.env.POSTHOG_PERSONAL_API_KEY,
     POSTHOG_PROJECT_ID: process.env.POSTHOG_PROJECT_ID,
     POSTHOG_API_HOST: process.env.POSTHOG_API_HOST,

@@ -34,6 +34,11 @@ export const users = pgTable(
      * client would be a promise the server quietly broke.
      */
     shareUsage: boolean('share_usage').notNull().default(true),
+    /**
+     * The notifications switch in the iPhone's settings. On until turned off; a
+     * reader still has to allow notifications in iOS before anything arrives.
+     */
+    pushEnabled: boolean('push_enabled').notNull().default(true),
 
     /**
      * Someone playing on the iPhone before they have signed up.

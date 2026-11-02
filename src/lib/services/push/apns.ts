@@ -1,7 +1,7 @@
 import { connect } from 'node:http2';
 import { SignJWT, importPKCS8 } from 'jose';
 import { env } from '@/env';
-import type { PushEnvironment, PushMessage, PushOutcome } from './push.types';
+import type { PushEnvironment, PushKind, PushMessage, PushOutcome } from './push.types';
 
 /**
  * Sends one notification through Apple's push service.
@@ -70,11 +70,14 @@ export function outcomeFrom(status: number, reason: string | undefined): PushOut
 export async function sendPush(
   device: { token: string; environment: PushEnvironment },
   message: PushMessage,
+  kind?: PushKind,
   host: string = HOSTS[device.environment]
 ): Promise<PushOutcome> {
   const authorization = `bearer ${await bearer()}`;
   const payload = JSON.stringify({
     aps: { alert: { title: message.title, body: message.body }, sound: 'default' },
+    // For the app's "opened" event. An enum, like everything else here.
+    ...(kind ? { kind } : {}),
   });
 
   return new Promise((resolve) => {

@@ -206,6 +206,19 @@ out of access logs.
 
 `removed` is `false` if this account didn't have that token, which is not an error.
 
+### `PUT /api/v1/me/notifications`
+
+The notifications switch in settings.
+
+```json
+{ "enabled": false }   →   200 { "enabled": false }
+```
+
+Honoured by the server, which is what sends them. On until turned off.
+
+A notification's payload carries `kind` (`battery_back` or `story_waiting`), so the
+app can tell which was opened. It never carries a name or a line of story.
+
 ### `DELETE /api/v1/me`
 
 Deletes the reader's account, now and for good: every row they own (the

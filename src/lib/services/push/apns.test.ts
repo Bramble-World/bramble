@@ -53,7 +53,7 @@ beforeEach(() => {
 
 describe('sendPush', () => {
   it('sends what Apple asks for, signed with the key', async () => {
-    expect(await sendPush(device, message, host)).toEqual({ kind: 'delivered' });
+    expect(await sendPush(device, message, undefined, host)).toEqual({ kind: 'delivered' });
 
     const [{ headers, body }] = seen;
     expect(headers[':path']).toBe(`/3/device/${device.token}`);
@@ -69,19 +69,27 @@ describe('sendPush', () => {
     expect(payload.iss).toBe('TEAMID1234');
   });
 
+  it('says which kind it is, for the app', async () => {
+    await sendPush(device, message, 'battery_back', host);
+    expect(JSON.parse(seen[0].body).kind).toBe('battery_back');
+  });
+
   it('reuses the provider token between sends', async () => {
-    await sendPush(device, message, host);
-    await sendPush(device, message, host);
+    await sendPush(device, message, undefined, host);
+    await sendPush(device, message, undefined, host);
     expect(seen[0].headers.authorization).toBe(seen[1].headers.authorization);
   });
 
   it('reports a dead token as gone', async () => {
     answer = { status: 410, body: JSON.stringify({ reason: 'Unregistered' }) };
-    expect(await sendPush(device, message, host)).toEqual({ kind: 'gone', reason: 'Unregistered' });
+    expect(await sendPush(device, message, undefined, host)).toEqual({
+      kind: 'gone',
+      reason: 'Unregistered',
+    });
   });
 
   it('reports an unreachable host as a failure, not a throw', async () => {
-    const outcome = await sendPush(device, message, 'http://127.0.0.1:1');
+    const outcome = await sendPush(device, message, undefined, 'http://127.0.0.1:1');
     expect(outcome.kind).toBe('failed');
   });
 });
