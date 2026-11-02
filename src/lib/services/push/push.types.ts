@@ -1,6 +1,8 @@
 export const PUSH_ENVIRONMENTS = ['sandbox', 'production'] as const;
 export type PushEnvironment = (typeof PUSH_ENVIRONMENTS)[number];
 
+export type PushKind = 'battery_back' | 'story_waiting';
+
 /**
  * What a notification says. Apple carries this text, and a lock screen shows it
  * to anyone nearby, so it must never hold a name or a line of a story.

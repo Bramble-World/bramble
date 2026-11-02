@@ -192,8 +192,9 @@ export default function Privacy() {
         when we last heard from the app, so we can reach you at a reasonable hour. Push
         notifications say they&rsquo;re from Bramble and never name the people in your stories or
         quote them. We delete the token when you sign out, when you delete your account, or when
-        Apple tells us it no longer works. Turn notifications off in your device&rsquo;s Settings at
-        any time.
+        Apple tells us it no longer works. We also record when we sent each one and what kind it
+        was: that your battery is back, or that your story is waiting. Turn them off in
+        Bramble&rsquo;s Settings or your device&rsquo;s Settings at any time.
       </p>
 
       <h3>Updates and downloads</h3>

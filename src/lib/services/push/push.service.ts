@@ -1,8 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/index';
-import { pushDevices } from '@/db/schema/tables';
+import { pushDevices, users } from '@/db/schema/tables';
 import { sendPush } from './apns';
-import type { PushEnvironment, PushMessage } from './push.types';
+import type { PushEnvironment, PushKind, PushMessage } from './push.types';
 
 export type DeviceRegistration = {
   token: string;
@@ -39,20 +39,29 @@ export async function removeDevice(userId: string, token: string): Promise<boole
   return removed.length > 0;
 }
 
+export async function setPushEnabled(userId: string, enabled: boolean): Promise<void> {
+  await db.update(users).set({ pushEnabled: enabled }).where(eq(users.id, userId));
+}
+
 export type PushResult = { delivered: number; removed: number; failed: string[] };
 
 /**
  * Sends to every install this user has, one at a time, and deletes any token
  * Apple says is dead. `failed` holds Apple's reasons, never tokens.
  */
-export async function sendToUser(userId: string, message: PushMessage): Promise<PushResult> {
+export async function sendToUser(
+  userId: string,
+  message: PushMessage,
+  kind?: PushKind
+): Promise<PushResult> {
   const devices = await db.select().from(pushDevices).where(eq(pushDevices.userId, userId));
   const result: PushResult = { delivered: 0, removed: 0, failed: [] };
 
   for (const device of devices) {
     const outcome = await sendPush(
       { token: device.token, environment: device.environment as PushEnvironment },
-      message
+      message,
+      kind
     );
     if (outcome.kind === 'delivered') {
       result.delivered += 1;

@@ -122,5 +122,5 @@ EXPOSE 3000
 # The web server. The worker and the one-off commands override this:
 #   worker:  node dist/worker/import-worker.js
 #   migrate: node dist/db/migrate.js
-#   sweeps:  node dist/sweeps/{arc,import,guest}-sweep.js
+#   sweeps:  node dist/sweeps/{arc,import,guest,push}-sweep.js
 CMD ["node", "server.js"]
