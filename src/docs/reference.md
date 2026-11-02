@@ -15,6 +15,12 @@ One row per Bramble account — or per **guest**, someone playing on the iPhone 
 - `guestExpiresAt` — when an unsaved guest is deleted (seven days after creation), by the hourly guest sweep. Also the guest token's expiry. Null for an account.
 - `appAttestKeyId` — the App Attest key a guest was created with, so one attested key holds at most one live guest (a partial unique index). Cleared on sign-up.
 
+### `pushDevices`
+
+One install of the iPhone app that accepts push notifications: its APNs `token`
+(unique across users, so a phone that changes hands moves), the `environment` that
+issued it, and an IANA `timeZone`. Cascades from `users`. Holds no story content.
+
 ### `persons`
 
 A real contact from the user's life — a sister, a coworker, an ex — stored **once per user**, regardless of how many storylines they appear in. This is the anchor that makes cross-storyline continuity possible: the same real person is the same `persons` row everywhere.
