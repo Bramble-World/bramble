@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withRequestClient } from '@/lib/analytics/client-context';
 import { json } from '@/lib/api/respond';
 import { parseOptionalBody } from '@/lib/api/params';
 import { assertClientSupported } from '@/lib/api/client-version';
@@ -43,12 +44,14 @@ export async function POST(request: Request) {
     const guest = await requireGuestFromHeader(request);
     const { method } = await parseOptionalBody(request, bodySchema);
 
-    const { merged, userId } = await claimGuest({
-      guestId: guest.id,
-      clerkId,
-      fetchIdentity: () => clerkIdentity(clerkId),
-      method,
-    });
+    const { merged, userId } = await withRequestClient(request, () =>
+      claimGuest({
+        guestId: guest.id,
+        clerkId,
+        fetchIdentity: () => clerkIdentity(clerkId),
+        method,
+      })
+    );
 
     return json({ merged, user: { id: userId } });
   } catch (error) {
