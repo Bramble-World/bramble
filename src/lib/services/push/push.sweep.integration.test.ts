@@ -24,8 +24,15 @@ const NOW = new Date('2026-11-04T20:00:00Z');
 let userId: string;
 let sessionId: string;
 
+/** Answered, because a session can only have one open turn. */
 async function addTurn(createdAt: Date, turnOrder: number) {
-  await db.insert(storyTurns).values({ sessionId, turnOrder, narrativeContent: 'x', createdAt });
+  await db.insert(storyTurns).values({
+    sessionId,
+    turnOrder,
+    narrativeContent: 'x',
+    createdAt,
+    respondedAt: createdAt,
+  });
 }
 
 beforeAll(async () => {
