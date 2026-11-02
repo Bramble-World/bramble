@@ -27,7 +27,12 @@ jobs:
               # Porter rewrites this file whenever the app's configuration
               # changes, in a pull request of its own. If a deploy ever fails on a
               # missing variable again, check that this flag survived that rewrite.
-              run: porter apply --attach-env-groups bramble-prd
+              #
+              # `-f porter.yaml` is load-bearing too. Without it this deploys new
+              # code and ignores the manifest, so a service added there never
+              # exists: guest-sweep and push-sweep went unnoticed that way. If
+              # Porter's rewrite drops it, every new sweep silently stops existing.
+              run: porter apply -f porter.yaml --attach-env-groups bramble-prd
               env:
                 PORTER_APP_NAME: bramble
                 PORTER_CLUSTER: "6001"
