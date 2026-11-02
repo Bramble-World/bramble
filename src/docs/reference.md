@@ -21,6 +21,11 @@ One install of the iPhone app that accepts push notifications: its APNs `token`
 (unique across users, so a phone that changes hands moves), the `environment` that
 issued it, and an IANA `timeZone`. Cascades from `users`. Holds no story content.
 
+### `pushSends`
+
+One notification the push sweep sent: its `kind`, the latest turn when it went out,
+and an `ordinal`. Holds the limits and makes a repeated sweep harmless. No text.
+
 ### `persons`
 
 A real contact from the user's life — a sister, a coworker, an ex — stored **once per user**, regardless of how many storylines they appear in. This is the anchor that makes cross-storyline continuity possible: the same real person is the same `persons` row everywhere.

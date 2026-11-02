@@ -1,7 +1,7 @@
 # Deploying the Bramble API
 
 The backend runs on Porter (AWS EKS) as **one image started several ways**: the web
-server, the import worker, and three scheduled sweeps. `porter.yaml` is the whole
+server, the import worker, and four scheduled sweeps. `porter.yaml` is the whole
 deployment; this document is the part that cannot live in it, namely where each
 secret comes from and which ones are needed before the image is even built.
 
@@ -19,12 +19,12 @@ secret comes from and which ones are needed before the image is even built.
 
 ## The four processes
 
-| Process    | Command                                        | Notes                                                       |
-| ---------- | ---------------------------------------------- | ----------------------------------------------------------- |
-| Web        | `node server.js`                               | 2 replicas. Liveness `/api/health`, readiness `/api/ready`. |
-| Worker     | `node dist/worker/import-worker.js`            | 1 replica. No port — it polls the `imports` table.          |
-| Migrations | `node dist/db/migrate.js`                      | Porter `predeploy`. Non-zero exit blocks the release.       |
-| Sweeps     | `node dist/sweeps/{arc,import,guest}-sweep.js` | Cron jobs: arc and guest hourly, import every ten minutes.  |
+| Process    | Command                                             | Notes                                                       |
+| ---------- | --------------------------------------------------- | ----------------------------------------------------------- |
+| Web        | `node server.js`                                    | 2 replicas. Liveness `/api/health`, readiness `/api/ready`. |
+| Worker     | `node dist/worker/import-worker.js`                 | 1 replica. No port — it polls the `imports` table.          |
+| Migrations | `node dist/db/migrate.js`                           | Porter `predeploy`. Non-zero exit blocks the release.       |
+| Sweeps     | `node dist/sweeps/{arc,import,guest,push}-sweep.js` | Cron jobs: arc and guest hourly, import every ten minutes.  |
 
 One image rather than four, so the worker cannot be running different code from
 the server that queued its work. The worker and the sweeps are bundled with
@@ -144,6 +144,7 @@ confidence rather than left in place forever because nobody is sure.
 | `APPLE_SIGN_IN_CLIENT_ID`   | web         | —                           | Defaults to `com.brambleworld.BrambleMobile`, the client id a native sign-in uses. Leave unset.                                                                                                                                                           |
 | `APNS_KEY_ID`               | web         | Apple Developer → Keys      | The key id of a key with Apple Push Notifications service enabled. With `APNS_PRIVATE_KEY` and `APPLE_TEAM_ID`, sends push notifications.                                                                                                                 |
 | `APNS_PRIVATE_KEY`          | web         | Apple Developer → Keys      | That key's `.p8`, PEM, multi-line (or one line with `\n`). A secret.                                                                                                                                                                                      |
+| `PUSH_ENABLED`              | worker      | set by hand                 | `true` lets the push sweep send notifications. Anything else stops it at the next run, so it's also the off switch. Public.                                                                                                                               |
 | `CLERK_JWT_KEY`             | web         | Clerk prod                  | PEM public key. Verifies session JWTs in-process instead of fetching JWKS per request. A latency optimisation, not a requirement.                                                                                                                         |
 | `IOS_TESTFLIGHT_URL`        | web         | App Store Connect           | The iPhone beta's TestFlight public link (`https://testflight.apple.com/join/…`, from the external testing group). Setting it **publishes the iPhone beta**: "get the iPhone beta" appears on the landing page. Read per request.                         |
 
