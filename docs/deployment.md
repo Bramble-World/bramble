@@ -319,7 +319,10 @@ model call, and killing one mid-flight bills for nothing.
 
 ## Applying the manifest
 
-`porter.yaml` is not read automatically — something has to apply it. The project
+`porter.yaml` is not read automatically — something has to apply it, and that is
+`-f porter.yaml` in `.github/workflows/porter-app-6001-bramble.yml`. Without the
+flag a deploy ships code and leaves services as they were, so a job added to the
+manifest silently never runs. After adding one, check it in Porter. The project
 id is **not** a field in the manifest (it has no such key); it is passed to the
 CLI, which is why it is recorded here instead.
 
