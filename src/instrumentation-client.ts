@@ -2,14 +2,22 @@ import posthog from 'posthog-js';
 import * as Sentry from '@sentry/nextjs';
 
 // PostHog throws on an undefined key, so only start it once one is configured.
-// Production builds have no key, and the privacy policy (src/app/privacy) says
-// the website runs no analytics. Setting one means updating that page first.
+//
+// Pageviews and the events we name, nothing more. Each setting below is a promise
+// the privacy policy's "Our website" section makes, so change them together:
+// `persistence: 'memory'` is what makes it cookieless (and is why a visitor is new
+// on every page load), and autocapture and recording stay off so that nothing a
+// visitor reads or types is ever sent.
 if (process.env.NEXT_PUBLIC_POSTHOG_KEY) {
   posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-    capture_pageview: false, // Handled manually so SPA navigations are counted once
-    capture_pageleave: true,
     defaults: '2025-11-30',
+    persistence: 'memory',
+    autocapture: false,
+    disable_session_recording: true,
+    disable_surveys: true,
+    capture_pageview: 'history_change',
+    capture_pageleave: true,
   });
 }
 

@@ -1,15 +1,11 @@
 import Image from 'next/image';
-import {
-  DownloadButton,
-  IPhoneBetaButton,
-  iPhoneBeta,
-  macBuild,
-} from '@/components/download/download-button';
+import { IPhoneBetaButton, iPhoneBeta } from '@/components/download/download-button';
+import { TrackedLink } from '@/components/download/tracked-link';
 import { LegalLinks } from '@/components/legal/legal-page';
 import { DISCORD_INVITE_URL } from '@/lib/links';
 
 export default async function Home() {
-  const [iPhone, build] = await Promise.all([iPhoneBeta(), macBuild()]);
+  const iPhone = await iPhoneBeta();
 
   return (
     <main className="relative flex min-h-svh w-full flex-col overflow-hidden bg-[#FFFFFB] px-6 py-8">
@@ -33,29 +29,30 @@ export default async function Home() {
         </p>
       </div>
 
-      {/* The download is the page's one job once there is a build: the iPhone
-          beta first, then the Mac app while it is still offered. Until there is
-          one, the Discord invite is, and it keeps its original wording rather
-          than becoming a footnote under a button that is not there. */}
+      {/* The iPhone beta is the page's one job once there is a link. New users
+          are not offered the Mac app here. Until there is a link, the Discord
+          invite is the job, and it keeps its original wording rather than
+          becoming a footnote under a button that is not there. */}
       <div className="mb-8 flex flex-col items-center gap-4 self-center">
-        {iPhone || build ? (
+        {iPhone ? (
           <>
-            {iPhone ? <IPhoneBetaButton url={iPhone} /> : null}
-            {build ? <DownloadButton build={build} /> : null}
-            <a
+            <IPhoneBetaButton url={iPhone} />
+            <TrackedLink
+              cta="discord"
               href={DISCORD_INVITE_URL}
               className="text-center text-base font-bold text-black/70 sm:text-lg"
             >
               join the discord
-            </a>
+            </TrackedLink>
           </>
         ) : (
-          <a
+          <TrackedLink
+            cta="discord"
             href={DISCORD_INVITE_URL}
             className="rounded-full px-6 py-3 text-center text-xl font-bold text-black sm:text-2xl md:text-3xl"
           >
             click here to join the discord and beta test Bramble
-          </a>
+          </TrackedLink>
         )}
       </div>
 

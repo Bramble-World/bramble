@@ -11,6 +11,13 @@ const nextConfig: NextConfig = {
    * majority of it build tooling that cannot be reached from a request.
    */
   output: 'standalone',
+  /**
+   * `/download` was the link handed to beta testers. The page is gone, but the
+   * link is still out there, so it lands on the home page rather than a 404.
+   */
+  async redirects() {
+    return [{ source: '/download', destination: '/', permanent: true }];
+  },
   experimental: {
     serverActions: {
       // A Server Action body is capped at 1MB by default, which a real message
