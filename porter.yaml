@@ -162,11 +162,11 @@ services:
 # absent, and the bundle is built without it. Keeping the one value we know here
 # removes that trap for at least this variable.
 #
-# The other two (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SENTRY_DSN`)
-# live in the env group because they come from Clerk and Sentry rather than from
-# us — they must be added there as **plain variables, never secrets**, for the
-# same reason. Both are public: a publishable key and a DSN are shipped to every
-# client that loads the page.
+# The others (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SENTRY_DSN`,
+# `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`) live in the env group
+# because they come from Clerk, Sentry and PostHog rather than from us — they must
+# be added there as **plain variables, never secrets**, for the same reason. All
+# are public: each is shipped to every client that loads the page.
 env:
   NEXT_PUBLIC_APP_URL: https://api.brambleworld.com
 
