@@ -1,10 +1,15 @@
 import Image from 'next/image';
-import { DownloadButton, macBuild } from '@/components/download/download-button';
+import {
+  DownloadButton,
+  IPhoneBetaButton,
+  iPhoneBeta,
+  macBuild,
+} from '@/components/download/download-button';
 import { LegalLinks } from '@/components/legal/legal-page';
 import { DISCORD_INVITE_URL } from '@/lib/links';
 
 export default async function Home() {
-  const build = await macBuild();
+  const [iPhone, build] = await Promise.all([iPhoneBeta(), macBuild()]);
 
   return (
     <main className="relative flex min-h-svh w-full flex-col overflow-hidden bg-[#FFFFFB] px-6 py-8">
@@ -28,13 +33,15 @@ export default async function Home() {
         </p>
       </div>
 
-      {/* The download is the page's one job once there is a build. Until there
-          is, the Discord invite is, and it keeps its original wording rather
+      {/* The download is the page's one job once there is a build: the iPhone
+          beta first, then the Mac app while it is still offered. Until there is
+          one, the Discord invite is, and it keeps its original wording rather
           than becoming a footnote under a button that is not there. */}
       <div className="mb-8 flex flex-col items-center gap-4 self-center">
-        {build ? (
+        {iPhone || build ? (
           <>
-            <DownloadButton build={build} />
+            {iPhone ? <IPhoneBetaButton url={iPhone} /> : null}
+            {build ? <DownloadButton build={build} /> : null}
             <a
               href={DISCORD_INVITE_URL}
               className="text-center text-base font-bold text-black/70 sm:text-lg"

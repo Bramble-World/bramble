@@ -94,6 +94,14 @@ export const env = createEnv({
     /** Shown beside the download, e.g. "0.3.1 (beta)". Cosmetic. */
     MACOS_BUILD_LABEL: z.string().optional(),
     /**
+     * The iPhone beta's TestFlight public link (`https://testflight.apple.com/join/…`).
+     *
+     * Public and read per request, like `MACOS_DOWNLOAD_URL`: setting it is what
+     * puts the iPhone button on the landing page and on `/download`. Unset means
+     * neither offers the iPhone app.
+     */
+    IOS_TESTFLIGHT_URL: z.url().optional(),
+    /**
      * PostHog, for server-side product events.
      *
      * Optional, and absent is the normal case: local development, the test
@@ -197,6 +205,7 @@ export const env = createEnv({
     MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
     MACOS_DOWNLOAD_URL: process.env.MACOS_DOWNLOAD_URL,
     MACOS_BUILD_LABEL: process.env.MACOS_BUILD_LABEL,
+    IOS_TESTFLIGHT_URL: process.env.IOS_TESTFLIGHT_URL,
     POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,
     POSTHOG_HOST: process.env.POSTHOG_HOST,
     GUEST_TOKEN_SECRET: process.env.GUEST_TOKEN_SECRET,

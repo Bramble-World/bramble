@@ -5,6 +5,8 @@ import { expect, test } from '@playwright/test';
 
 /** Matches `MACOS_DOWNLOAD_URL` in `playwright.config.ts`. */
 const BUILD_URL = 'https://downloads.example.test/Bramble-test.dmg';
+/** Matches `IOS_TESTFLIGHT_URL` in `playwright.config.ts`. */
+const TESTFLIGHT_URL = 'https://testflight.example.test/join/TEST';
 
 test('landing page renders', async ({ page }) => {
   await page.goto('/');
@@ -24,6 +26,14 @@ for (const path of ['/', '/download']) {
     const download = page.getByRole('link', { name: /download for macOS/i });
     await expect(download).toHaveAttribute('href', BUILD_URL);
     await expect(page.getByText(/0\.0\.0 \(test\) · macOS 14 or later/)).toBeVisible();
+  });
+
+  test(`${path} offers the iPhone beta`, async ({ page }) => {
+    await page.goto(path);
+
+    const beta = page.getByRole('link', { name: /get the iPhone beta/i });
+    await expect(beta).toHaveAttribute('href', TESTFLIGHT_URL);
+    await expect(page.getByText(/on TestFlight · iOS 18 or later/)).toBeVisible();
   });
 }
 
