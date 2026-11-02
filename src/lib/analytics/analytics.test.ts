@@ -39,6 +39,7 @@ const EVERY_EVENT: AnalyticsEvent[] = [
   { name: 'person_named', properties: { relationship: 'old_friend', pronouns_given: 'no' } },
   { name: 'guest_beat_played', properties: { n: 2 } },
   { name: 'signup_completed', properties: { method: 'passkey', merged: true } },
+  { name: 'push_sent', properties: { kind: 'battery_back' } },
 ];
 
 describe('what a property may be', () => {

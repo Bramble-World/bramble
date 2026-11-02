@@ -95,6 +95,13 @@ export type AnalyticsEvent =
         /** Whether the guest story joined an account that already existed. */
         merged: boolean;
       };
+    }
+  | {
+      name: 'push_sent';
+      properties: {
+        /** An enum: what a notification says is decided by this, and never stored. */
+        kind: 'battery_back' | 'story_waiting';
+      };
     };
 
 export type AnalyticsEventName = AnalyticsEvent['name'];
@@ -125,4 +132,5 @@ export const ALLOWED_PROPERTY_KEYS = [
   'n',
   'method',
   'merged',
+  'kind',
 ] as const;

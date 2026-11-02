@@ -14,6 +14,7 @@
     "sweep:arc": "doppler run -- tsx src/sweeps/arc-sweep.ts",
     "sweep:imports": "doppler run -- tsx src/sweeps/import-sweep.ts",
     "sweep:guests": "doppler run -- tsx src/sweeps/guest-sweep.ts",
+    "sweep:push": "doppler run -- tsx src/sweeps/push-sweep.ts",
     "build": "next build",
     "build:server": "node scripts/build-server.mjs",
     "promote": "node scripts/promote.mjs",

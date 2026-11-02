@@ -39,6 +39,7 @@ const GROUP = 'bramble-prd';
  * forgetting to *remove* one would quietly publish a credential.
  */
 const PUBLIC = new Set([
+  'PUSH_ENABLED',
   'BRAMBLE_AI_MODE',
   'MIN_MACOS_BUILD',
   'POSTHOG_HOST',
@@ -87,6 +88,7 @@ const KNOWN = new Set([
   'APPLE_SIGN_IN_CLIENT_ID',
   'APNS_KEY_ID',
   'APNS_PRIVATE_KEY',
+  'PUSH_ENABLED',
   'POSTHOG_PERSONAL_API_KEY',
   'POSTHOG_PROJECT_ID',
   'POSTHOG_API_HOST',
