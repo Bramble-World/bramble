@@ -117,6 +117,13 @@ export const env = createEnv({
     POSTHOG_PROJECT_TOKEN: z.string().optional(),
     POSTHOG_HOST: z.url().optional(),
     /**
+     * The iPhone's own PostHog project: where the server records what iPhone
+     * requests do, beside the app's events. Unset, they share the project above.
+     * `POSTHOG_IOS_PROJECT_ID` is its numeric id, needed to delete a person there.
+     */
+    POSTHOG_IOS_PROJECT_TOKEN: z.string().optional(),
+    POSTHOG_IOS_PROJECT_ID: z.string().optional(),
+    /**
      * Signs the tokens guests play with (HS256). At least 32 characters.
      *
      * Optional like the rest so a bare checkout builds, but guest creation fails
@@ -215,6 +222,8 @@ export const env = createEnv({
     MACOS_BUILD_LABEL: process.env.MACOS_BUILD_LABEL,
     IOS_TESTFLIGHT_URL: process.env.IOS_TESTFLIGHT_URL,
     POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,
+    POSTHOG_IOS_PROJECT_TOKEN: process.env.POSTHOG_IOS_PROJECT_TOKEN,
+    POSTHOG_IOS_PROJECT_ID: process.env.POSTHOG_IOS_PROJECT_ID,
     POSTHOG_HOST: process.env.POSTHOG_HOST,
     GUEST_TOKEN_SECRET: process.env.GUEST_TOKEN_SECRET,
     GUEST_ATTESTATION: process.env.GUEST_ATTESTATION,
