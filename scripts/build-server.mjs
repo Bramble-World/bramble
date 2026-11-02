@@ -25,6 +25,7 @@ const ENTRIES = {
   'src/sweeps/guest-sweep.ts': `${OUT}/sweeps/guest-sweep.js`,
   'src/db/migrate.ts': `${OUT}/db/migrate.js`,
   'src/scripts/delete-account.ts': `${OUT}/scripts/delete-account.js`,
+  'src/scripts/send-test-push.ts': `${OUT}/scripts/send-test-push.js`,
 };
 
 await Promise.all(

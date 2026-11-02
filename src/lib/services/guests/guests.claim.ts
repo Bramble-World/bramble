@@ -3,6 +3,7 @@ import { db } from '@/index';
 import {
   characters,
   imports,
+  pushDevices,
   motifParticipants,
   motifs,
   personRelationships,
@@ -51,6 +52,7 @@ export const USER_OWNED_TABLES = [
   motifs,
   storylineSessions,
   imports,
+  pushDevices,
 ] as const;
 
 export type ClaimMethod = 'apple' | 'passkey' | 'email';

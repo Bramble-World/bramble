@@ -163,6 +163,14 @@ export const env = createEnv({
     /** The iPhone app's bundle id: native sign-in uses it as the client id. */
     APPLE_SIGN_IN_CLIENT_ID: z.string().default('com.brambleworld.BrambleMobile'),
     /**
+     * Sending push notifications through Apple. A key with APNs enabled, from
+     * Apple Developer → Keys, for team `APPLE_TEAM_ID`. Optional so a bare
+     * checkout builds; without them nothing can be sent.
+     */
+    APNS_KEY_ID: z.string().optional(),
+    /** The .p8 key's PEM, as Apple issues it. */
+    APNS_PRIVATE_KEY: z.string().optional(),
+    /**
      * PostHog's private API, for deleting a person and their events when their
      * account is deleted. A personal API key with `person:write` on this one
      * project, and the project's numeric id. The private API lives on the app
@@ -215,6 +223,8 @@ export const env = createEnv({
     APPLE_SIGN_IN_KEY_ID: process.env.APPLE_SIGN_IN_KEY_ID,
     APPLE_SIGN_IN_PRIVATE_KEY: process.env.APPLE_SIGN_IN_PRIVATE_KEY,
     APPLE_SIGN_IN_CLIENT_ID: process.env.APPLE_SIGN_IN_CLIENT_ID,
+    APNS_KEY_ID: process.env.APNS_KEY_ID,
+    APNS_PRIVATE_KEY: process.env.APNS_PRIVATE_KEY,
     POSTHOG_PERSONAL_API_KEY: process.env.POSTHOG_PERSONAL_API_KEY,
     POSTHOG_PROJECT_ID: process.env.POSTHOG_PROJECT_ID,
     POSTHOG_API_HOST: process.env.POSTHOG_API_HOST,
