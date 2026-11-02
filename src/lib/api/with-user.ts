@@ -2,6 +2,7 @@ import { requireCurrentUser } from '@/lib/services/auth/auth.service';
 import { PublicUser } from '@/lib/services/users/users.types';
 import { handleError } from '@/lib/utils/api.handler-errors';
 import { ForbiddenError, SignupRequiredError } from '@/lib/utils/errors';
+import { withRequestClient } from '@/lib/analytics/client-context';
 import { assertClientSupported } from './client-version';
 
 /**
@@ -31,7 +32,9 @@ export function withUser<Context = unknown>(
       // web, curl, a build from before the header existed — passes through.
       assertClientSupported(request);
 
-      return await handler(await requireCurrentUser(request), request, context);
+      return await withRequestClient(request, async () =>
+        handler(await requireCurrentUser(request), request, context)
+      );
     } catch (error) {
       return handleError(error);
     }

@@ -82,23 +82,12 @@ export const env = createEnv({
      */
     MIN_MACOS_BUILD: z.coerce.number().int().min(0).default(0),
     /**
-     * Where the signed macOS build lives.
-     *
-     * Public: it is rendered as an href on the landing page, and the download is
-     * not gated. Still not `NEXT_PUBLIC_`, so that it is read at request time
-     * rather than inlined at build time — one image serves every environment,
-     * and a release should only have to change a variable. Optional, so a
-     * checkout with no build configured renders a page saying so.
-     */
-    MACOS_DOWNLOAD_URL: z.url().optional(),
-    /** Shown beside the download, e.g. "0.3.1 (beta)". Cosmetic. */
-    MACOS_BUILD_LABEL: z.string().optional(),
-    /**
      * The iPhone beta's TestFlight public link (`https://testflight.apple.com/join/…`).
      *
-     * Public and read per request, like `MACOS_DOWNLOAD_URL`: setting it is what
-     * puts the iPhone button on the landing page and on `/download`. Unset means
-     * neither offers the iPhone app.
+     * Public: it is rendered as an href on the landing page. Still not
+     * `NEXT_PUBLIC_`, so that it is read at request time rather than inlined at
+     * build time — one image serves every environment, and a new link should only
+     * have to change a variable. Unset means the page does not offer the iPhone app.
      */
     IOS_TESTFLIGHT_URL: z.url().optional(),
     /**
@@ -116,6 +105,13 @@ export const env = createEnv({
      */
     POSTHOG_PROJECT_TOKEN: z.string().optional(),
     POSTHOG_HOST: z.url().optional(),
+    /**
+     * The iPhone's own PostHog project: where the server records what iPhone
+     * requests do, beside the app's events. Unset, they share the project above.
+     * `POSTHOG_IOS_PROJECT_ID` is its numeric id, needed to delete a person there.
+     */
+    POSTHOG_IOS_PROJECT_TOKEN: z.string().optional(),
+    POSTHOG_IOS_PROJECT_ID: z.string().optional(),
     /**
      * Signs the tokens guests play with (HS256). At least 32 characters.
      *
@@ -211,10 +207,10 @@ export const env = createEnv({
     IMPORT_MASTER_KEY: process.env.IMPORT_MASTER_KEY,
     IMPORT_WORKER_CONCURRENCY: process.env.IMPORT_WORKER_CONCURRENCY,
     MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
-    MACOS_DOWNLOAD_URL: process.env.MACOS_DOWNLOAD_URL,
-    MACOS_BUILD_LABEL: process.env.MACOS_BUILD_LABEL,
     IOS_TESTFLIGHT_URL: process.env.IOS_TESTFLIGHT_URL,
     POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,
+    POSTHOG_IOS_PROJECT_TOKEN: process.env.POSTHOG_IOS_PROJECT_TOKEN,
+    POSTHOG_IOS_PROJECT_ID: process.env.POSTHOG_IOS_PROJECT_ID,
     POSTHOG_HOST: process.env.POSTHOG_HOST,
     GUEST_TOKEN_SECRET: process.env.GUEST_TOKEN_SECRET,
     GUEST_ATTESTATION: process.env.GUEST_ATTESTATION,

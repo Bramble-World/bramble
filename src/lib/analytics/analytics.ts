@@ -1,6 +1,7 @@
 import { PostHog } from 'posthog-node';
 import { env } from '@/env';
 import * as userReader from '@/lib/services/users/users.reader';
+import { isIosRequest } from './client-context';
 import type { AnalyticsEvent } from './events';
 
 /**
@@ -76,11 +77,16 @@ export class PostHogAnalytics implements Analytics {
   }
 }
 
-let client: PostHog | null = null;
-let analytics: Analytics | null = null;
+/** One sink per project token. */
+const sinks = new Map<string, Analytics>();
+const noop = new NoopAnalytics();
 
 /**
- * The sink this process uses.
+ * The sink for this event.
+ *
+ * iPhone requests go to the iOS project, so a player's server events sit beside
+ * the app's own. Where it has no token, which is everywhere but production, they
+ * share the main project.
  *
  * `flushAt: 1` alongside `captureImmediate` because the two places that send
  * events are a serverless route handler and a worker process, both of which
@@ -88,23 +94,21 @@ let analytics: Analytics | null = null;
  * never happened as far as any chart is concerned, and it fails silently.
  */
 export function getAnalytics(): Analytics {
-  if (analytics) return analytics;
+  const main = env.POSTHOG_PROJECT_TOKEN;
+  if (!main) return noop;
 
-  const token = env.POSTHOG_PROJECT_TOKEN;
-  if (!token) return (analytics = new NoopAnalytics());
-
-  client = new PostHog(token, {
-    host: env.POSTHOG_HOST,
-    flushAt: 1,
-  });
-
-  return (analytics = new PostHogAnalytics(client));
+  const token = (isIosRequest() && env.POSTHOG_IOS_PROJECT_TOKEN) || main;
+  let sink = sinks.get(token);
+  if (!sink) {
+    sink = new PostHogAnalytics(new PostHog(token, { host: env.POSTHOG_HOST, flushAt: 1 }));
+    sinks.set(token, sink);
+  }
+  return sink;
 }
 
 /** Test seam: drops the memoised sink so a fake can replace it. */
 export function resetAnalytics(): void {
-  analytics = null;
-  client = null;
+  sinks.clear();
 }
 
 /**

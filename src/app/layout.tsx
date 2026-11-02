@@ -12,9 +12,17 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+const title = 'Bramble';
+const description = 'your real life. infinitely playable.';
+
 export const metadata: Metadata = {
-  title: 'Bramble',
-  description: 'your real life. infinitely playable.',
+  // The public site, not NEXT_PUBLIC_APP_URL, which is the API's host. Social
+  // crawlers need absolute URLs, and this is what resolves `opengraph-image.png`.
+  metadataBase: new URL('https://www.brambleworld.com'),
+  title,
+  description,
+  openGraph: { title, description, siteName: title, type: 'website' },
+  twitter: { card: 'summary_large_image', title, description },
 };
 
 export default function RootLayout({
