@@ -10,7 +10,7 @@ vi.mock('./apns', () => ({ apnsConfigured: () => true, sendPush: vi.fn() }));
 
 const { env } = await import('@/env');
 const { db } = await import('@/index');
-const { pushDevices, pushSends, storyTurns, storylineSessions, users } =
+const { pushDevices, pushSends, storyTurns, storylineSessions, turnChoices, users } =
   await import('@/db/schema/tables');
 const apns = vi.mocked(await import('./apns'));
 const storylines = await import('../storylines/storylines.service');
