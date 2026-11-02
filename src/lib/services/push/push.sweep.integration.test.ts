@@ -10,7 +10,7 @@ vi.mock('./apns', () => ({ apnsConfigured: () => true, sendPush: vi.fn() }));
 
 const { env } = await import('@/env');
 const { db } = await import('@/index');
-const { pushDevices, pushSends, storyTurns, storylineSessions, users } =
+const { pushDevices, pushSends, storyTurns, storylineSessions, turnChoices, users } =
   await import('@/db/schema/tables');
 const apns = vi.mocked(await import('./apns'));
 const storylines = await import('../storylines/storylines.service');
@@ -24,8 +24,17 @@ const NOW = new Date('2026-11-04T20:00:00Z');
 let userId: string;
 let sessionId: string;
 
+/** Answered, because a session can only have one open turn. */
 async function addTurn(createdAt: Date, turnOrder: number) {
-  await db.insert(storyTurns).values({ sessionId, turnOrder, narrativeContent: 'x', createdAt });
+  const [{ id }] = await db
+    .insert(storyTurns)
+    .values({ sessionId, turnOrder, narrativeContent: 'x', createdAt, selectedChoiceId: null })
+    .returning({ id: storyTurns.id });
+  const [choice] = await db
+    .insert(turnChoices)
+    .values({ turnId: id, label: 'x', orderIndex: 0 })
+    .returning({ id: turnChoices.id });
+  await db.update(storyTurns).set({ selectedChoiceId: choice.id }).where(eq(storyTurns.id, id));
 }
 
 beforeAll(async () => {
