@@ -102,11 +102,18 @@ export function createFakeGenerator(): FakeGenerator {
 
       return {
         value: parsed.data,
+        // All zero: the fake spends nothing, and a fabricated token count would
+        // be indistinguishable from a real one in a log or an assertion.
         meta: {
           promptName: spec.name,
+          stage: spec.stage,
           model: `fake:${STAGE_MODELS[spec.stage].model}`,
+          reasoningEffort: STAGE_MODELS[spec.stage].reasoningEffort,
           inputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
           outputTokens: 0,
+          reasoningTokens: 0,
           finishReason: 'stop',
           durationMs: 0,
         },
