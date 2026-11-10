@@ -5,6 +5,7 @@ import {
   imports,
   pushDevices,
   pushSends,
+  rebornAnswers,
   motifParticipants,
   motifs,
   personRelationships,
@@ -18,6 +19,7 @@ import { track, trackAlias } from '@/lib/analytics/analytics';
 import * as userReader from '../users/users.reader';
 import { ClerkIdentity } from '../users/users.identity';
 import { Executor } from '../executor';
+import { makeRoomForGuestAnswers } from '../onboarding/reborn-answers.service';
 
 /**
  * Signing up from a guest: the guest's story becomes an account's.
@@ -55,6 +57,7 @@ export const USER_OWNED_TABLES = [
   imports,
   pushDevices,
   pushSends,
+  rebornAnswers,
 ] as const;
 
 export type ClaimMethod = 'apple' | 'passkey' | 'email';
@@ -196,6 +199,9 @@ async function mergeInto(guestId: string, accountId: string): Promise<void> {
     if (guestSelf && accountSelf) {
       await mergeSelf(tx, guestId, guestSelf.id, accountSelf.id);
     }
+
+    // One answer per question: the guest's, newer, replace the account's.
+    await makeRoomForGuestAnswers(tx, guestId, accountId);
 
     for (const table of USER_OWNED_TABLES) {
       await tx.update(table).set({ userId: accountId }).where(eq(table.userId, guestId));

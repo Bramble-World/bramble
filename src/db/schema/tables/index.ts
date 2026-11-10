@@ -12,6 +12,7 @@ export { turnChoices } from './storylineSessions/turnChoices';
 export { turnSurfaces } from './storylineSessions/turnSurfaces';
 export { pushDevices } from './pushDevices';
 export { pushSends } from './pushDevices/pushSends';
+export { rebornAnswers } from './rebornAnswers';
 export { imports, importStatusEnum, importStageEnum } from './imports';
 export { motifs } from './motifs';
 export { motifParticipants } from './motifs/motifParticipants';

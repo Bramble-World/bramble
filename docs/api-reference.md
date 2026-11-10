@@ -273,6 +273,7 @@ account or moves their story into the account they already had.
 ```
 POST /api/v1/guests/challenge   → challenge          (where attestation is required)
 POST /api/v1/guests             → guest token
+POST /api/v1/onboarding/answers → { flagged }        (reborn: up to three, before the opening)
 GET  /api/v1/onboarding/opening → the first screen
 POST /api/v1/onboarding/story   → beat 1             (scripted, no model call)
 POST /api/v1/sessions/{id}/answer, POST .../turn     → beats 2 and 3
@@ -444,6 +445,54 @@ An unknown `openingId` is **400** with `fields.openingId`; a bad `name`,
 The name and pronouns are stored with the story and sent to the model to write
 the beats that follow. Nothing on this path logs them, and analytics never carries them.
 
+### `POST /api/v1/onboarding/answers`
+
+Guest token only (an account gets **403 `FORBIDDEN`**). The reborn onboarding's
+three questions about the player's "last life", one answer per request, as the
+player taps "next":
+
+```json
+{ "index": 2, "role": "ex", "text": "they left the week before graduation" }
+```
+
+- `index` — **1** (the choice you still wonder about), **2** (who changed the
+  direction of your life) or **3** (what you were about to do).
+- `role` — question 2 only, optional: `parent`, `ex`, `best_friend`, `teacher`,
+  `boss` or `stranger`.
+- `text` — trimmed, 1–140 characters counted as graphemes. Line breaks are
+  allowed; other control characters are not.
+
+The answer is checked for safety (OpenAI's moderation endpoint) before anything
+is written. **200**:
+
+```json
+{ "ok": true, "flagged": false }
+```
+
+- **`flagged: false`** — kept on the guest, replacing any earlier answer to the
+  same question.
+- **`flagged: true`** — it talks about self-harm, abuse or someone in danger.
+  Nothing is kept, and any earlier answer to that question is deleted. Show the
+  care check rather than moving on.
+
+If the check can't be run, it's **429 `UPSTREAM_BUSY`** with `Retry-After`, and
+nothing is kept: an answer is never stored unchecked. The iPhone waits about a
+second for this response and moves on without it; a late `flagged: true` needs
+nothing, since the answer was discarded anyway.
+
+A skipped question sends nothing. A bad `index`, `role` or `text` is **400** with
+that field. Safe to retry: the latest answer to a question wins.
+
+The text is sent to OpenAI and stored. Nothing on this path logs it, and
+analytics never carries it. Answers move with everything else when the guest
+claims an account.
+
+### `DELETE /api/v1/onboarding/answers/{index}`
+
+Guest token only. "i'd rather not say" on a question already answered: deletes
+that answer. **204** whether or not there was one, so it's safe to repeat. An
+`index` other than 1–3 is **400**.
+
 ### `POST /api/v1/guests/claim`
 
 Both identities at once:
@@ -464,7 +513,8 @@ up, for analytics only.
   _became_ it. `user.id` is the guest's id, unchanged.
 - **`merged: true`** — they already had an account. The guest's story moved into
   it: its people, storyline and playthrough, with the guest's "you" merged into
-  the account's. `user.id` is the **account's** id; the guest id no longer
+  the account's, and its reborn answers, which replace the account's answers to
+  the same questions. `user.id` is the **account's** id; the guest id no longer
   exists, so identify analytics with the new one.
 
 Either way the guest token stops working immediately, and the `sessionId` the app
