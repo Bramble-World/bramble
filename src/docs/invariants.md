@@ -56,6 +56,14 @@ product's central claim, not an implementation detail.
   `importId:userId`, so a blob cannot be replayed into another import or
   account.
 
+- **A reborn answer is checked before it is kept, and its text goes nowhere but
+  OpenAI and `reborn_answers.text`.** The safety check runs first; a flagged
+  answer is never written (and removes the earlier answer to that question), and
+  a check that can't run keeps nothing rather than storing it unchecked. The text
+  is never logged, never in analytics, and never in an error's message or cause:
+  the route's catch-all would send it to the logs and Sentry. `safety.ts` logs
+  only the kind of failure. Stories written from answers must never quote them.
+
 **Fails:** silently, and as a privacy breach rather than a bug. Nothing detects
 it. Worth an explicit check in code review of anything touching the generation
 pipeline.

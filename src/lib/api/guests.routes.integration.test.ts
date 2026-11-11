@@ -20,6 +20,12 @@ import { and, eq, getTableName, inArray, sql } from 'drizzle-orm';
  * for this app in a test run. The verifier itself is tested against real
  * attestations in app-attest.test.ts.
  */
+/** What the safety check says, per test: pass, flag, or fail to run. */
+const safety = vi.hoisted(() => ({
+  verdict: 'pass' as 'pass' | 'flag' | 'fail',
+  checked: [] as string[],
+}));
+
 const captured: Array<{ userId: string; event: { name: string; properties: unknown } }> = [];
 const aliases: Array<{ userId: string; previousId: string }> = [];
 
@@ -35,6 +41,18 @@ vi.mock('@/lib/services/auth/auth.service', async (importOriginal) => {
 vi.mock('@/lib/services/guests/app-attest', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/guests/app-attest')>();
   return { ...actual, verifyAttestation: vi.fn() };
+});
+vi.mock('@/lib/onboarding/safety', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/onboarding/safety')>();
+  const { UpstreamBusyError } = await import('@/lib/utils/errors');
+  return {
+    ...actual,
+    getSafetyCheck: () => async (text: string) => {
+      safety.checked.push(text);
+      if (safety.verdict === 'fail') throw new UpstreamBusyError(5);
+      return { flagged: safety.verdict === 'flag' };
+    },
+  };
 });
 vi.mock('@/lib/analytics/analytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/analytics/analytics')>();
@@ -55,8 +73,16 @@ vi.mock('@/lib/analytics/analytics', async (importOriginal) => {
 const { env } = await import('@/env');
 const { db } = await import('@/index');
 const tables = await import('@/db/schema/tables');
-const { users, persons, personRelationships, storylines, characters, motifs, motifParticipants } =
-  tables;
+const {
+  users,
+  persons,
+  personRelationships,
+  storylines,
+  characters,
+  motifs,
+  motifParticipants,
+  rebornAnswers,
+} = tables;
 const auth = vi.mocked(await import('@/lib/services/auth/auth.service'));
 const appAttest = vi.mocked(await import('@/lib/services/guests/app-attest'));
 const { redis } = await import('@/lib/redis/client');
@@ -72,6 +98,8 @@ const challengeRoute = await import('@/app/api/v1/guests/challenge/route');
 const claimRoute = await import('@/app/api/v1/guests/claim/route');
 const openingRoute = await import('@/app/api/v1/onboarding/opening/route');
 const storyRoute = await import('@/app/api/v1/onboarding/story/route');
+const answersRoute = await import('@/app/api/v1/onboarding/answers/route');
+const answerIndexRoute = await import('@/app/api/v1/onboarding/answers/[index]/route');
 const meRoute = await import('@/app/api/me/route');
 const preferencesRoute = await import('@/app/api/v1/me/preferences/route');
 const sessionRoute = await import('@/app/api/v1/sessions/[sessionId]/route');
@@ -213,6 +241,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   captured.length = 0;
   aliases.length = 0;
+  safety.verdict = 'pass';
+  safety.checked.length = 0;
   (env as { GUEST_ATTESTATION?: string }).GUEST_ATTESTATION = undefined;
   await cleanUp();
 });
@@ -466,6 +496,102 @@ describe('POST /api/v1/onboarding/story', () => {
   });
 });
 
+async function sendAnswer(token: string, body: Record<string, unknown>) {
+  return answersRoute.POST(request('POST', '/api/v1/onboarding/answers', { token, body }), ctx({}));
+}
+
+async function answersOf(userId: string) {
+  return db
+    .select({
+      question: rebornAnswers.question,
+      role: rebornAnswers.role,
+      text: rebornAnswers.text,
+    })
+    .from(rebornAnswers)
+    .where(eq(rebornAnswers.userId, userId))
+    .orderBy(rebornAnswers.question);
+}
+
+describe('POST /api/v1/onboarding/answers', () => {
+  it('keeps a checked answer, trimmed; a resend replaces it', async () => {
+    const guest = await newGuest();
+    let res = await sendAnswer(guest.token, { index: 1, text: '  i stayed in my hometown  ' });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, flagged: false });
+    res = await sendAnswer(guest.token, { index: 2, role: 'best_friend', text: 'they pushed me' });
+    expect(res.status).toBe(200);
+    res = await sendAnswer(guest.token, { index: 1, text: 'i never left' });
+    expect(res.status).toBe(200);
+
+    expect(await answersOf(guest.id)).toEqual([
+      { question: 1, role: null, text: 'i never left' },
+      { question: 2, role: 'best_friend', text: 'they pushed me' },
+    ]);
+    expect(safety.checked).toEqual(['i stayed in my hometown', 'they pushed me', 'i never left']);
+    // Nothing about answers reaches analytics yet.
+    expect(captured.filter((c) => c.event.name.startsWith('reborn'))).toEqual([]);
+  });
+
+  it('never keeps a flagged answer, and drops the one it replaced', async () => {
+    const guest = await newGuest();
+    await sendAnswer(guest.token, { index: 1, text: 'i stayed' });
+    safety.verdict = 'flag';
+    const res = await sendAnswer(guest.token, { index: 1, text: 'something painful' });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, flagged: true });
+    expect(await answersOf(guest.id)).toEqual([]);
+  });
+
+  it('keeps nothing when the check cannot run', async () => {
+    const guest = await newGuest();
+    safety.verdict = 'fail';
+    const res = await sendAnswer(guest.token, { index: 3, text: 'quit my job' });
+    expect(res.status).toBe(429);
+    expect((await res.json()).error.code).toBe('UPSTREAM_BUSY');
+    expect(await answersOf(guest.id)).toEqual([]);
+  });
+
+  it.each([
+    ['a question out of range', { index: 4, text: 'hi' }],
+    ['an empty answer', { index: 1, text: '   ' }],
+    ['a role off question 2', { index: 1, role: 'ex', text: 'hi' }],
+    ['a role not on the list', { index: 2, role: 'cousin', text: 'hi' }],
+    ['141 characters', { index: 1, text: 'a'.repeat(141) }],
+    ['a control character', { index: 1, text: 'hi\u0007' }],
+  ])('refuses %s, unchecked', async (_case, body) => {
+    const guest = await newGuest();
+    const res = await sendAnswer(guest.token, body);
+    expect(res.status).toBe(400);
+    expect(safety.checked).toEqual([]);
+    expect(await answersOf(guest.id)).toEqual([]);
+  });
+
+  it('takes 140 characters as a person counts them, and line breaks', async () => {
+    const guest = await newGuest();
+    const res = await sendAnswer(guest.token, { index: 1, text: '👋🏽'.repeat(138) + '\n' + 'a' });
+    expect(res.status).toBe(200);
+  });
+
+  it('withdraws an answer, and a second withdrawal is fine', async () => {
+    const guest = await newGuest();
+    await sendAnswer(guest.token, { index: 2, role: 'ex', text: 'they left' });
+    const withdraw = () =>
+      answerIndexRoute.DELETE(
+        request('DELETE', '/api/v1/onboarding/answers/2', { token: guest.token }),
+        ctx({ index: '2' })
+      );
+    expect((await withdraw()).status).toBe(204);
+    expect((await withdraw()).status).toBe(204);
+    expect(await answersOf(guest.id)).toEqual([]);
+
+    const bad = await answerIndexRoute.DELETE(
+      request('DELETE', '/api/v1/onboarding/answers/9', { token: guest.token }),
+      ctx({ index: '9' })
+    );
+    expect(bad.status).toBe(400);
+  });
+});
+
 describe('a guest plays three beats, then hits the wall', () => {
   it('plays beats 2 and 3 through the ordinary loop, with no energy', async () => {
     const guest = await newGuest();
@@ -561,6 +687,7 @@ describe('POST /api/v1/guests/claim', () => {
 
   it('turns the guest into a new account, and the story plays on to beat 4', async () => {
     const { guest, story } = await guestAtTheWall();
+    await sendAnswer(guest.token, { index: 3, text: 'start the band' });
     signInAs(CLERK_NEW);
 
     const res = await claim(guest.token, { method: 'apple' });
@@ -580,6 +707,11 @@ describe('POST /api/v1/guests/claim', () => {
     // The guest token is finished.
     const me = await meRoute.GET(request('GET', '/api/me', { token: guest.token }));
     expect(me.status).toBe(401);
+
+    // The answers are the account's: the row became it.
+    expect(await answersOf(guest.id)).toEqual([
+      { question: 3, role: null, text: 'start the band' },
+    ]);
 
     // The account is past the wall: beat 4, paid for in energy now.
     const four = await advanceSession(guest.id, story.sessionId);
@@ -673,6 +805,28 @@ describe('POST /api/v1/guests/claim', () => {
         event: { name: 'signup_completed', properties: { merged: true, method: 'passkey' } },
       },
     ]);
+  });
+
+  it("moves a guest's answers into an existing account, replacing its answers to the same questions", async () => {
+    const accountId = await makeAccount(CLERK_EXISTING, true);
+    await db.insert(rebornAnswers).values([
+      { userId: accountId, question: 1, role: null, text: 'an old answer' },
+      { userId: accountId, question: 3, role: null, text: 'move across the country' },
+    ]);
+    const { guest } = await guestAtTheWall();
+    await sendAnswer(guest.token, { index: 1, text: 'i dropped out' });
+    await sendAnswer(guest.token, { index: 2, role: 'teacher', text: 'they believed in me' });
+
+    signInAs(CLERK_EXISTING);
+    const res = await claim(guest.token, { method: 'email' });
+    expect(res.status).toBe(200);
+
+    expect(await answersOf(accountId)).toEqual([
+      { question: 1, role: null, text: 'i dropped out' },
+      { question: 2, role: 'teacher', text: 'they believed in me' },
+      { question: 3, role: null, text: 'move across the country' },
+    ]);
+    expect(await answersOf(guest.id)).toEqual([]);
   });
 
   it("gives an account with no self person the guest's", async () => {

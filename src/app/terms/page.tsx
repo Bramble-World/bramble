@@ -12,13 +12,13 @@ export const metadata: Metadata = {
 
 export default function Terms() {
   return (
-    <LegalPage title="Terms of Service" effective="October 12, 2026">
+    <LegalPage title="Terms of Service" effective="November 10, 2026">
       <p>
         These terms are an agreement between you and {LEGAL_ENTITY} (&ldquo;Bramble&rdquo;,
-        &ldquo;we&rdquo;, &ldquo;us&rdquo;) for the Bramble app for Mac, our website, and the
-        service behind them (together, &ldquo;Bramble&rdquo;). By creating an account or using
-        Bramble, you agree to them. Our <Link href="/privacy">Privacy Policy</Link> explains how we
-        handle your data.
+        &ldquo;we&rdquo;, &ldquo;us&rdquo;) for the Bramble apps for iPhone and Mac, our website,
+        and the service behind them (together, &ldquo;Bramble&rdquo;). By creating an account or
+        using Bramble, you agree to them. Our <Link href="/privacy">Privacy Policy</Link> explains
+        how we handle your data.
       </p>
 
       <h2>Who can use Bramble</h2>
@@ -59,6 +59,24 @@ export default function Terms() {
         stories made from them, only to run Bramble for you as described in our Privacy Policy. This
         permission ends when you delete your account, except for copies we must keep by law or that
         are waiting to expire from backups.
+      </p>
+
+      <h2>Your answers about your last life</h2>
+      <p>
+        On iPhone, Bramble may ask you about your past: a choice you still wonder about, someone who
+        changed your life, and something you were about to do. Answering is optional. When you
+        answer, you promise that you&rsquo;re allowed to share what you write, and you agree not to
+        use real names or anything that would identify someone else.
+      </p>
+      <p>
+        You keep ownership of your answers. You give us a worldwide, non-exclusive, royalty-free
+        permission to use them to write new stories and to let other Bramble players play those
+        stories. Before anyone else sees such a story, we change the names, places and other details
+        that could identify you or anyone else, and we never show your words as you wrote them. We
+        check each answer for safety first, and don&rsquo;t keep one that talks about self-harm,
+        abuse or someone in danger. This permission ends when you delete the answer or your account,
+        and stories written from your answers are then taken out of the stories other players are
+        offered.
       </p>
 
       <h2>Your stories are fiction</h2>

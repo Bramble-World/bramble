@@ -12,8 +12,10 @@ import { LEGAL_ENTITY, LegalPage, Mail } from '@/components/legal/legal-page';
  * (purge.integration.test.ts and account-deletion.routes.integration.test.ts), the analytics allow-lists (src/lib/analytics and
  * the Mac's Analytics.swift), and a guest's seven days, App Attest key and
  * per-address count (GUEST_LIFETIME_MS, guest-sweep.ts, attestation.ts,
- * ip-limit.ts, and guests.routes.integration.test.ts). Change the behaviour and this page has to change
- * with it, in the same PR.
+ * ip-limit.ts, and guests.routes.integration.test.ts), and the last-life answers: checked before they
+ * are kept, a flagged one never kept, moved on sign-up and deleted with the account (safety.ts,
+ * reborn-answers.service.ts, guests.routes.integration.test.ts and purge.integration.test.ts). Change the
+ * behaviour and this page has to change with it, in the same PR.
  */
 export const metadata: Metadata = {
   title: 'Privacy Policy · Bramble',
@@ -22,7 +24,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 2, 2026">
+    <LegalPage title="Privacy Policy" effective="November 10, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -105,6 +107,34 @@ export default function Privacy() {
         identifies that key, not you or your device, and we don&rsquo;t use your device&rsquo;s
         advertising identifier. We also count how many guest accounts are created from each IP
         address, and keep that count for an hour.
+      </p>
+
+      <h3>Questions about your last life (iPhone)</h3>
+      <p>
+        When you start on iPhone, the app may ask you up to three questions about your past: a
+        choice you still wonder about, someone who changed the direction of your life (and who they
+        were to you, such as a parent or an ex), and something you were about to do. Every question
+        can be skipped. We ask you not to use real names, and we change details anyway (see below).
+      </p>
+      <p>
+        When you answer, we first send your answer to OpenAI&rsquo;s moderation service to check
+        whether it talks about self-harm, abuse or someone in danger. If it does, we don&rsquo;t
+        keep it (and we delete any earlier answer you gave to that question): it won&rsquo;t become
+        a story and no one else will see it, and the app points you to free helplines instead. If
+        the check can&rsquo;t be run, we don&rsquo;t keep the answer either.
+      </p>
+      <p>
+        Otherwise we keep your answer with your guest account, and with your account once you sign
+        up. We&rsquo;ll use your answers to write stories that other Bramble players can play.
+        Before anyone else sees such a story, the names, places, schools, employers and any other
+        details that could identify you or anyone else are changed, and your own words are never
+        shown as you wrote them. Your answers are sent to OpenAI to check them and to write those
+        stories. They are never part of usage data or crash reports.
+      </p>
+      <p>
+        Choosing &ldquo;i&rsquo;d rather not say&rdquo; on a question you&rsquo;d already answered
+        deletes that answer. Deleting your account deletes your answers, and stories written from
+        them are taken out of the stories other players are offered.
       </p>
 
       <h3>Messages and contacts on your Mac</h3>
@@ -227,8 +257,10 @@ export default function Privacy() {
         <li>
           <strong>OpenAI</strong>: writes stories. It receives the conversations you send (to create
           a story) and the story so far, including the names and pronouns you give people, to write
-          each scene. Under OpenAI&rsquo;s terms for its API, it doesn&rsquo;t train its models on
-          this data; it may keep it for up to 30 days to detect abuse.
+          each scene; and your answers to the questions about your last life, to check them with its
+          moderation service and to write stories from them. Under OpenAI&rsquo;s terms for its API,
+          it doesn&rsquo;t train its models on this data; it may keep it for up to 30 days to detect
+          abuse.
         </li>
         <li>
           <strong>Clerk</strong>: sign-in and account security.
@@ -280,6 +312,10 @@ export default function Privacy() {
           automatically.
         </li>
         <li>Counts of guest accounts created per IP address: 1 hour.</li>
+        <li>
+          Answers to the questions about your last life: with your account, until you delete them or
+          your account. An answer the safety check flags is never kept.
+        </li>
         <li>Your account and stories: until you delete them, or ask us to.</li>
         <li>Download-page IP addresses: 15 minutes.</li>
         <li>
@@ -293,11 +329,12 @@ export default function Privacy() {
       <p>
         In the iPhone app, go to Settings and tap &ldquo;delete my account&rdquo;. You confirm with
         Face ID or your sign-in first, so nobody else can do it from your phone. It happens straight
-        away: we delete your account, your stories, the people you added and everything else we hold
-        about you in our database, your Clerk account and passkeys, and your usage data in PostHog.
-        If you signed in with Apple, we also revoke Bramble&rsquo;s Sign in with Apple, so Bramble
-        no longer appears under your Apple ID. Passkeys saved in your iCloud Keychain or password
-        manager stay there until you delete them yourself.
+        away: we delete your account, your stories, the people you added, your answers to the
+        questions about your last life and everything else we hold about you in our database, your
+        Clerk account and passkeys, and your usage data in PostHog. If you signed in with Apple, we
+        also revoke Bramble&rsquo;s Sign in with Apple, so Bramble no longer appears under your
+        Apple ID. Passkeys saved in your iCloud Keychain or password manager stay there until you
+        delete them yourself.
       </p>
       <p>
         You can also email <Mail /> from the address you use for Bramble and ask us to delete your
