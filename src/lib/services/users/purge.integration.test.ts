@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/index';
-import { imports, pushDevices, users } from '@/db/schema/tables';
+import { imports, pushDevices, rebornAnswers, users } from '@/db/schema/tables';
 import { createFakeGenerator } from '@/lib/ai';
 import { registerFixtures } from '@/lib/ai/fixtures';
 import * as persons from '../persons/persons.service';
@@ -67,6 +67,7 @@ async function makeAccount(clerkId: string, email: string) {
     environment: 'production',
     timeZone: 'UTC',
   });
+  await db.insert(rebornAnswers).values({ userId, question: 1, role: null, text: 'i stayed' });
 
   const fake = createFakeGenerator();
   registerFixtures(fake);

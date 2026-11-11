@@ -26,6 +26,17 @@ issued it, and an IANA `timeZone`. Cascades from `users`. Holds no story content
 One notification the push sweep sent: its `kind`, the latest turn when it went out,
 and an `ordinal`. Holds the limits and makes a repeated sweep harmless. No text.
 
+### `rebornAnswers`
+
+A reborn player's answer to one of the three questions about their "last life",
+asked on the iPhone before sign-up: `question` (1–3), `role` (who changed their
+life; question 2 only, from a fixed list) and `text`, the player's own words about
+their real life. One row per `(userId, question)`, so a changed answer replaces
+the last. Only answers the safety check passed are here: a flagged answer is never
+written and removes the one it replaced. Meant to become storylines other players
+live. Cascades from `users`, and moves to the account on a claim, the guest's
+answers replacing the account's for the same questions.
+
 ### `persons`
 
 A real contact from the user's life — a sister, a coworker, an ex — stored **once per user**, regardless of how many storylines they appear in. This is the anchor that makes cross-storyline continuity possible: the same real person is the same `persons` row everywhere.
