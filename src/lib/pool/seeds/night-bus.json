@@ -1,0 +1,46 @@
+{
+  "title": "night bus",
+  "premise": "On the last bus home, a stranger sits beside you and says your name. They say they're from the future, and that in eleven minutes you'll get off at the wrong stop.",
+  "setting": "A night bus crossing a big city in winter, rain on the windows, nearly empty.",
+  "tone": "eerie, playful, and strangely moving",
+  "self": {
+    "description": "You're tired, a little lonely, and on your way home from a job you hate.",
+    "want": "To know if they're telling the truth.",
+    "avoids": "Getting off the bus."
+  },
+  "cast": [
+    {
+      "name": "Halden",
+      "pronouns": "he",
+      "relationshipType": "a stranger",
+      "role": "supporting",
+      "description": "Calm, kind, oddly familiar. He knows things about you no one should.",
+      "want": "For you to get off at the wrong stop.",
+      "avoids": "Saying who he really is.",
+      "voiceTone": "gentle, precise, a little sad",
+      "closeness": null,
+      "tension": "he knows too much"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The job",
+      "description": "For two years you've worked late in a job that was meant to be temporary.",
+      "engagementScore": 4
+    },
+    {
+      "title": "The last bus",
+      "description": "Tonight you missed your usual bus and caught the last one.",
+      "engagementScore": 5
+    },
+    {
+      "title": "Your name",
+      "description": "A stranger sits beside you. \"Hi. Don't be scared. In eleven minutes, get off early.\"",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "The wrong stop is outside a café hiring for the job you used to dream about.",
+    "Halden is you, years from now, or says he is."
+  ]
+}

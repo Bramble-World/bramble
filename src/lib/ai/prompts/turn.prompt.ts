@@ -120,7 +120,10 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
 
     return {
       system: [
-        'You write one beat of an interactive story drawn from a real conversation.',
+        // Source-neutral on purpose: stories come from players' answers to the
+        // reborn questions, the team's seeds, and (on the Mac) imported
+        // conversations. The setup below is what is true, whichever it was.
+        'You write one beat of an interactive story.',
         '',
         'The reader is the protagonist. Write to them as "you".',
         '',
@@ -172,8 +175,8 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         ...(beyondScript
           ? [
               '',
-              'The conversation this story came from has run out. There is no next',
-              'real event waiting to be told — whatever happens now is something',
+              'The setup this story started from has run out. There is no next',
+              'planned event waiting to be told — whatever happens now is something',
               'these people have not done before. Invent it from who they are, and',
               'do not stall: silence and non-reply are not a beat.',
             ]

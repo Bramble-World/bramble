@@ -75,7 +75,7 @@ describe('turn prompt', () => {
    * it is in. With script left it copies the next real beat; with none left it
    * has been observed to stall — three consecutive turns of nobody replying.
    */
-  it('tells the model when the source conversation has run out', () => {
+  it('tells the model when the setup it started from has run out', () => {
     expect(render({ beyondScript: true }).system).toContain('has run out');
     expect(render({ beyondScript: false }).system).not.toContain('has run out');
   });

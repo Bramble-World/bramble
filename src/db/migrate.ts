@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { postgresConnection } from './ssl';
+import { seedPool } from '@/lib/pool/seed-pool';
 
 /**
  * Applies pending migrations, then exits.
@@ -44,6 +45,11 @@ async function main(): Promise<void> {
   console.log(JSON.stringify({ event: 'migrate_started', migrations: applied }));
   await migrate(db, { migrationsFolder });
   console.log(JSON.stringify({ event: 'migrate_finished', migrations: applied }));
+
+  // The pool's seed stories, so a player who finishes a story always has a next
+  // one. After the migrations, because the table is one of them.
+  const seeded = await seedPool(db);
+  console.log(JSON.stringify({ event: 'seed_stories_written', count: seeded }));
 
   await db.$client.end();
 }

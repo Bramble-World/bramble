@@ -244,6 +244,13 @@ export type CurrentPlaythroughView = {
   lastActiveAt: string;
 };
 
+/** A pool story offered after one ends. No id: `POST .../next` starts it. */
+export type NextStoryView = {
+  title: string;
+  /** One or two sentences on what it is about. */
+  premise: string;
+};
+
 export type SessionView = {
   id: string;
   storylineId: string;
@@ -253,6 +260,12 @@ export type SessionView = {
   turn: TurnView | null;
   /** When the story ended. Null while it is still going. */
   endedAt: string | null;
+  /**
+   * The story offered next, once this one has ended: the "next episode" card.
+   * Null while the story is going, or when the pool has nothing new for this
+   * reader. Start it with `POST .../next`.
+   */
+  next: NextStoryView | null;
   /**
    * Everything already lived through, oldest first, excluding the open turn.
    *

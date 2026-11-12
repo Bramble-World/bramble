@@ -1,6 +1,8 @@
 import { pgTable, uuid, text, timestamp, index, pgEnum, integer } from 'drizzle-orm/pg-core';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
+import { storyTemplates } from '../storyTemplates';
+import { type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const storylineStatusEnum = pgEnum('storyline_status', [
   'pending',
@@ -41,7 +43,21 @@ export const storylines = pgTable(
      */
     targetBeats: integer('target_beats').notNull().default(20),
 
+    /**
+     * The pool story this was copied from. Null for an imported or scripted story.
+     *
+     * `set null`: when the author leaves, their template goes and this copy stays
+     * — it is the player's own story by then. Also how the pool knows what a
+     * player has already played.
+     */
+    templateId: uuid('template_id').references((): AnyPgColumn => storyTemplates.id, {
+      onDelete: 'set null',
+    }),
+
     ...timestamps,
   },
-  (table) => [index('idx_storylines_user').on(table.userId)]
+  (table) => [
+    index('idx_storylines_user').on(table.userId),
+    index('idx_storylines_template').on(table.userId, table.templateId),
+  ]
 );
