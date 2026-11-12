@@ -795,7 +795,10 @@ Every turn has three parts, whatever it is shown on:
 **Stories end.** Each storyline has a soft length of about 20 beats. From four
 beats before it the model may end the story when it lands; four beats after it,
 it must. So a story is roughly 16–24 beats, and its ending is shaped by the
-choices made. The ending is an ordinary generated turn and costs one point of
+choices made. Stories already in progress when endings shipped were given at
+least their longest playthrough + 8 beats, so none ends without building to it.
+**The Mac app never gets an ending** (`X-Bramble-Client: macos/…`): it can't show
+one, so stories played there stay open. The ending is an ordinary generated turn and costs one point of
 energy like any other. There is deliberately no "beats left" figure: the length
 is a budget, not a promise.
 

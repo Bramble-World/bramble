@@ -5,6 +5,7 @@ import { turnView } from '@/lib/api/views';
 import { readerEnergy } from '@/lib/api/energy';
 import { advanceSession } from '@/lib/services/generation/turns.service';
 import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
+import { clientShowsEndings } from '@/lib/api/client-version';
 
 type Params = { params: Promise<{ sessionId: string }> };
 
@@ -42,7 +43,9 @@ export const POST = withUser(async (user, request, { params }: Params) => {
   // `request.signal` joins it, so a reader who closes the app stops the spend
   // instead of paying for a turn nobody will read.
   const turn = await withDeadline(
-    (signal) => advanceSession(user.id, sessionId, { signal }),
+    // The Mac app can't show an ending, so its stories don't get one.
+    (signal) =>
+      advanceSession(user.id, sessionId, { signal, endings: clientShowsEndings(request) }),
     TURN_DEADLINE_MS,
     request.signal
   );

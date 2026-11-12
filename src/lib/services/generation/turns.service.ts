@@ -30,7 +30,15 @@ import * as storylineReader from '../storylines/storylines.reader';
  * headers timeout, a failure mode with no status code and three automatic
  * retries. See `src/lib/ai/deadline.ts`.
  */
-export type GenerationDeps = { generator?: Generator; signal?: AbortSignal };
+export type GenerationDeps = {
+  generator?: Generator;
+  signal?: AbortSignal;
+  /**
+   * False for a client that cannot show an ending (the Mac app): the story is
+   * kept open, however long it runs. See `clientShowsEndings`.
+   */
+  endings?: boolean;
+};
 
 /**
  * Presents the next beat of a session.
@@ -78,7 +86,10 @@ export async function generateTurn(
   // the anti-leak test asserting against a context the model never saw.
   const visible = contextAsOf(storyline, session.playheadOrder);
   const beyondScript = scriptExhausted(storyline, session.playheadOrder);
-  const phase = storyPhase(sessionContext.turns.length + 1, storyline.storyline.targetBeats);
+  const phase =
+    deps.endings === false
+      ? 'open'
+      : storyPhase(sessionContext.turns.length + 1, storyline.storyline.targetBeats);
   const vars = { storyline: visible, session: sessionContext, beyondScript, phase };
 
   // One more try when the model breaks a rule the schema cannot express (an
