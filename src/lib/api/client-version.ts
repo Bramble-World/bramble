@@ -78,3 +78,15 @@ export function assertClientSupported(request: Request): void {
 
   if (client.build < minimum) throw new ClientTooOldError();
 }
+
+/**
+ * Whether this client can show a story's ending.
+ *
+ * The Mac app cannot: it renders an ending as a beat with no buttons, and an
+ * ended session as a state it doesn't recognise, and no Mac update is coming to
+ * teach it. So stories played on the Mac stay endless while it winds down.
+ * Anything else, including a request that doesn't say what it is, gets endings.
+ */
+export function clientShowsEndings(request: Request): boolean {
+  return parseClientHeader(request.headers.get(CLIENT_HEADER))?.platform !== 'macos';
+}

@@ -1,8 +1,18 @@
-import { index, integer, pgTable, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  timestamp,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
+import type { StoredEnding } from '@/lib/endings/ending';
 import { storylines } from '../storylines';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
 import { events } from '../events';
+import { storyTemplates } from '../storyTemplates';
 
 export const storylineSessions = pgTable(
   'storyline_sessions',
@@ -57,6 +67,38 @@ export const storylineSessions = pgTable(
      * reporting implicit `any` on perfectly ordinary callbacks.
      */
     startedFromEventId: uuid('started_from_event_id').references((): AnyPgColumn => events.id, {
+      onDelete: 'set null',
+    }),
+
+    /**
+     * When this playthrough's ending was written. Null while the story is going.
+     *
+     * Set in the same transaction as the ending turn, so an ended session always
+     * has one to show.
+     */
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+
+    /**
+     * How the story ended, for the notebook's ending page: a title, two
+     * sentences, the choices that led there and a few facts.
+     *
+     * Written once, after the ending turn, by a model that is shown only this
+     * playthrough — so unlike `storylines.arc_summary` it describes nothing the
+     * reader hasn't lived. Null until it's written, which is moments after the
+     * ending; a failed write is retried by the next `POST .../turn`.
+     */
+    ending: jsonb().$type<StoredEnding>(),
+
+    /**
+     * The pool story offered after this one ended, chosen once so the card the
+     * reader saw and the story they get are the same. `set null` if it leaves
+     * the pool before they start it; a new one is chosen then.
+     */
+    nextTemplateId: uuid('next_template_id').references((): AnyPgColumn => storyTemplates.id, {
+      onDelete: 'set null',
+    }),
+    /** The playthrough started from `next`, so starting it twice starts it once. */
+    nextSessionId: uuid('next_session_id').references((): AnyPgColumn => storylineSessions.id, {
       onDelete: 'set null',
     }),
 

@@ -21,7 +21,10 @@ import type {
   StorylineDetailView,
   SurfaceView,
   TurnView,
+  NextStoryView,
+  EndingView,
 } from './views.types';
+import type { StoredEnding } from '@/lib/endings/ending';
 
 /**
  * Pure functions from domain types to wire types.
@@ -84,6 +87,7 @@ export function turnView(turn: TurnWithChoices): TurnView {
     id: turn.id,
     headline: turn.headline,
     narrative: turn.narrativeContent,
+    isEnding: turn.isEnding,
     choices: turn.choices.map(choiceView),
     surfaces: turn.surfaces.map(surfaceView),
   };
@@ -124,8 +128,9 @@ export function storylineDetailView(
     startable: storyline.status === 'ready',
     cast: metCast.map(personView),
   };
-  // No durationMinutes and no coverImageUrl. Neither has honest backing, and
-  // with endless stories a duration cannot ever have one. Shipping a field the
+  // No durationMinutes and no coverImageUrl. Neither has honest backing: a
+  // story's length is a soft budget the model may overrun, so a duration would
+  // be a guess. Shipping a field the
   // client renders and then removing it is a breaking change; adding one later
   // is not.
 }
@@ -246,6 +251,9 @@ export function sessionView(input: {
   turnsAnswered: number;
   turn: TurnWithChoices | null;
   history: TurnWithChoices[];
+  endedAt: Date | null;
+  next?: NextStoryView | null;
+  ending?: StoredEnding | null;
 }): SessionView {
   return {
     id: input.id,
@@ -253,11 +261,44 @@ export function sessionView(input: {
     state: input.state,
     turnsAnswered: input.turnsAnswered,
     turn: input.turn ? turnView(input.turn) : null,
+    endedAt: iso(input.endedAt),
+    ending: input.ending ? endingView(input.ending, input.history) : null,
+    next: input.next
+      ? {
+          title: input.next.title,
+          hook: input.next.hook,
+          openingLines: input.next.openingLines,
+          fromPool: input.next.fromPool,
+        }
+      : null,
     history: input.history.map(answeredTurnView),
   };
   // playheadOrder is absent: it is an internal key over events.narrativeOrder,
-  // meaningless to a reader, and paired with any total it becomes a progress
-  // figure that an endless story makes a lie.
+  // meaningless to a reader. Likewise there is no "beats left": a story's
+  // length is a soft budget the model may overrun, so a total would be a lie.
+}
+
+/**
+ * The ending page. A key choice's colour is read from the turn it was made on,
+ * so it always matches the choice the reader actually picked; one whose turn
+ * can't be found is left out.
+ */
+export function endingView(ending: StoredEnding, history: TurnWithChoices[]): EndingView {
+  const turns = new Map(history.map((turn) => [turn.id, turn]));
+  return {
+    title: ending.title,
+    summary: ending.summary,
+    keyChoices: ending.keyChoices.flatMap((choice) => {
+      const turn = turns.get(choice.turnId);
+      const picked = turn?.choices.find((c) => c.id === turn.selectedChoiceId);
+      return picked ? [{ label: choice.label, position: picked.orderIndex }] : [];
+    }),
+    facts: {
+      choices: history.length,
+      storyNights: ending.storyNights,
+      peopleMet: ending.peopleMet,
+    },
+  };
 }
 
 export type * from './views.types';

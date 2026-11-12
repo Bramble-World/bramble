@@ -20,6 +20,18 @@ vi.mock('@/env', async (importOriginal) => {
   return { env: { ...actual.env, BRAMBLE_AI_MODE: 'fake' } };
 });
 vi.mock('@/lib/services/auth/auth.service', () => ({ requireCurrentUser: vi.fn() }));
+/**
+ * `after()` needs a request scope, which a handler called directly has none of.
+ * The stand-in runs the work at once and keeps it, so a test can wait for what
+ * would have run after the response.
+ */
+const afterWork = vi.hoisted(() => [] as Promise<unknown>[]);
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (work: () => unknown) => {
+    afterWork.push(Promise.resolve().then(work));
+  },
+}));
 
 const { db } = await import('@/index');
 const { storylines: storylineTable, storylineSessions, users } = await import('@/db/schema/tables');
@@ -39,6 +51,9 @@ const startRoute = await import('@/app/api/v1/storylines/[storylineId]/sessions/
 const sessionRoute = await import('@/app/api/v1/sessions/[sessionId]/route');
 const answerRoute = await import('@/app/api/v1/sessions/[sessionId]/answer/route');
 const turnRoute = await import('@/app/api/v1/sessions/[sessionId]/turn/route');
+const nextRoute = await import('@/app/api/v1/sessions/[sessionId]/next/route');
+const { storyTemplates } = await import('@/db/schema/tables');
+const { SEED_STORIES } = await import('@/lib/pool/seeds');
 
 /** The ending, in one sentence. Never leaves the server. */
 const ARC_SUMMARY = 'It begins badly and ends with them reconciled on a rooftop.';
@@ -1137,5 +1152,164 @@ describe('the world after playing', () => {
       expect(event.storylineId).toBe(storylineId);
       expect(event).not.toHaveProperty('narrativeOrder');
     }
+  });
+});
+
+/**
+ * A story that ends, over HTTP: the ending, the "next episode" card, and
+ * starting it. The storyline's budget is cut to 6 so the fake ends it at beat 2.
+ */
+describe('endings and the next story', () => {
+  const SEED_SLUG = 'routes-test-seed';
+
+  beforeEach(async () => {
+    await db.delete(storyTemplates).where(eq(storyTemplates.slug, SEED_SLUG));
+    await db.insert(storyTemplates).values({
+      origin: 'seed',
+      slug: SEED_SLUG,
+      status: 'ready',
+      content: SEED_STORIES['night-bus'],
+    });
+    await db
+      .update(storylineTable)
+      .set({ targetBeats: 6 })
+      .where(eq(storylineTable.id, storylineId));
+  });
+
+  afterAll(async () => {
+    await db.delete(storyTemplates).where(eq(storyTemplates.slug, SEED_SLUG));
+  });
+
+  const turn = (sessionId: string) =>
+    turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }));
+
+  async function playToTheEnd() {
+    asOwner();
+    const started = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`),
+        ctx({ storylineId })
+      )
+    ).json();
+    const sessionId: string = started.session.id;
+    const first = (await (await turn(sessionId)).json()).turn;
+    expect(first.isEnding).toBe(false);
+    await answerRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/answer`, {
+        turnId: first.id,
+        choiceId: first.choices[0].id,
+      }),
+      ctx({ sessionId })
+    );
+    const ending = (await (await turn(sessionId)).json()).turn;
+    return { sessionId, first, ending };
+  }
+
+  it('serves the ending as a turn with no choices', async () => {
+    const { ending } = await playToTheEnd();
+
+    expect(ending.isEnding).toBe(true);
+    expect(ending.choices).toEqual([]);
+  });
+
+  it('reports the session ended, with the ending and the next story', async () => {
+    const { sessionId, ending } = await playToTheEnd();
+
+    const body = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+    ).json();
+
+    expect(body.session.state).toBe('ended');
+    expect(typeof body.session.endedAt).toBe('string');
+    expect(body.session.turn.id).toBe(ending.id);
+    // A seed: the owner has no other players' stories to be offered. Which seed
+    // is random, and CI's migration writes them all.
+    const seeds = Object.values(SEED_STORIES);
+    expect(seeds.map((story) => story.title)).toContain(body.session.next.title);
+    const offered = seeds.find((story) => story.title === body.session.next.title)!;
+    expect(body.session.next).toEqual({
+      title: offered.title,
+      hook: offered.hook,
+      openingLines: offered.openingLines,
+      // A seed: written by the team, not from someone else's past.
+      fromPool: false,
+    });
+  });
+
+  it('writes the ending page after the last beat, from what the reader chose', async () => {
+    const { sessionId, first } = await playToTheEnd();
+    await Promise.all(afterWork);
+
+    const body = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+    ).json();
+
+    expect(body.session.ending).toEqual({
+      title: 'the long way home',
+      summary: 'you said the true thing in the end. it cost you the easy version of the night.',
+      // The fake also names a beat that never happened; it is dropped.
+      keyChoices: [{ label: `you chose to ${first.choices[0].label.toLowerCase()}`, position: 0 }],
+      facts: { choices: 1, storyNights: 1, peopleMet: expect.any(Array) },
+    });
+  });
+
+  it('returns the ending again for free, and refuses an answer to it', async () => {
+    const { sessionId, first, ending } = await playToTheEnd();
+
+    expect((await (await turn(sessionId)).json()).turn.id).toBe(ending.id);
+    const answered = await answerRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/answer`, {
+        turnId: ending.id,
+        choiceId: first.choices[0].id,
+      }),
+      ctx({ sessionId })
+    );
+    expect(answered.status).toBe(409);
+  });
+
+  it('starts the next story once, however often it is asked', async () => {
+    const { sessionId } = await playToTheEnd();
+    const next = () =>
+      nextRoute.POST(
+        post(`/api/v1/sessions/${sessionId}/next`, { how: 'countdown' }),
+        ctx({ sessionId })
+      );
+
+    const first = await next();
+    expect(first.status).toBe(201);
+    const body = await first.json();
+    expect(body.session.id).not.toBe(sessionId);
+    expect(body.session.state).toBe('awaiting_turn');
+    expect(body.session.next).toBeNull();
+
+    expect((await (await next()).json()).session.id).toBe(body.session.id);
+  });
+
+  it('refuses the next story while a story is still going', async () => {
+    asOwner();
+    const started = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`),
+        ctx({ storylineId })
+      )
+    ).json();
+    const sessionId: string = started.session.id;
+
+    const response = await nextRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/next`),
+      ctx({ sessionId })
+    );
+    expect(response.status).toBe(409);
+  });
+
+  it("does not start another reader's next story", async () => {
+    const { sessionId } = await playToTheEnd();
+    asStranger();
+
+    const response = await nextRoute.POST(
+      post(`/api/v1/sessions/${sessionId}/next`),
+      ctx({ sessionId })
+    );
+    expect(response.status).toBe(404);
   });
 });

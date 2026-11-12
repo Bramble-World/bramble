@@ -3,6 +3,7 @@ import { env } from '@/env';
 import { abandonImport, runImport } from '@/lib/services/imports/import-runner';
 import { RUN_RECLAIM_AFTER_MS, claimNextImport } from '@/lib/services/imports/imports.writer';
 import type { ClaimedImport } from '@/lib/services/imports/imports.writer';
+import { poolLane } from './pool-lane';
 
 /**
  * The import worker: a long-running process that extracts whatever is queued.
@@ -183,10 +184,22 @@ export async function main(): Promise<number> {
   process.on('SIGTERM', onTerm);
   process.on('SIGINT', onInt);
 
-  log('worker_started', { concurrency, idlePollMs: IDLE_POLL_MS, timeoutMs: IMPORT_TIMEOUT_MS });
+  const poolConcurrency = env.POOL_WORKER_CONCURRENCY;
+  log('worker_started', {
+    concurrency,
+    poolConcurrency,
+    idlePollMs: IDLE_POLL_MS,
+    timeoutMs: IMPORT_TIMEOUT_MS,
+  });
 
   try {
-    await Promise.all(Array.from({ length: concurrency }, (_, i) => lane(i, control)));
+    // Pool lanes beside the import lanes, in the same process: both are queue
+    // rows claimed the same way, and one more deployment for a few calls a day
+    // would be a service to run for nothing.
+    await Promise.all([
+      ...Array.from({ length: concurrency }, (_, i) => lane(i, control)),
+      ...Array.from({ length: poolConcurrency }, (_, i) => poolLane(i, control, log)),
+    ]);
   } finally {
     process.off('SIGTERM', onTerm);
     process.off('SIGINT', onInt);

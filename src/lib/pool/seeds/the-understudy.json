@@ -1,0 +1,63 @@
+{
+  "title": "the understudy",
+  "hook": "opening night, a lead who's lost her voice, and the understudy who knows every line.",
+  "openingLines": [
+    "fifty-eight minutes to curtain.",
+    "noor hasn't sung a note all day.",
+    "\"please don't tell him.\""
+  ],
+  "setting": "Backstage at a small, proud theatre in a cold northern city, opening night of the winter season.",
+  "tone": "backstage chaos with real heartbreak underneath",
+  "self": {
+    "description": "You know every line, every mark, and every time she's been late.",
+    "want": "To finally go on, and to deserve it.",
+    "avoids": "Being the person who took it from her."
+  },
+  "cast": [
+    {
+      "name": "Noor",
+      "pronouns": "she",
+      "relationshipType": "the lead, your friend",
+      "role": "supporting",
+      "description": "Brilliant, proud and frightened. This role is her comeback.",
+      "want": "To get through tonight somehow, and keep the part.",
+      "avoids": "Admitting she's been sick for a week.",
+      "voiceTone": "hoarse, urgent, bargaining",
+      "closeness": "you came up through drama school together",
+      "tension": "she got the part you both auditioned for"
+    },
+    {
+      "name": "Teodor",
+      "pronouns": "he",
+      "relationshipType": "the director",
+      "role": "antagonist",
+      "description": "Exacting, sentimental about the theatre, ruthless about the show.",
+      "want": "A perfect opening night for the critics.",
+      "avoids": "Hearing about problems after it's too late to fix them.",
+      "voiceTone": "clipped and theatrical",
+      "closeness": null,
+      "tension": "he has never once called you by your name"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The casting",
+      "description": "Two years ago Noor got the lead. You got the understudy and a hug.",
+      "engagementScore": 5
+    },
+    {
+      "title": "The cough",
+      "description": "All week Noor has been drinking honey and skipping notes.",
+      "engagementScore": 6
+    },
+    {
+      "title": "Fifty-eight minutes",
+      "description": "In the dressing room Noor whispers that she can't sing. \"Please don't tell him.\"",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "A critic Noor once dated is in the second row tonight.",
+    "You've rehearsed her part alone in your kitchen hundreds of times."
+  ]
+}

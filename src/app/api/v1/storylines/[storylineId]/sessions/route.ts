@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { withUser } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { parseOptionalBody, uuidParam } from '@/lib/api/params';
-import { sessionView } from '@/lib/api/views';
+import { sessionResponse } from '@/lib/api/session-response';
 import * as sessions from '@/lib/services/sessions/sessions.service';
 
 type Params = { params: Promise<{ storylineId: string }> };
@@ -49,18 +49,10 @@ export const POST = withUser(async (user, request, { params }: Params) => {
   const { mode = 'resume', fromEventId } = await parseOptionalBody(request, bodySchema);
 
   const session = await sessions.resumeOrStart(user.id, storylineId, mode, fromEventId);
-  const snapshot = await sessions.sessionSnapshot(user.id, session.id);
 
   return json(
     {
-      session: sessionView({
-        id: snapshot.session.id,
-        storylineId: snapshot.session.storylineId,
-        state: snapshot.state,
-        turnsAnswered: snapshot.turnsAnswered,
-        turn: snapshot.turn,
-        history: snapshot.history,
-      }),
+      session: await sessionResponse(user.id, session.id),
     },
     { status: 201 }
   );

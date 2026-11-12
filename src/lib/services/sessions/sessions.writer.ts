@@ -24,6 +24,7 @@ export async function insertSession(
       lastActiveAt: storylineSessions.lastActiveAt,
       playheadOrder: storylineSessions.playheadOrder,
       startedFromEventId: storylineSessions.startedFromEventId,
+      endedAt: storylineSessions.endedAt,
     });
   return session;
 }
@@ -57,6 +58,8 @@ export async function insertTurn(
       turnOrder,
       narrativeContent: turn.narrativeContent,
       headline: turn.headline,
+      isEnding: turn.isEnding ?? false,
+      free: turn.free ?? false,
     })
     .returning({ id: storyTurns.id });
 
@@ -154,6 +157,17 @@ export async function answerTurnGuarded(
  * session look idle while someone is mid-decision, so the summary recomputes
  * underneath them. invariants.md §5 names the second failure by name.
  */
+/**
+ * Marks the playthrough as ended. Written in the transaction that writes its
+ * ending turn, so an ended session always has one to show.
+ */
+export async function markSessionEnded(tx: Executor, sessionId: string): Promise<void> {
+  await tx
+    .update(storylineSessions)
+    .set({ endedAt: new Date() })
+    .where(and(eq(storylineSessions.id, sessionId), isNull(storylineSessions.endedAt)));
+}
+
 export async function touchSession(tx: Executor, sessionId: string): Promise<void> {
   await tx
     .update(storylineSessions)

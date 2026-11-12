@@ -33,7 +33,7 @@ vi.mock('@/lib/analytics/analytics', async (importOriginal) => {
 });
 
 const { db } = await import('@/index');
-const { users } = await import('@/db/schema/tables');
+const { storylines: storylinesTable, users } = await import('@/db/schema/tables');
 const { ALLOWED_PROPERTY_KEYS } = await import('./events');
 const persons = await import('@/lib/services/persons/persons.service');
 const storylines = await import('@/lib/services/storylines/storylines.service');
@@ -92,6 +92,11 @@ beforeEach(async () => {
   });
   storylineId = storyline.id;
   await storylines.markStatus(userId, storylineId, 'ready');
+  // Long enough that a day's energy never reaches an ending.
+  await db
+    .update(storylinesTable)
+    .set({ targetBeats: TURN_ENERGY_PER_DAY * 2 })
+    .where(eq(storylinesTable.id, storylineId));
 
   const self = await persons.getOrCreateSelfPerson(userId, 'Blossom');
   const maya = await persons.createPerson(userId, { name: 'Maya' });

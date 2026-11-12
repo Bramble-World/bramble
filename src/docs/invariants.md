@@ -63,6 +63,13 @@ product's central claim, not an implementation detail.
   is never logged, never in analytics, and never in an error's message or cause:
   the route's catch-all would send it to the logs and Sentry. `safety.ts` logs
   only the kind of failure. Stories written from answers must never quote them.
+- **A pool story goes to other players only once it is `ready`.** The writer
+  (`pool.rewrite`) replaces identifying details and may decline; the check
+  (`pool.check`) rejects any identifier or quote that survives, and anything
+  about minors, abuse or self-harm, and scores quality (4 and up only); then the
+  whole text goes through moderation. Nothing declined or rejected keeps its
+  content. The pool lane logs ids, attempts and outcome codes, never an error,
+  because a failure's cause can carry the answer.
 
 **Fails:** silently, and as a privacy breach rather than a bug. Nothing detects
 it. Worth an explicit check in code review of anything touching the generation
@@ -113,6 +120,15 @@ hot write path.
 
 Mitigation: do these writes through service functions that take the parent and
 derive the children, rather than accepting both ids from a caller.
+
+**The story pool crosses players only through templates.** A pool story
+(`story_templates`) is never a storyline another player reads: it is copied into
+the player's own rows by `instantiateTemplate`, which makes every person,
+character and event under that player's `user_id`. The only link from a copy
+back to the pool is `storylines.template_id`, `on delete set null`, so nothing a
+player plays depends on, or reveals, the author. A template's content is written
+from an answer and checked for identifiers before it is `ready`; nothing else
+of the author's is ever read when one is offered.
 
 ---
 

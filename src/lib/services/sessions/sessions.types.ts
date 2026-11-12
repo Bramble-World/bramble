@@ -8,6 +8,8 @@ export type PublicSession = {
   playheadOrder: number;
   /** The beat this playthrough was opened at, or null when begun from the top. */
   startedFromEventId: string | null;
+  /** When the story's ending was written. Null while it is still going. */
+  endedAt: Date | null;
 };
 
 export type PublicChoice = {
@@ -25,6 +27,8 @@ export type PublicTurn = {
   narrativeContent: string;
   /** The one-sentence hook. Null on turns written before turns had one. */
   headline: string | null;
+  /** The story's last beat: no choices, never answered. */
+  isEnding: boolean;
   selectedChoiceId: string | null;
   respondedAt: Date | null;
 };
@@ -41,6 +45,10 @@ export type TurnWithChoices = PublicTurn & {
 /** Everything needed to open a turn. Surfaces are validated before they get here. */
 export type NewTurn = {
   headline: string | null;
+  /** True for the story's last beat, which must offer no choices. */
+  isEnding?: boolean;
+  /** Written without spending energy (the first beat of a next story). */
+  free?: boolean;
   narrativeContent: string;
   choices: NewChoice[];
   surfaces: NewTurnSurface[];

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CLIENT_HEADER, parseClientHeader } from './client-version';
+import { CLIENT_HEADER, clientShowsEndings, parseClientHeader } from './client-version';
 
 /**
  * The version gate.
@@ -139,5 +139,22 @@ describe('the refusal itself', () => {
         message: 'This version of Bramble is too old. Please update.',
       },
     });
+  });
+});
+
+describe('clientShowsEndings', () => {
+  const from = (header?: string) =>
+    new Request('http://api.test/api/v1/sessions/x/turn', {
+      headers: header ? { [CLIENT_HEADER]: header } : {},
+    });
+
+  it('keeps stories open on the Mac, which cannot show an ending', () => {
+    expect(clientShowsEndings(from('macos/1.0 (11)'))).toBe(false);
+  });
+
+  it('ends stories everywhere else, including a client that does not say', () => {
+    expect(clientShowsEndings(from('ios/1.2 (40)'))).toBe(true);
+    expect(clientShowsEndings(from())).toBe(true);
+    expect(clientShowsEndings(from('not a header'))).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import { db } from '@/index';
 import { rebornAnswers } from '@/db/schema/tables';
 import { getSafetyCheck, type SafetyCheck } from '@/lib/onboarding/safety';
 import { Executor } from '../executor';
+import { enqueueForAnswer } from '../pool/pool.writer';
 
 /** Who changed the player's life, on question 2. */
 export const REBORN_ROLES = ['parent', 'ex', 'best_friend', 'teacher', 'boss', 'stranger'] as const;
@@ -22,6 +23,9 @@ export type RebornAnswer = {
  *
  * The check comes first and nothing is written if it fails: an answer is never
  * stored unchecked. Nothing here logs the text.
+ *
+ * A kept answer queues the story written from it (`src/lib/services/pool`),
+ * replacing any story from its earlier text.
  */
 export async function saveRebornAnswer(
   userId: string,
@@ -33,13 +37,19 @@ export async function saveRebornAnswer(
     await withdrawRebornAnswer(userId, answer.question);
     return { flagged: true };
   }
-  await db
-    .insert(rebornAnswers)
-    .values({ userId, question: answer.question, role: answer.role, text: answer.text })
-    .onConflictDoUpdate({
-      target: [rebornAnswers.userId, rebornAnswers.question],
-      set: { role: answer.role, text: answer.text, updatedAt: new Date() },
-    });
+  // The answer and the story to be written from it are one fact: an answer
+  // with no story queued would never become one.
+  await db.transaction(async (tx) => {
+    const [saved] = await tx
+      .insert(rebornAnswers)
+      .values({ userId, question: answer.question, role: answer.role, text: answer.text })
+      .onConflictDoUpdate({
+        target: [rebornAnswers.userId, rebornAnswers.question],
+        set: { role: answer.role, text: answer.text, updatedAt: new Date() },
+      })
+      .returning({ id: rebornAnswers.id });
+    await enqueueForAnswer(tx, userId, saved.id);
+  });
   return { flagged: false };
 }
 

@@ -3,6 +3,9 @@ import { turnPrompt } from './prompts/turn.prompt';
 import { consequencePrompt } from './prompts/consequence.prompt';
 import { extractionPrompt } from './prompts/extraction.prompt';
 import { arcPrompt } from './prompts/arc.prompt';
+import { checkPrompt, rewritePrompt } from './prompts/pool.prompt';
+import { endingPrompt } from './prompts/ending.prompt';
+import { SEED_STORIES } from '@/lib/pool/seeds';
 
 /**
  * Canned output for every prompt, so the loop runs with no key and no spend.
@@ -34,7 +37,12 @@ export function registerFixtures(fake: FakeGenerator): void {
     const texter = others[seed % Math.max(others.length, 1)];
     const onPhone = texter !== undefined && seed % 2 === 0;
 
+    // Ends as soon as it may, so a test reaches an ending in the fewest beats
+    // the closing window allows.
+    const isEnding = vars.phase !== 'open';
+
     return {
+      isEnding,
       headline: onPhone
         ? `${texter.name} just texted you.`
         : other === 'they'
@@ -60,7 +68,7 @@ export function registerFixtures(fake: FakeGenerator): void {
         { label: 'Say the true thing', description: 'It will not be taken well.' },
         { label: 'Say the easy thing', description: null },
         { label: 'Say nothing yet', description: 'Let the silence do the work.' },
-      ].slice(0, 2 + (seed % 2)),
+      ].slice(0, isEnding ? 0 : 2 + (seed % 2)),
     };
   });
 
@@ -200,5 +208,48 @@ export function registerFixtures(fake: FakeGenerator): void {
 
   fake.register(arcPrompt, ({ vars }) => ({
     arcSummary: `Across ${vars.storyline.timeline.length} beats, what began unsaid is now partly said, and neither of them has decided what that means.`,
+  }));
+
+  // A short answer is declined, as the real writer is told to; anything longer
+  // becomes a story that shares no words with it — a seed, retitled — so a test
+  // can assert nothing from the answer survives.
+  fake.register(rewritePrompt, ({ vars, seed }) => {
+    if (vars.answer.text.trim().length < 20) {
+      return { verdict: 'declined' as const, declineCode: 'too_thin' as const, story: null };
+    }
+    const seeds = Object.values(SEED_STORIES);
+    const base = seeds[seed % seeds.length];
+    return {
+      verdict: 'story' as const,
+      declineCode: null,
+      story: { ...base, title: `${base.title} (${vars.answer.question})` },
+    };
+  });
+
+  // Names the beats the reader actually chose on, so the server's check that a
+  // key choice is a real answered turn is exercised; plus one beat that isn't.
+  fake.register(endingPrompt, ({ vars }) => {
+    const chosen = vars.session.turns
+      .map((turn, i) => ({ beat: i + 1, label: turn.selectedChoiceLabel }))
+      .filter((turn) => turn.label !== null)
+      .slice(0, 2);
+    return {
+      title: 'the long way home',
+      summary: 'you said the true thing in the end. it cost you the easy version of the night.',
+      keyChoices: [
+        ...chosen.map((turn) => ({
+          beat: turn.beat,
+          label: `you chose to ${turn.label!.toLowerCase()}`,
+        })),
+        { beat: 999, label: 'you did something that never happened' },
+      ].slice(0, 3),
+      storyNights: 1,
+    };
+  });
+
+  fake.register(checkPrompt, () => ({
+    verdict: 'pass' as const,
+    rejectCode: null,
+    qualityScore: 4,
   }));
 }

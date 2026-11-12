@@ -37,6 +37,44 @@ order by 1 desc;
 is doing anything. If it sits far below 20, the limit is not the thing shaping
 behaviour and tightening it would only annoy people.
 
+## Stories finished, and how long they ran
+
+Every story ends somewhere around 16–24 beats (`storylines.target_beats`, 20 by
+default). The PostHog event is `story_ended` with `turns` (how many beats
+it took) and `phase`: `closing` when the model chose the moment, `must_end` when
+the cap forced it. A high share of `must_end` means the model is not finding
+endings on its own and the closing instructions need work. From the database:
+
+```sql
+select date_trunc('day', s.ended_at)  as day,
+       count(*)                       as stories_ended,
+       round(avg(t.turn_order), 1)    as avg_beats
+from storyline_sessions s
+join story_turns t on t.session_id = s.id and t.is_ending
+where s.ended_at >= now() - interval '30 days'
+group by 1
+order by 1 desc;
+```
+
+## The story pool
+
+How answers become pool stories. Every row is one answer's story; the outcome
+says what happened to it. A high share of `declined` or `low_quality` is the
+writer doing its job (quality over quantity), not a fault.
+
+```sql
+select origin, status, reason, count(*), round(avg(quality_score), 1) as avg_score
+from story_templates
+group by 1, 2, 3
+order by 1, 2, 4 desc;
+```
+
+The PostHog event `next_story_started` carries `origin` (`seed`, `reborn`) and
+`how` (`countdown`, `begin_now`, or `later` from the notebook). The share of
+`story_ended` followed by a `next_story_started` is how often players go on; the
+share with `how = countdown` is the autoplay rate. The app sends
+`next_story_stayed` and `countdown_paused` itself.
+
 ## Readers who hit zero energy, per day
 
 Who the limit is actually biting. A reader is counted on a day if they created

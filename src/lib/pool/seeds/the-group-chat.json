@@ -1,0 +1,63 @@
+{
+  "title": "the group chat",
+  "hook": "a screenshot, a furious boss, and a whole weekend to wait.",
+  "openingLines": [
+    "it's friday, 6:12 p.m.",
+    "an email from odette.",
+    "\"monday, 8 a.m. my office.\""
+  ],
+  "setting": "A long weekend in a busy city, an office tower you can see from your window.",
+  "tone": "anxious comedy that turns into something braver",
+  "self": {
+    "description": "Good at your job, bad at keeping opinions to yourself.",
+    "want": "To find out who did it, and to keep your job.",
+    "avoids": "Apologising for something you meant."
+  },
+  "cast": [
+    {
+      "name": "Odette",
+      "pronouns": "she",
+      "relationshipType": "your boss",
+      "role": "antagonist",
+      "description": "Brilliant, cold, and fairer than anyone thinks.",
+      "want": "To know if you're worth keeping.",
+      "avoids": "Admitting the criticism was right.",
+      "voiceTone": "formal, brief, unreadable",
+      "closeness": null,
+      "tension": "you called her a fraud in writing"
+    },
+    {
+      "name": "Miles",
+      "pronouns": "he",
+      "relationshipType": "your work friend",
+      "role": "supporting",
+      "description": "Funny, loyal, nervy. He was in the chat.",
+      "want": "To stay out of it.",
+      "avoids": "Telling you he knows who did it.",
+      "voiceTone": "jokes when scared",
+      "closeness": "you eat lunch together every day",
+      "tension": null
+    }
+  ],
+  "opening": [
+    {
+      "title": "The message",
+      "description": "On Wednesday, in the group chat, you called Odette's new plan a fraud.",
+      "engagementScore": 6
+    },
+    {
+      "title": "The screenshot",
+      "description": "Thursday, Odette stopped saying good morning to you.",
+      "engagementScore": 7
+    },
+    {
+      "title": "The email",
+      "description": "Friday, 6:12 p.m.: \"Monday, 8 a.m., my office. — O.\"",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "Miles's girlfriend works for Odette.",
+    "Odette agreed with you, privately, and was overruled."
+  ]
+}
