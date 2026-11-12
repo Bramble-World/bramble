@@ -1,0 +1,46 @@
+{
+  "title": "the inheritance",
+  "premise": "Your grandmother left her house to you, not to your mother. Your mother found out at the reading of the will, an hour ago. She's waiting in the car.",
+  "setting": "A small coastal town in early spring, a solicitor's office, then a long drive along the cliffs.",
+  "tone": "restrained family drama with sudden warmth",
+  "self": {
+    "description": "You spent every summer at your grandmother's house.",
+    "want": "To keep the house without losing your mother.",
+    "avoids": "Telling your mother why your grandmother did it."
+  },
+  "cast": [
+    {
+      "name": "Marguerite",
+      "pronouns": "she",
+      "relationshipType": "your mother",
+      "role": "antagonist",
+      "description": "Proud, wounded, and sharper than ever when she's hurt.",
+      "want": "To understand why her mother passed her over.",
+      "avoids": "Talking about the last time she visited.",
+      "voiceTone": "cool, precise, cutting",
+      "closeness": "you were close until you were fifteen",
+      "tension": "she and her mother didn't speak for nine years"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The summers",
+      "description": "Every summer until you were eighteen, you stayed with your grandmother by the sea.",
+      "engagementScore": 5
+    },
+    {
+      "title": "The phone call",
+      "description": "Last month your grandmother told you on the phone, \"it has to be you, and you'll know why.\"",
+      "engagementScore": 7
+    },
+    {
+      "title": "The car",
+      "description": "Your mother sits in the passenger seat, engine off, staring straight ahead.",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "Your grandmother left you a letter you haven't opened.",
+    "Your mother tried to sell the house once, years ago."
+  ]
+}

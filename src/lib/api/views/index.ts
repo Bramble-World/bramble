@@ -249,6 +249,7 @@ export function sessionView(input: {
   turn: TurnWithChoices | null;
   history: TurnWithChoices[];
   endedAt: Date | null;
+  next?: { title: string; premise: string } | null;
 }): SessionView {
   return {
     id: input.id,
@@ -257,6 +258,7 @@ export function sessionView(input: {
     turnsAnswered: input.turnsAnswered,
     turn: input.turn ? turnView(input.turn) : null,
     endedAt: iso(input.endedAt),
+    next: input.next ? { title: input.next.title, premise: input.next.premise } : null,
     history: input.history.map(answeredTurnView),
   };
   // playheadOrder is absent: it is an internal key over events.narrativeOrder,

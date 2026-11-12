@@ -3,6 +3,8 @@ import { turnPrompt } from './prompts/turn.prompt';
 import { consequencePrompt } from './prompts/consequence.prompt';
 import { extractionPrompt } from './prompts/extraction.prompt';
 import { arcPrompt } from './prompts/arc.prompt';
+import { checkPrompt, rewritePrompt } from './prompts/pool.prompt';
+import { SEED_STORIES } from '@/lib/pool/seeds';
 
 /**
  * Canned output for every prompt, so the loop runs with no key and no spend.
@@ -205,5 +207,27 @@ export function registerFixtures(fake: FakeGenerator): void {
 
   fake.register(arcPrompt, ({ vars }) => ({
     arcSummary: `Across ${vars.storyline.timeline.length} beats, what began unsaid is now partly said, and neither of them has decided what that means.`,
+  }));
+
+  // A short answer is declined, as the real writer is told to; anything longer
+  // becomes a story that shares no words with it — a seed, retitled — so a test
+  // can assert nothing from the answer survives.
+  fake.register(rewritePrompt, ({ vars, seed }) => {
+    if (vars.answer.text.trim().length < 20) {
+      return { verdict: 'declined' as const, declineCode: 'too_thin' as const, story: null };
+    }
+    const seeds = Object.values(SEED_STORIES);
+    const base = seeds[seed % seeds.length];
+    return {
+      verdict: 'story' as const,
+      declineCode: null,
+      story: { ...base, title: `${base.title} (${vars.answer.question})` },
+    };
+  });
+
+  fake.register(checkPrompt, () => ({
+    verdict: 'pass' as const,
+    rejectCode: null,
+    qualityScore: 4,
   }));
 }

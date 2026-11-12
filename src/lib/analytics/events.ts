@@ -106,6 +106,15 @@ export type AnalyticsEvent =
       };
     }
   | {
+      name: 'next_story_started';
+      properties: {
+        /** Where the pool story came from. Never which one, and never its author. */
+        origin: 'seed' | 'reborn' | 'reddit';
+        /** Whether the countdown started it, or the reader did. */
+        autoplay: boolean;
+      };
+    }
+  | {
       name: 'push_sent';
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
@@ -143,4 +152,6 @@ export const ALLOWED_PROPERTY_KEYS = [
   'merged',
   'kind',
   'phase',
+  'origin',
+  'autoplay',
 ] as const;

@@ -711,6 +711,7 @@ reconstructing state locally.
     "state": "awaiting_answer",
     "turnsAnswered": 3,
     "endedAt": null,
+    "next": null,
     "turn": {
       "id": "uuid",
       "headline": "Maya just texted you at 1:47 AM.",
@@ -867,6 +868,45 @@ lost response cannot strand you on an operation that succeeded. A _different_
 choice is a real 409.
 
 An ending cannot be answered: answering it is `409 CONFLICT`.
+
+### The next story
+
+Once a session is `ended`, its `SessionView` carries **`next`**: the story the
+reader goes on to, like the next episode. Null while the story is going, and
+null when there is nothing new for this reader (rare: the pool always has the
+team's seed stories).
+
+```json
+"next": {
+  "title": "night bus",
+  "premise": "On the last bus home, a stranger sits beside you and says your name..."
+}
+```
+
+It's the same story every time you ask for this session, so the card shown and
+the story started match. Pool stories are written by other players (from their
+answers to the reborn questions, rewritten so they can't identify anyone) or by
+the team. A reader is never offered their own story, one they've already played,
+or two by the same author in a row.
+
+### `POST /api/v1/sessions/{sessionId}/next`
+
+```json
+{ "autoplay": true }
+```
+
+Starts `next` and returns `201 { "session": SessionView }` for the new session,
+which is in `awaiting_turn`. Then call `POST .../turn` on it as usual; that first
+beat costs a point like any other. Starting it is free (no model call).
+
+`autoplay` is optional and only says, for analytics, whether a countdown started
+it rather than a tap.
+
+**Safe to retry:** asking again for the same ended session returns the same new
+session. `409 CONFLICT` if the story hasn't ended; `404 NOT_FOUND` if there is no
+next story.
+
+The new session becomes the reader's `current` story in `GET /world`.
 
 ---
 

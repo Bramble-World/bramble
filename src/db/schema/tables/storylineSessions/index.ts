@@ -3,6 +3,7 @@ import { storylines } from '../storylines';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
 import { events } from '../events';
+import { storyTemplates } from '../storyTemplates';
 
 export const storylineSessions = pgTable(
   'storyline_sessions',
@@ -67,6 +68,19 @@ export const storylineSessions = pgTable(
      * has one to show.
      */
     endedAt: timestamp('ended_at', { withTimezone: true }),
+
+    /**
+     * The pool story offered after this one ended, chosen once so the card the
+     * reader saw and the story they get are the same. `set null` if it leaves
+     * the pool before they start it; a new one is chosen then.
+     */
+    nextTemplateId: uuid('next_template_id').references((): AnyPgColumn => storyTemplates.id, {
+      onDelete: 'set null',
+    }),
+    /** The playthrough started from `next`, so starting it twice starts it once. */
+    nextSessionId: uuid('next_session_id').references((): AnyPgColumn => storylineSessions.id, {
+      onDelete: 'set null',
+    }),
 
     ...timestamps,
   },

@@ -1,7 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/index';
-import { imports, pushDevices, rebornAnswers, users } from '@/db/schema/tables';
+import {
+  imports,
+  pushDevices,
+  rebornAnswers,
+  storylines as storylineTable,
+  storyTemplates,
+  users,
+} from '@/db/schema/tables';
+import { SEED_STORIES } from '@/lib/pool/seeds';
+import { instantiateTemplate } from '@/lib/services/pool/next.service';
 import { createFakeGenerator } from '@/lib/ai';
 import { registerFixtures } from '@/lib/ai/fixtures';
 import * as persons from '../persons/persons.service';
@@ -67,14 +76,28 @@ async function makeAccount(clerkId: string, email: string) {
     environment: 'production',
     timeZone: 'UTC',
   });
-  await db.insert(rebornAnswers).values({ userId, question: 1, role: null, text: 'i stayed' });
+  const [answer] = await db
+    .insert(rebornAnswers)
+    .values({ userId, question: 1, role: null, text: 'i stayed' })
+    .returning({ id: rebornAnswers.id });
+  // A pool story written from that answer, which another player will copy.
+  const [template] = await db
+    .insert(storyTemplates)
+    .values({
+      origin: 'reborn',
+      userId,
+      sourceAnswerId: answer.id,
+      status: 'ready',
+      content: SEED_STORIES['last-shift'],
+    })
+    .returning({ id: storyTemplates.id });
 
   const fake = createFakeGenerator();
   registerFixtures(fake);
   const session = await sessions.startSession(userId, storyline.id);
   await generateTurn(userId, session.id, { generator: fake });
 
-  return { userId, storylineId: storyline.id };
+  return { userId, storylineId: storyline.id, templateId: template.id };
 }
 
 /** Every public table with a column of this name, read from the live schema. */
@@ -105,6 +128,10 @@ beforeAll(async () => {
   ownerId = owner.userId;
   bystanderId = bystander.userId;
   ownerStorylineIds = [owner.storylineId];
+  // The bystander is playing a copy of the owner's pool story.
+  await db.transaction((tx) =>
+    instantiateTemplate(tx, bystanderId, owner.templateId, SEED_STORIES['last-shift'])
+  );
 });
 
 afterAll(async () => {
@@ -142,7 +169,20 @@ describe('purgeUsersByEmail', () => {
 
   it("leaves everyone else's data alone", async () => {
     expect(await rowsWhere('users', 'id', [bystanderId])).toBe(1);
-    expect(await rowsWhere('storylines', 'user_id', [bystanderId])).toBe(1);
+    expect(await rowsWhere('storylines', 'user_id', [bystanderId])).toBe(2);
+  });
+
+  /**
+   * The author's pool stories go with them (the user_id scan above covers
+   * story_templates), and a player already playing one keeps their copy: it is
+   * their own rows, and only its link back to the pool is cleared.
+   */
+  it("takes the author's stories out of the pool and leaves players' copies", async () => {
+    const copies = await db
+      .select({ templateId: storylineTable.templateId, title: storylineTable.title })
+      .from(storylineTable)
+      .where(eq(storylineTable.userId, bystanderId));
+    expect(copies).toContainEqual({ templateId: null, title: SEED_STORIES['last-shift'].title });
   });
 
   it('is a no-op for an email with no account', async () => {

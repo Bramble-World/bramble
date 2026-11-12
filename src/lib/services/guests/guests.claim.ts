@@ -6,6 +6,7 @@ import {
   pushDevices,
   pushSends,
   rebornAnswers,
+  storyTemplates,
   motifParticipants,
   motifs,
   personRelationships,
@@ -58,6 +59,7 @@ export const USER_OWNED_TABLES = [
   pushDevices,
   pushSends,
   rebornAnswers,
+  storyTemplates,
 ] as const;
 
 export type ClaimMethod = 'apple' | 'passkey' | 'email';

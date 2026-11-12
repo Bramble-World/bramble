@@ -37,6 +37,25 @@ written and removes the one it replaced. Meant to become storylines other player
 live. Cascades from `users`, and moves to the account on a claim, the guest's
 answers replacing the account's for the same questions.
 
+### `storyTemplates`
+
+The shared pool of stories, and the queue that fills it. Every storyline belongs
+to one player, so the pool holds **templates** rather than storylines: a
+template is copied into a player's own rows (persons, characters, events, a
+session) when it's offered after their story ends (`src/lib/services/pool`).
+
+- `origin` — `seed` (the team's, in `src/lib/pool/seeds`, upserted by `slug` after every migration), `reborn` (written from an answer), `reddit` (reserved).
+- `userId` — the author; null for a seed. Cascades from `users`, so an author leaving takes their stories out of the pool.
+- `sourceAnswerId` — the answer it was written from; cascades, so withdrawing or replacing the answer, or a guest expiring, removes it.
+- `status` — `pending` → `generating` → `ready`, or `declined` (the writer said the answer can't carry a story), `rejected` (the check refused it: an identifier, a quote, minors, abuse, self-harm, moderation, or a quality score under 4), or `failed` (out of attempts). Declined and rejected are final and keep no `content`.
+- `reason` — a code for anything not ready. Never text.
+- `qualityScore` — the check's 1–5, kept on rejections too so the bar can be tuned.
+- `content` — the story (`storyTemplateSchema`), only once `ready`.
+- `attempts`, `nextAttemptAt`, `startedAt` — the queue, claimed by the worker's pool lanes like `imports`. A saved answer's story waits 10 minutes (`SETTLE_MS`) so edits during onboarding don't each pay for one.
+
+A copy is linked back by `storylines.templateId`, `on delete set null`: a player
+already playing a story whose author leaves keeps it.
+
 ### `persons`
 
 A real contact from the user's life — a sister, a coworker, an ex — stored **once per user**, regardless of how many storylines they appear in. This is the anchor that makes cross-storyline continuity possible: the same real person is the same `persons` row everywhere.
@@ -67,6 +86,7 @@ One row per generated story.
 - `status` — lifecycle state: `pending` → `generating` → `ready` / `failed`. Answers "is this storyline currently viewable," not "is a background job running" (that's a separate, deferred concern — see Architecture Decisions).
 - `failureReason` — set when `status` is `failed`; holds enough detail to debug or explain the failure.
 - `arcSummary` — a computed, high-level description of how things changed over the storyline (e.g., "started distant, ended reconciled"). Derived from `events` after the fact, not authored directly.
+- `templateId` — the pool story this was copied from, or null. `set null` when the template goes. Also how the pool knows what a player has already played.
 - `targetBeats` — the story's soft length, 20 by default. Not an outline: the turn prompt is told it may end the story from `targetBeats - 4` and must by `targetBeats + 4` (`storyPhase` in `src/lib/services/generation/story-phase.ts`).
 - `arcSummaryGeneratedAt` — timestamp of the last recompute. Recomputation is **session-based**: triggered when a `storylineSession` goes idle, if any `conversation_generated` events were added since the last recompute. Compare against the latest event's `createdAt` to detect staleness.
 
@@ -129,6 +149,7 @@ One **playthrough** — the user interacting with a storyline through the decisi
 
 - `lastActiveAt` — touched whenever the user answers a turn. This is what makes "the session went idle" detectable: nothing asks a user to end a session, they just stop, so idleness is inferred by a sweep over `WHERE lastActiveAt < now() - <threshold>` rather than declared. Deliberately denormalised — it equals `MAX(storyTurns.respondedAt)` for the session, but deriving it would mean joining and aggregating every session's turns on every sweep. Distinct from `updatedAt`, which changes whenever the row does, for reasons the user may have had nothing to do with.
 
+- `nextTemplateId`, `nextSessionId` — once ended, the pool story offered next (chosen once, so the card and the story match) and the playthrough started from it (so starting it twice starts it once).
 - `endedAt` — when the story's ending was written; null while it is going. Set in the same transaction as the ending turn, so an ended session always has one. An ended session is never written to again: `/turn` returns its ending for free, and the ending cannot be answered.
 
 Nothing marks a session as "already summarised." Deduplication happens at the storyline level instead: if `arcSummaryGeneratedAt` is newer than the most recent event, there is nothing to recompute and the sweep skips it.

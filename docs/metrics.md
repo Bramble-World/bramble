@@ -56,6 +56,23 @@ group by 1
 order by 1 desc;
 ```
 
+## The story pool
+
+How answers become pool stories. Every row is one answer's story; the outcome
+says what happened to it. A high share of `declined` or `low_quality` is the
+writer doing its job (quality over quantity), not a fault.
+
+```sql
+select origin, status, reason, count(*), round(avg(quality_score), 1) as avg_score
+from story_templates
+group by 1, 2, 3
+order by 1, 2, 4 desc;
+```
+
+The PostHog event `next_story_started` carries `origin` (`seed`, `reborn`) and
+`autoplay` (whether the countdown started it). The share of `story_ended` that
+are followed by a `next_story_started` is the autoplay rate.
+
 ## Readers who hit zero energy, per day
 
 Who the limit is actually biting. A reader is counted on a day if they created

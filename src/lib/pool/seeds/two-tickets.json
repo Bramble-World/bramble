@@ -1,0 +1,58 @@
+{
+  "title": "two tickets",
+  "premise": "You bought two tickets to see your favourite band with your best friend. She bailed this morning. Now her new girlfriend has messaged you asking if she can come instead.",
+  "setting": "A summer evening in a sprawling city, from a crowded train to a festival field.",
+  "tone": "light, sharp, with a sting in it",
+  "self": {
+    "description": "You and your best friend used to do everything together.",
+    "want": "To keep your best friend, whatever that means now.",
+    "avoids": "Admitting you're jealous."
+  },
+  "cast": [
+    {
+      "name": "Priya",
+      "pronouns": "she",
+      "relationshipType": "your best friend",
+      "role": "supporting",
+      "description": "Loyal, scattered, falling hard for someone new.",
+      "want": "For her two favourite people to like each other.",
+      "avoids": "Telling you she's moving in with Sol.",
+      "voiceTone": "fast, apologetic, emoji-heavy",
+      "closeness": "best friends since you were eleven",
+      "tension": "she cancelled on you three times this month"
+    },
+    {
+      "name": "Sol",
+      "pronouns": "she",
+      "relationshipType": "your best friend's girlfriend",
+      "role": "supporting",
+      "description": "Funny, direct, nervous about you specifically.",
+      "want": "Your approval, more than she'll admit.",
+      "avoids": "Mentioning the apartment.",
+      "voiceTone": "dry and disarming",
+      "closeness": null,
+      "tension": "you've been cold to her twice"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The tickets",
+      "description": "In March you bought two tickets the minute they went on sale.",
+      "engagementScore": 4
+    },
+    {
+      "title": "The cancellation",
+      "description": "This morning Priya texted: something came up, so sorry, love you.",
+      "engagementScore": 7
+    },
+    {
+      "title": "The message",
+      "description": "An unknown number: \"hi, it's Sol. this is weird. can i come?\"",
+      "engagementScore": 8
+    }
+  ],
+  "background": [
+    "Priya and Sol signed a lease last week.",
+    "Priya told Sol you're the most important person in her life."
+  ]
+}

@@ -27,7 +27,7 @@ export const DEFAULT_MODEL = 'gpt-6-astra';
  */
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
-export type StageName = 'turn' | 'consequence' | 'extraction' | 'arc';
+export type StageName = 'turn' | 'consequence' | 'extraction' | 'arc' | 'pool';
 
 export type StageModel = {
   model: string;
@@ -49,4 +49,7 @@ export const STAGE_MODELS: Record<StageName, StageModel> = {
   // show for it. Effort is the cheapest dial that buys the margin back.
   extraction: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
   arc: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
+  // Writing and checking pool stories. Off the request path, so there is no
+  // header timeout to fit inside, and these decide what every other player gets.
+  pool: { model: DEFAULT_MODEL, reasoningEffort: 'high' },
 };
