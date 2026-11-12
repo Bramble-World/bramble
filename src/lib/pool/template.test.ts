@@ -22,7 +22,8 @@ describe('templateText', () => {
     const story = Object.values(SEED_STORIES)[0];
     const text = templateText(story);
 
-    expect(text).toContain(story.premise);
+    expect(text).toContain(story.hook);
+    for (const line of story.openingLines) expect(text).toContain(line);
     expect(text).toContain(story.cast[0].name);
     expect(text).toContain(story.opening.at(-1)!.description);
     for (const line of story.background) expect(text).toContain(line);

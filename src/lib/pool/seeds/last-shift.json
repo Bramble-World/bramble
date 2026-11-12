@@ -1,6 +1,11 @@
 {
   "title": "last shift",
-  "premise": "It's your final night shift at the 24-hour diner before you leave town for good. Your boss, who's been more of a father than your father, hasn't said a word about it.",
+  "hook": "your last night shift at the diner, and a boss who won't say goodbye.",
+  "openingLines": [
+    "it's 3 a.m. at the diner.",
+    "one trucker. one jukebox.",
+    "walt leaves an envelope by the till."
+  ],
   "setting": "A roadside diner off a highway in the flat middle of the country, 3 a.m., one trucker and a jukebox.",
   "tone": "warm, melancholy, and full of small jokes",
   "self": {

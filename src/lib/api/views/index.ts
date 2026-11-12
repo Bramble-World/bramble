@@ -21,7 +21,10 @@ import type {
   StorylineDetailView,
   SurfaceView,
   TurnView,
+  NextStoryView,
+  EndingView,
 } from './views.types';
+import type { StoredEnding } from '@/lib/endings/ending';
 
 /**
  * Pure functions from domain types to wire types.
@@ -249,7 +252,8 @@ export function sessionView(input: {
   turn: TurnWithChoices | null;
   history: TurnWithChoices[];
   endedAt: Date | null;
-  next?: { title: string; premise: string } | null;
+  next?: NextStoryView | null;
+  ending?: StoredEnding | null;
 }): SessionView {
   return {
     id: input.id,
@@ -258,12 +262,43 @@ export function sessionView(input: {
     turnsAnswered: input.turnsAnswered,
     turn: input.turn ? turnView(input.turn) : null,
     endedAt: iso(input.endedAt),
-    next: input.next ? { title: input.next.title, premise: input.next.premise } : null,
+    ending: input.ending ? endingView(input.ending, input.history) : null,
+    next: input.next
+      ? {
+          title: input.next.title,
+          hook: input.next.hook,
+          openingLines: input.next.openingLines,
+          fromPool: input.next.fromPool,
+        }
+      : null,
     history: input.history.map(answeredTurnView),
   };
   // playheadOrder is absent: it is an internal key over events.narrativeOrder,
   // meaningless to a reader. Likewise there is no "beats left": a story's
   // length is a soft budget the model may overrun, so a total would be a lie.
+}
+
+/**
+ * The ending page. A key choice's colour is read from the turn it was made on,
+ * so it always matches the choice the reader actually picked; one whose turn
+ * can't be found is left out.
+ */
+export function endingView(ending: StoredEnding, history: TurnWithChoices[]): EndingView {
+  const turns = new Map(history.map((turn) => [turn.id, turn]));
+  return {
+    title: ending.title,
+    summary: ending.summary,
+    keyChoices: ending.keyChoices.flatMap((choice) => {
+      const turn = turns.get(choice.turnId);
+      const picked = turn?.choices.find((c) => c.id === turn.selectedChoiceId);
+      return picked ? [{ label: choice.label, position: picked.orderIndex }] : [];
+    }),
+    facts: {
+      choices: history.length,
+      storyNights: ending.storyNights,
+      peopleMet: ending.peopleMet,
+    },
+  };
 }
 
 export type * from './views.types';

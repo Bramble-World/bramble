@@ -99,8 +99,8 @@ export type AnalyticsEvent =
   | {
       name: 'story_ended';
       properties: {
-        /** The ending's position in the session: how many beats the story took. */
-        turn_order: number;
+        /** How many beats the story took, the ending included. */
+        turns: number;
         /** Whether the model chose to end it, or the length cap made it. */
         phase: 'closing' | 'must_end';
       };
@@ -110,8 +110,8 @@ export type AnalyticsEvent =
       properties: {
         /** Where the pool story came from. Never which one, and never its author. */
         origin: 'seed' | 'reborn' | 'reddit';
-        /** Whether the countdown started it, or the reader did. */
-        autoplay: boolean;
+        /** The countdown ran out, the reader tapped "begin now", or began it later from the notebook. */
+        how: 'countdown' | 'begin_now' | 'later';
       };
     }
   | {
@@ -153,5 +153,6 @@ export const ALLOWED_PROPERTY_KEYS = [
   'kind',
   'phase',
   'origin',
-  'autoplay',
+  'how',
+  'turns',
 ] as const;

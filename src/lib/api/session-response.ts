@@ -1,6 +1,7 @@
 import { sessionView, type SessionView } from '@/lib/api/views';
 import * as sessions from '@/lib/services/sessions/sessions.service';
 import { nextStoryFor } from '@/lib/services/pool/next.service';
+import { storedEnding } from '@/lib/services/endings/ending.service';
 
 /**
  * A session as every route returns it: the snapshot, and the next story once it
@@ -9,7 +10,10 @@ import { nextStoryFor } from '@/lib/services/pool/next.service';
  */
 export async function sessionResponse(userId: string, sessionId: string): Promise<SessionView> {
   const snapshot = await sessions.sessionSnapshot(userId, sessionId);
-  const next = snapshot.state === 'ended' ? await nextStoryFor(userId, sessionId) : null;
+  const ended = snapshot.state === 'ended';
+  const [next, ending] = ended
+    ? await Promise.all([nextStoryFor(userId, sessionId), storedEnding(sessionId)])
+    : [null, null];
   return sessionView({
     id: snapshot.session.id,
     storylineId: snapshot.session.storylineId,
@@ -19,5 +23,6 @@ export async function sessionResponse(userId: string, sessionId: string): Promis
     history: snapshot.history,
     endedAt: snapshot.session.endedAt,
     next,
+    ending,
   });
 }

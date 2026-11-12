@@ -47,6 +47,8 @@ export type NewTurn = {
   headline: string | null;
   /** True for the story's last beat, which must offer no choices. */
   isEnding?: boolean;
+  /** Written without spending energy (the first beat of a next story). */
+  free?: boolean;
   narrativeContent: string;
   choices: NewChoice[];
   surfaces: NewTurnSurface[];

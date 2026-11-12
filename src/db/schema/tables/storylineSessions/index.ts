@@ -1,4 +1,13 @@
-import { index, integer, pgTable, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  timestamp,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
+import type { StoredEnding } from '@/lib/endings/ending';
 import { storylines } from '../storylines';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
@@ -68,6 +77,17 @@ export const storylineSessions = pgTable(
      * has one to show.
      */
     endedAt: timestamp('ended_at', { withTimezone: true }),
+
+    /**
+     * How the story ended, for the notebook's ending page: a title, two
+     * sentences, the choices that led there and a few facts.
+     *
+     * Written once, after the ending turn, by a model that is shown only this
+     * playthrough — so unlike `storylines.arc_summary` it describes nothing the
+     * reader hasn't lived. Null until it's written, which is moments after the
+     * ending; a failed write is retried by the next `POST .../turn`.
+     */
+    ending: jsonb().$type<StoredEnding>(),
 
     /**
      * The pool story offered after this one ended, chosen once so the card the

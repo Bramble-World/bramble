@@ -4,6 +4,7 @@ import { consequencePrompt } from './prompts/consequence.prompt';
 import { extractionPrompt } from './prompts/extraction.prompt';
 import { arcPrompt } from './prompts/arc.prompt';
 import { checkPrompt, rewritePrompt } from './prompts/pool.prompt';
+import { endingPrompt } from './prompts/ending.prompt';
 import { SEED_STORIES } from '@/lib/pool/seeds';
 
 /**
@@ -222,6 +223,27 @@ export function registerFixtures(fake: FakeGenerator): void {
       verdict: 'story' as const,
       declineCode: null,
       story: { ...base, title: `${base.title} (${vars.answer.question})` },
+    };
+  });
+
+  // Names the beats the reader actually chose on, so the server's check that a
+  // key choice is a real answered turn is exercised; plus one beat that isn't.
+  fake.register(endingPrompt, ({ vars }) => {
+    const chosen = vars.session.turns
+      .map((turn, i) => ({ beat: i + 1, label: turn.selectedChoiceLabel }))
+      .filter((turn) => turn.label !== null)
+      .slice(0, 2);
+    return {
+      title: 'the long way home',
+      summary: 'you said the true thing in the end. it cost you the easy version of the night.',
+      keyChoices: [
+        ...chosen.map((turn) => ({
+          beat: turn.beat,
+          label: `you chose to ${turn.label!.toLowerCase()}`,
+        })),
+        { beat: 999, label: 'you did something that never happened' },
+      ].slice(0, 3),
+      storyNights: 1,
     };
   });
 

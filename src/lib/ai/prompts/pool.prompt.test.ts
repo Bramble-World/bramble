@@ -38,7 +38,7 @@ describe('pool.check', () => {
 
   it('compares the story against the answer it came from', () => {
     expect(prompt).toContain(answer.text);
-    expect(prompt).toContain(story.premise);
+    expect(prompt).toContain(story.hook);
   });
 
   it('scores strictly, with only 4 and 5 played', () => {

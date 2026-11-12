@@ -35,8 +35,15 @@ export type NextStory = {
   templateId: string;
   origin: 'seed' | 'reborn' | 'reddit';
   title: string;
-  premise: string;
+  hook: string;
+  openingLines: string[];
+  /** Written from another player's past, rather than by the team. */
+  fromPool: boolean;
 };
+
+/** How the reader went on to the next story. */
+export const NEXT_STORY_HOW = ['countdown', 'begin_now', 'later'] as const;
+export type NextStoryHow = (typeof NEXT_STORY_HOW)[number];
 
 /**
  * Picks a pool story for this reader: ready, never their own, never one they
@@ -123,7 +130,9 @@ export async function nextStoryFor(userId: string, sessionId: string): Promise<N
     templateId: template.id,
     origin: template.origin,
     title: template.content.title,
-    premise: template.content.premise,
+    hook: template.content.hook,
+    openingLines: template.content.openingLines,
+    fromPool: template.origin !== 'seed',
   };
 }
 
@@ -137,7 +146,7 @@ export async function nextStoryFor(userId: string, sessionId: string): Promise<N
 export async function startNextStory(
   userId: string,
   sessionId: string,
-  { autoplay }: { autoplay: boolean }
+  { how }: { how: NextStoryHow }
 ): Promise<{ sessionId: string }> {
   const session = await sessions.getSession(userId, sessionId);
   if (!session.endedAt) throw new ConflictError('This story has not ended');
@@ -169,7 +178,7 @@ export async function startNextStory(
   if (started.origin) {
     await track(userId, {
       name: 'next_story_started',
-      properties: { origin: started.origin, autoplay },
+      properties: { origin: started.origin, how },
     });
   }
   return { sessionId: started.sessionId };

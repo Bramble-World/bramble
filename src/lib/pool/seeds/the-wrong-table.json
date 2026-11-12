@@ -1,6 +1,11 @@
 {
   "title": "the wrong table",
-  "premise": "At your cousin's wedding you're seated next to the person who bullied you all through school. They don't seem to remember. They want to dance.",
+  "hook": "a vineyard wedding, and a seat next to the person who made school hell.",
+  "openingLines": [
+    "the string lights are already on.",
+    "your name card is next to theirs.",
+    "the band starts a slow song."
+  ],
   "setting": "A wedding at a vineyard in late summer, string lights, too much wine, a band that only knows covers.",
   "tone": "awkward, funny, and unexpectedly tender",
   "self": {

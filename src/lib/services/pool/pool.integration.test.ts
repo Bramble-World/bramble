@@ -7,7 +7,8 @@ import { registerFixtures } from '@/lib/ai/fixtures';
 import { checkPrompt, rewritePrompt } from '@/lib/ai/prompts/pool.prompt';
 import { SEED_STORIES } from '@/lib/pool/seeds';
 import { templateText } from '@/lib/pool/template';
-import { ConflictError } from '@/lib/utils/errors';
+import { ConflictError, RateLimitError } from '@/lib/utils/errors';
+import { energyFor } from '../sessions/energy.service';
 import { saveRebornAnswer, withdrawRebornAnswer } from '../onboarding/reborn-answers.service';
 import { advanceSession, commitChoice } from '../generation/turns.service';
 import * as sessions from '../sessions/sessions.service';
@@ -230,7 +231,7 @@ describe('the next story', () => {
     );
 
     expect(await nextStoryFor(player, sessionId)).toBeNull();
-    await expect(startNextStory(player, sessionId, { autoplay: true })).rejects.toBeInstanceOf(
+    await expect(startNextStory(player, sessionId, { how: 'countdown' })).rejects.toBeInstanceOf(
       ConflictError
     );
   });
@@ -250,8 +251,8 @@ describe('the next story', () => {
     const player = await newUser('player');
     const ended = await finishAStory(player);
 
-    const started = await startNextStory(player, ended, { autoplay: true });
-    expect(await startNextStory(player, ended, { autoplay: false })).toEqual(started);
+    const started = await startNextStory(player, ended, { how: 'countdown' });
+    expect(await startNextStory(player, ended, { how: 'begin_now' })).toEqual(started);
 
     const next = await sessions.getSession(player, started.sessionId);
     const [copy] = await db.select().from(storylines).where(eq(storylines.id, next.storylineId));
@@ -274,7 +275,7 @@ describe('the next story', () => {
     const { author, templateId } = await authorWithStory();
     const player = await newUser('player');
     const ended = await finishAStory(player);
-    const started = await startNextStory(player, ended, { autoplay: true });
+    const started = await startNextStory(player, ended, { how: 'countdown' });
 
     await db.delete(users).where(eq(users.id, author));
 
@@ -307,5 +308,75 @@ describe('the next story', () => {
     expect(row.next).toBeNull();
     const offered = await nextStoryFor(player, ended);
     expect(offered?.origin ?? 'seed').toBe('seed');
+  });
+});
+
+describe('the next-story card', () => {
+  it("says a player's story is from someone else's past, with its hook and lines", async () => {
+    const author = await newUser('author');
+    await saveRebornAnswer(author, { question: 1, role: null, text: ANSWER }, pass);
+    await writeNext();
+    const player = await newUser('player');
+    const ended = await finishAStory(player);
+
+    const offered = await nextStoryFor(player, ended);
+
+    expect(offered?.fromPool).toBe(true);
+    expect(offered?.hook.length).toBeGreaterThan(0);
+    expect(offered?.openingLines).toHaveLength(3);
+    for (const line of offered!.openingLines) {
+      expect(line.length).toBeLessThanOrEqual(40);
+      expect(line).toBe(line.toLowerCase());
+    }
+  });
+
+  it('keeps out a story whose hook gives away its opening', async () => {
+    const author = await newUser('author');
+    fake.register(checkPrompt, () => ({
+      verdict: 'reject' as const,
+      rejectCode: 'spoils_opening' as const,
+      qualityScore: 5,
+    }));
+    await saveRebornAnswer(author, { question: 1, role: null, text: ANSWER }, pass);
+
+    expect(await writeNext()).toBe('rejected');
+    expect((await templatesOf(author))[0]).toMatchObject({ reason: 'spoils_opening' });
+  });
+});
+
+describe('the first beat of the next story', () => {
+  async function startedNext(player: string) {
+    const ended = await finishAStory(player);
+    return (await startNextStory(player, ended, { how: 'countdown' })).sessionId;
+  }
+
+  it('is free, and the beat after it is not', async () => {
+    const player = await newUser('player');
+    const next = await startedNext(player);
+    const before = (await energyFor(player)).remaining;
+
+    const first = await advanceSession(player, next, { generator: fake });
+    expect((await energyFor(player)).remaining).toBe(before);
+
+    await commitChoice(player, first.id, first.choices[0].id);
+    await advanceSession(player, next, { generator: fake });
+    expect((await energyFor(player)).remaining).toBe(before - 1);
+  });
+
+  it('still waits for battery', async () => {
+    const player = await newUser('player');
+    const next = await startedNext(player);
+    // Spend what's left in another story, so the battery is at 0%.
+    const other = await db.transaction((tx) =>
+      instantiateTemplate(tx, player, seedId, SEED_STORIES['night-bus'])
+    );
+    while ((await energyFor(player)).remaining > 0) {
+      const turn = await advanceSession(player, other, { generator: fake, endings: false });
+      await commitChoice(player, turn.id, turn.choices[0].id);
+    }
+
+    await expect(advanceSession(player, next, { generator: fake })).rejects.toBeInstanceOf(
+      RateLimitError
+    );
   });
 });

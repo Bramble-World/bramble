@@ -712,6 +712,7 @@ reconstructing state locally.
     "turnsAnswered": 3,
     "endedAt": null,
     "next": null,
+    "ending": null,
     "turn": {
       "id": "uuid",
       "headline": "Maya just texted you at 1:47 AM.",
@@ -769,6 +770,26 @@ Four states, one remedy each:
 | `awaiting_turn`   | Call `POST .../turn`. `turn` is null                           |
 | `blocked`         | The storyline is not playable                                  |
 | `ended`           | The story is over. `turn` is its ending; show it, then move on |
+
+**`ending`** is the notebook's ending page, once the story has ended:
+
+```json
+"ending": {
+  "title": "the train home",
+  "summary": "you never said it. jordan got married, and you watched the first dance on your phone, alone.",
+  "keyChoices": [{ "label": "you texted back at 1:48 am", "position": 0 }],
+  "facts": { "choices": 14, "storyNights": 3, "peopleMet": ["jordan", "mae", "theo"] }
+}
+```
+
+- Written once, moments after the ending turn, from this playthrough alone.
+  **`null` until then**: read the session again shortly. If writing it fails,
+  the next `POST .../turn` on the ended session (free) tries again.
+- **`keyChoices`** — up to three of the reader's own choices, re-worded "you …",
+  in story order. `position` is the choice's place in its beat (0-based), so it
+  takes that beat's choice colour.
+- **`facts`** — `choices` made, `storyNights` (null when the story's clock
+  doesn't say: leave it out of the line), and the people met, by name.
 
 **`endedAt`** is when the story ended, or null while it is going. An ended
 session stays the reader's `current` story in `GET /world` until they start
@@ -882,9 +903,26 @@ team's seed stories).
 ```json
 "next": {
   "title": "night bus",
-  "premise": "On the last bus home, a stranger sits beside you and says your name..."
+  "hook": "the last bus home, and a stranger who knows your name.",
+  "openingLines": [
+    "you missed your usual bus.",
+    "the last one is nearly empty.",
+    "a stranger sits down beside you."
+  ],
+  "fromPool": false
 }
 ```
+
+- **`hook`** — one line for the card: the setting and the situation, never what
+  happens in the opening.
+- **`openingLines`** — exactly three lines from the story's opening, shown one at
+  a time before play. Lowercase, at most 40 characters each; the last is the
+  moment the story begins, and none gives away anything past it.
+- **`fromPool`** — written from another player's past. Show "written from
+  someone else's past." when true; seed stories are the team's and say nothing.
+
+Pool stories are already written, so `next` is ready as soon as the story ends:
+there is no "still being written" state.
 
 It's the same story every time you ask for this session, so the card shown and
 the story started match. Pool stories are written by other players (from their
@@ -895,15 +933,18 @@ or two by the same author in a row.
 ### `POST /api/v1/sessions/{sessionId}/next`
 
 ```json
-{ "autoplay": true }
+{ "how": "countdown" }
 ```
 
 Starts `next` and returns `201 { "session": SessionView }` for the new session,
-which is in `awaiting_turn`. Then call `POST .../turn` on it as usual; that first
-beat costs a point like any other. Starting it is free (no model call).
+which is in `awaiting_turn`. Starting it is free (no model call). Then call
+`POST .../turn` on it as usual. **That first beat is free too**, so autoplay
+never spends battery the reader didn't choose to spend — but it still waits for
+battery: at 0 it's a 429 like any other turn (see _Energy_).
 
-`autoplay` is optional and only says, for analytics, whether a countdown started
-it rather than a tap.
+`how` is optional and only for analytics: `countdown` (the countdown ran out),
+`begin_now` (the default: the reader tapped it), or `later` (begun afterwards
+from the notebook).
 
 **Safe to retry:** asking again for the same ended session returns the same new
 session. `409 CONFLICT` if the story hasn't ended; `404 NOT_FOUND` if there is no
@@ -1003,16 +1044,16 @@ the memory of the worker reading it, and nowhere else.
 
 Not oversights. Each is a field a client might expect and must not get.
 
-| Field                                                        | Why                                                                                                                                                                                                                    |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stakes`                                                     | What is at risk in a beat — the lever the model writes with, and most of every beat the reader has not reached                                                                                                         |
-| `generationRationale`                                        | The model explaining its own trick                                                                                                                                                                                     |
-| `arcSummary`                                                 | Describes the whole arc, including beats above the playhead                                                                                                                                                            |
-| `narrativeOrder`, `playheadOrder`                            | Internal ordering keys. Start sessions from `eventId`                                                                                                                                                                  |
-| `voiceProfile` / `sampleTurns`                               | Model-authored imitation of a real person's messages, learned from the conversation. (A surface's notification `text` is returned: it is a line of the story, like the narrative, not a sample of how someone writes.) |
-| `want` / `avoids`                                            | The authoring levers behind each character                                                                                                                                                                             |
-| `clerkId`, `userId`, `sourceContactRef`, `appAttestKeyId`    | Identity and contact join keys                                                                                                                                                                                         |
-| `durationMinutes`, `coverImageUrl`, any progress denominator | No honest backing — a story's length is a soft budget the model may overrun, so "3 of 20" is both a lie and a spoiler                                                                                                  |
+| Field                                                        | Why                                                                                                                                                                                                                            |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stakes`                                                     | What is at risk in a beat — the lever the model writes with, and most of every beat the reader has not reached                                                                                                                 |
+| `generationRationale`                                        | The model explaining its own trick                                                                                                                                                                                             |
+| `arcSummary`                                                 | Describes the whole arc, including beats above the playhead. (The ended session's `ending.summary` _is_ returned: it is written after the final beat from that playthrough alone, so it describes only what the reader lived.) |
+| `narrativeOrder`, `playheadOrder`                            | Internal ordering keys. Start sessions from `eventId`                                                                                                                                                                          |
+| `voiceProfile` / `sampleTurns`                               | Model-authored imitation of a real person's messages, learned from the conversation. (A surface's notification `text` is returned: it is a line of the story, like the narrative, not a sample of how someone writes.)         |
+| `want` / `avoids`                                            | The authoring levers behind each character                                                                                                                                                                                     |
+| `clerkId`, `userId`, `sourceContactRef`, `appAttestKeyId`    | Identity and contact join keys                                                                                                                                                                                                 |
+| `durationMinutes`, `coverImageUrl`, any progress denominator | No honest backing — a story's length is a soft budget the model may overrun, so "3 of 20" is both a lie and a spoiler                                                                                                          |
 
 A unit test stringifies every view and asserts none of these appear, so adding a
 field by spreading a database row fails the build rather than shipping.
@@ -1064,6 +1105,10 @@ Only **generating a new turn**. Specifically:
   whose consequence failed and retried is not charged twice.
 - **A failed generation costs nothing.** The balance is counted from turns that
   were actually written, so there is nothing to refund.
+- **The first beat of the next story is free.** The beat a reader gets after
+  going on from an ending (`POST .../next`) doesn't count, so autoplay never
+  spends battery they didn't choose to spend. It still needs battery to be
+  written: at 0 it waits, like any turn. The ending itself costs a point.
 
 ### When it runs out
 

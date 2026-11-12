@@ -1,6 +1,11 @@
 {
   "title": "night bus",
-  "premise": "On the last bus home, a stranger sits beside you and says your name. They say they're from the future, and that in eleven minutes you'll get off at the wrong stop.",
+  "hook": "the last bus home, and a stranger who knows your name.",
+  "openingLines": [
+    "you missed your usual bus.",
+    "the last one is nearly empty.",
+    "a stranger sits down beside you."
+  ],
   "setting": "A night bus crossing a big city in winter, rain on the windows, nearly empty.",
   "tone": "eerie, playful, and strangely moving",
   "self": {

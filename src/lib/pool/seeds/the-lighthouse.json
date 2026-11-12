@@ -1,6 +1,11 @@
 {
   "title": "the lighthouse",
-  "premise": "You took a job as the caretaker of a lighthouse on a tiny island to be alone. Three weeks in, a boat washes up with someone in it who refuses to say where they came from.",
+  "hook": "a lighthouse, an island, and someone the sea brought in.",
+  "openingLines": [
+    "three weeks alone on the island.",
+    "the worst storm since you came.",
+    "at dawn, a boat on the rocks."
+  ],
   "setting": "A small island off a rough coast in autumn, a lighthouse, a cottage, one boat a week.",
   "tone": "quiet, mysterious, and hopeful",
   "self": {

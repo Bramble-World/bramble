@@ -1,6 +1,11 @@
 {
   "title": "the group chat",
-  "premise": "Someone screenshotted what you said about your boss in the work group chat and sent it to her. She's asked to see you first thing Monday. It's Friday night.",
+  "hook": "a screenshot, a furious boss, and a whole weekend to wait.",
+  "openingLines": [
+    "it's friday, 6:12 p.m.",
+    "an email from odette.",
+    "\"monday, 8 a.m. my office.\""
+  ],
   "setting": "A long weekend in a busy city, an office tower you can see from your window.",
   "tone": "anxious comedy that turns into something braver",
   "self": {

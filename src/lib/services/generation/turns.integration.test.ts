@@ -24,6 +24,7 @@ import * as storylines from '../storylines/storylines.service';
 import * as sessions from '../sessions/sessions.service';
 import * as timeline from '../timeline/timeline.service';
 import { advanceSession, commitChoice, generateConsequences, generateTurn } from './turns.service';
+import { writeEnding } from '../endings/ending.service';
 
 /**
  * The decision loop, end to end, against the fake generator and a real database.
@@ -961,5 +962,63 @@ describe('surfaces', () => {
     await db.delete(storylineSessions).where(eq(storylineSessions.id, session.id));
 
     expect(await db.query.turnSurfaces.findMany({ where: { turnId: turn.id } })).toStrictEqual([]);
+  });
+});
+
+describe('the ending page', () => {
+  beforeEach(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 6 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+  afterAll(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+
+  async function endedSession() {
+    const session = await freshSession();
+    const first = await advanceSession(userId, session.id, { generator: fake });
+    await commitChoice(userId, first.id, first.choices[0].id);
+    await advanceSession(userId, session.id, { generator: fake });
+    return { session, first };
+  }
+
+  it('is written once, from the playthrough alone', async () => {
+    const { session } = await endedSession();
+
+    const ending = await writeEnding(userId, session.id, { generator: fake });
+    const again = await writeEnding(userId, session.id, { generator: fake });
+
+    expect(ending?.title).toBe('the long way home');
+    expect(again).toEqual(ending);
+    const calls = fake.calls.filter((c) => c.promptName === 'ending.summarise');
+    expect(calls).toHaveLength(1);
+    // Neither the storyline's timeline nor its arc summary reaches the prompt:
+    // only the beats the reader lived.
+    expect(calls[0].prompt).not.toContain('Where things stood');
+    expect(calls[0].prompt).not.toContain('They had not spoken in three weeks.');
+  });
+
+  it('keeps only key choices the reader actually made', async () => {
+    const { session, first } = await endedSession();
+
+    const ending = await writeEnding(userId, session.id, { generator: fake });
+
+    expect(ending?.keyChoices).toEqual([
+      { turnId: first.id, label: `you chose to ${first.choices[0].label.toLowerCase()}` },
+    ]);
+    expect(ending?.peopleMet).toContain('Maya');
+  });
+
+  it('writes nothing for a story that is still going', async () => {
+    const session = await freshSession();
+    await advanceSession(userId, session.id, { generator: fake });
+
+    expect(await writeEnding(userId, session.id, { generator: fake })).toBeNull();
+    expect(fake.calls.some((c) => c.promptName === 'ending.summarise')).toBe(false);
   });
 });

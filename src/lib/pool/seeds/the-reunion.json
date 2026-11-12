@@ -1,6 +1,11 @@
 {
   "title": "the reunion",
-  "premise": "Your old band is getting back together for one show, and they want you on drums. The last time you all played, you were the one who quit, in the middle of a song.",
+  "hook": "one last show with the band you walked out on.",
+  "openingLines": [
+    "ten years since you walked out.",
+    "the old venue closes next week.",
+    "benji is holding the setlist."
+  ],
   "setting": "A grimy rehearsal room and a sold-out small venue, in the city where you all grew up.",
   "tone": "loud, nostalgic, and funny about getting older",
   "self": {

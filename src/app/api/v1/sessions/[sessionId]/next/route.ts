@@ -3,13 +3,13 @@ import { withUser } from '@/lib/api/with-user';
 import { json } from '@/lib/api/respond';
 import { parseOptionalBody, uuidParam } from '@/lib/api/params';
 import { sessionResponse } from '@/lib/api/session-response';
-import { startNextStory } from '@/lib/services/pool/next.service';
+import { NEXT_STORY_HOW, startNextStory } from '@/lib/services/pool/next.service';
 
 type Params = { params: Promise<{ sessionId: string }> };
 
 const bodySchema = z.object({
-  /** True when the countdown started it rather than a tap. For analytics only. */
-  autoplay: z.boolean().optional(),
+  /** How the reader went on, for analytics only. */
+  how: z.enum(NEXT_STORY_HOW).optional(),
 });
 
 /**
@@ -24,9 +24,9 @@ const bodySchema = z.object({
  */
 export const POST = withUser(async (user, request, { params }: Params) => {
   const sessionId = uuidParam((await params).sessionId, 'sessionId');
-  const { autoplay = false } = await parseOptionalBody(request, bodySchema);
+  const { how = 'begin_now' } = await parseOptionalBody(request, bodySchema);
 
-  const started = await startNextStory(user.id, sessionId, { autoplay });
+  const started = await startNextStory(user.id, sessionId, { how });
 
   return json({ session: await sessionResponse(user.id, started.sessionId) }, { status: 201 });
 });

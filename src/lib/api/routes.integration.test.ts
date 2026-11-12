@@ -20,6 +20,18 @@ vi.mock('@/env', async (importOriginal) => {
   return { env: { ...actual.env, BRAMBLE_AI_MODE: 'fake' } };
 });
 vi.mock('@/lib/services/auth/auth.service', () => ({ requireCurrentUser: vi.fn() }));
+/**
+ * `after()` needs a request scope, which a handler called directly has none of.
+ * The stand-in runs the work at once and keeps it, so a test can wait for what
+ * would have run after the response.
+ */
+const afterWork = vi.hoisted(() => [] as Promise<unknown>[]);
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (work: () => unknown) => {
+    afterWork.push(Promise.resolve().then(work));
+  },
+}));
 
 const { db } = await import('@/index');
 const { storylines: storylineTable, storylineSessions, users } = await import('@/db/schema/tables');
@@ -1214,7 +1226,31 @@ describe('endings and the next story', () => {
     // is random, and CI's migration writes them all.
     const seeds = Object.values(SEED_STORIES);
     expect(seeds.map((story) => story.title)).toContain(body.session.next.title);
-    expect(seeds.map((story) => story.premise)).toContain(body.session.next.premise);
+    const offered = seeds.find((story) => story.title === body.session.next.title)!;
+    expect(body.session.next).toEqual({
+      title: offered.title,
+      hook: offered.hook,
+      openingLines: offered.openingLines,
+      // A seed: written by the team, not from someone else's past.
+      fromPool: false,
+    });
+  });
+
+  it('writes the ending page after the last beat, from what the reader chose', async () => {
+    const { sessionId, first } = await playToTheEnd();
+    await Promise.all(afterWork);
+
+    const body = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+    ).json();
+
+    expect(body.session.ending).toEqual({
+      title: 'the long way home',
+      summary: 'you said the true thing in the end. it cost you the easy version of the night.',
+      // The fake also names a beat that never happened; it is dropped.
+      keyChoices: [{ label: `you chose to ${first.choices[0].label.toLowerCase()}`, position: 0 }],
+      facts: { choices: 1, storyNights: 1, peopleMet: expect.any(Array) },
+    });
   });
 
   it('returns the ending again for free, and refuses an answer to it', async () => {
@@ -1235,7 +1271,7 @@ describe('endings and the next story', () => {
     const { sessionId } = await playToTheEnd();
     const next = () =>
       nextRoute.POST(
-        post(`/api/v1/sessions/${sessionId}/next`, { autoplay: true }),
+        post(`/api/v1/sessions/${sessionId}/next`, { how: 'countdown' }),
         ctx({ sessionId })
       );
 

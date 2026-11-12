@@ -1,6 +1,11 @@
 {
   "title": "two tickets",
-  "premise": "You bought two tickets to see your favourite band with your best friend. She bailed this morning. Now her new girlfriend has messaged you asking if she can come instead.",
+  "hook": "two tickets, a best friend who bailed, and her new girlfriend asking to come.",
+  "openingLines": [
+    "you bought these in march.",
+    "priya cancelled this morning.",
+    "an unknown number: \"hi, it's sol.\""
+  ],
   "setting": "A summer evening in a sprawling city, from a crowded train to a festival field.",
   "tone": "light, sharp, with a sting in it",
   "self": {

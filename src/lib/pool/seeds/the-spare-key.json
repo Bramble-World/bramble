@@ -1,6 +1,11 @@
 {
   "title": "the spare key",
-  "premise": "Your ex still has a key to your apartment, and tonight they used it. They say they came for a box of their things. The box is gone, and you know who threw it out.",
+  "hook": "a rainy walk-up after midnight, and an ex who still has a key.",
+  "openingLines": [
+    "the lock turned at 12:40.",
+    "you know that walk on the stairs.",
+    "he's standing in your kitchen, soaked."
+  ],
   "setting": "A third-floor walk-up in a rainy port city, late October, a little after midnight.",
   "tone": "tense, intimate, and quietly funny",
   "self": {
