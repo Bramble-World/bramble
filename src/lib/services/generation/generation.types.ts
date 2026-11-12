@@ -22,6 +22,8 @@ export type StorylineContext = {
     setting: string | null;
     tone: string | null;
     arcSummary: string | null;
+    /** The soft length budget; see `storyPhase`. */
+    targetBeats: number;
   };
   characters: CharacterContext[];
   relationships: RelationshipContext[];

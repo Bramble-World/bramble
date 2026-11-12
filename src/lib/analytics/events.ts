@@ -97,6 +97,15 @@ export type AnalyticsEvent =
       };
     }
   | {
+      name: 'story_ended';
+      properties: {
+        /** The ending's position in the session: how many beats the story took. */
+        turn_order: number;
+        /** Whether the model chose to end it, or the length cap made it. */
+        phase: 'closing' | 'must_end';
+      };
+    }
+  | {
       name: 'push_sent';
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
@@ -133,4 +142,5 @@ export const ALLOWED_PROPERTY_KEYS = [
   'method',
   'merged',
   'kind',
+  'phase',
 ] as const;

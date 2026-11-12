@@ -35,6 +35,7 @@ export const GET = withUser(async (user, _request, { params }: Params) => {
       turnsAnswered: snapshot.turnsAnswered,
       turn: snapshot.turn,
       history: snapshot.history,
+      endedAt: snapshot.session.endedAt,
     }),
   });
 });

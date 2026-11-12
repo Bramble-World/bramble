@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionContext, StorylineContext } from '@/lib/services/generation/generation.types';
-import { turnPrompt, TurnVars } from './turn.prompt';
+import { turnIsUsable, turnPrompt, TurnVars } from './turn.prompt';
 
 const storyline = (overrides: Partial<StorylineContext> = {}): StorylineContext => ({
   storyline: {
@@ -9,6 +9,7 @@ const storyline = (overrides: Partial<StorylineContext> = {}): StorylineContext 
     setting: null,
     tone: null,
     arcSummary: 'It began badly and ends reconciled.',
+    targetBeats: 20,
   },
   characters: [],
   relationships: [],
@@ -32,7 +33,13 @@ const storyline = (overrides: Partial<StorylineContext> = {}): StorylineContext 
 const session: SessionContext = { sessionId: 'sess-1', storylineId: 's1', turns: [] };
 
 const render = (vars: Partial<TurnVars> = {}) =>
-  turnPrompt.render({ storyline: storyline(), session, beyondScript: false, ...vars });
+  turnPrompt.render({
+    storyline: storyline(),
+    session,
+    beyondScript: false,
+    phase: 'open',
+    ...vars,
+  });
 
 describe('turn prompt', () => {
   /**
@@ -147,6 +154,7 @@ describe('per-character background', () => {
       },
       session,
       beyondScript: false,
+      phase: 'open',
     });
 
   it('names the person a piece of background is about', () => {
@@ -203,6 +211,7 @@ describe('wants', () => {
       storyline: { ...storyline(), characters, timeline },
       session,
       beyondScript: false,
+      phase: 'open',
     });
 
   it('tells the model what an on-stage character is after', () => {
@@ -292,5 +301,60 @@ describe('surfaces', () => {
     expect(prompt).toContain(
       '- Maya just texted you. You put the phone face down.\n  On your phone — Maya: "are you up"\n  You chose: Leave it'
     );
+  });
+});
+
+/**
+ * Stories end. The model decides when, inside the window `storyPhase` opens,
+ * and the rules it cannot be trusted with are checked after it answers.
+ */
+describe('endings', () => {
+  it('forbids an ending before the closing window', () => {
+    const { system } = render({ phase: 'open' });
+
+    expect(system).toContain('Do not resolve the story yet');
+    expect(system).not.toContain('isEnding true');
+  });
+
+  it('lets the model end the story when it lands, and not merely because it may', () => {
+    const { system } = render({ phase: 'closing' });
+
+    expect(system).toContain('When the beat you');
+    expect(system).toContain('Do not end it just because you may.');
+    expect(system).toContain('isEnding true and no choices');
+  });
+
+  it('asks for the ending past the cap, shaped by what the reader chose', () => {
+    const { system, prompt } = render({ phase: 'must_end' });
+
+    expect(system).toContain('It must end now.');
+    expect(system).toContain('Their choices decide how it ends');
+    expect(prompt).toContain('Write the ending of this story');
+  });
+});
+
+describe('turnIsUsable', () => {
+  const output = (isEnding: boolean, choices: number) =>
+    ({
+      isEnding,
+      choices: Array.from({ length: choices }, (_, i) => ({ label: `c${i}`, description: null })),
+    }) as Parameters<typeof turnIsUsable>[0];
+
+  it('takes an ordinary beat with two to four choices before the cap', () => {
+    expect(turnIsUsable(output(false, 2), 'open')).toBe(true);
+    expect(turnIsUsable(output(false, 4), 'closing')).toBe(true);
+    expect(turnIsUsable(output(false, 1), 'open')).toBe(false);
+    expect(turnIsUsable(output(false, 0), 'open')).toBe(false);
+  });
+
+  it('refuses an ending too early, or one that offers choices', () => {
+    expect(turnIsUsable(output(true, 0), 'open')).toBe(false);
+    expect(turnIsUsable(output(true, 2), 'closing')).toBe(false);
+    expect(turnIsUsable(output(true, 0), 'closing')).toBe(true);
+  });
+
+  it('refuses anything but an ending past the cap', () => {
+    expect(turnIsUsable(output(false, 3), 'must_end')).toBe(false);
+    expect(turnIsUsable(output(true, 0), 'must_end')).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import { SessionContext, StorylineContext } from '@/lib/services/generation/gene
 import { renderTimeline } from './timeline';
 import { SURFACE_KINDS } from '@/lib/surfaces';
 import { MAX_NOTIFICATION_CHARS, MAX_NOTIFICATIONS } from '@/lib/surfaces/imessage.surface';
+import type { StoryPhase } from '@/lib/services/generation/story-phase';
 
 export type TurnVars = {
   storyline: StorylineContext;
@@ -17,6 +18,8 @@ export type TurnVars = {
    * consecutive turns of nobody replying.
    */
   beyondScript: boolean;
+  /** How far through its length the story is; decides whether it may, or must, end. */
+  phase: StoryPhase;
 };
 
 /**
@@ -29,7 +32,20 @@ export type TurnVars = {
 /** How a cast line states someone's pronouns. Shared with the consequence prompt. */
 export const PRONOUN_LABELS = { he: 'he/him', she: 'she/her', they: 'they/them' } as const;
 
+const choiceSchema = z.object({
+  label: z.string().min(1).describe('A short imperative, under 60 characters.'),
+  description: z
+    .string()
+    .nullable()
+    .describe('One clause on what this choice risks. Null if the label says enough.'),
+});
+
 export const turnOutputSchema = z.object({
+  isEnding: z
+    .boolean()
+    .describe(
+      'True only when this beat ends the story. An ending offers no choices; every other beat offers 2-4.'
+    ),
   headline: z
     .string()
     .min(1)
@@ -40,19 +56,14 @@ export const turnOutputSchema = z.object({
     .describe(
       'What you do or feel now, in second person, 1-3 sentences. Never repeats the headline or the words on a surface. No dialogue attribution.'
     ),
+  // 0..4 in the schema, because structured output has no conditional length.
+  // `turnIsUsable` holds the real rule: empty for an ending, 2-4 otherwise.
   choices: z
-    .array(
-      z.object({
-        label: z.string().min(1).describe('A short imperative, under 60 characters.'),
-        description: z
-          .string()
-          .nullable()
-          .describe('One clause on what this choice risks. Null if the label says enough.'),
-      })
-    )
-    .min(2)
+    .array(choiceSchema)
     .max(4)
-    .describe('Distinct options. No option may be a rephrasing of another.'),
+    .describe(
+      'Distinct options. No option may be a rephrasing of another. Empty only when isEnding is true.'
+    ),
   // The surface, flattened into the turn rather than nested: nested optional
   // structures are where structured output is least reliable (see the
   // consequence prompt's `dynamic`). `surfaceKind` says which of the fields
@@ -87,12 +98,24 @@ export const turnOutputSchema = z.object({
 
 export type TurnOutput = z.infer<typeof turnOutputSchema>;
 
+/**
+ * Whether a generated turn obeys the rules the schema cannot express.
+ *
+ * An ending has no choices and any other beat has two to four. An ending is
+ * refused before the closing window, so a story cannot stop at beat three, and
+ * past the cap anything but an ending is refused.
+ */
+export function turnIsUsable(output: TurnOutput, phase: StoryPhase): boolean {
+  if (output.isEnding) return phase !== 'open' && output.choices.length === 0;
+  return phase !== 'must_end' && output.choices.length >= 2;
+}
+
 export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
   name: 'turn.generate',
   stage: 'turn',
   schema: turnOutputSchema,
 
-  render: ({ storyline, session, beyondScript }) => {
+  render: ({ storyline, session, beyondScript, phase }) => {
     const stage = onStage(storyline);
 
     return {
@@ -124,7 +147,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '  information; at least one must risk something — saying the awkward thing,',
         '  committing to something, or letting a moment pass. A turn where every option',
         '  is a question is a turn where nothing can happen.',
-        '- Do not resolve the story. A beat ends on a decision, not a conclusion.',
+        ...PHASE_RULES[phase],
         '',
         'Shape of a beat:',
         '- headline is the hook, one sentence: what just happened, to "you".',
@@ -252,14 +275,46 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
               '',
             ]
           : []),
-        session.turns.length
-          ? 'Write the next beat, following on from the choice just made.'
-          : 'Write the opening beat of this playthrough.',
+        phase === 'must_end'
+          ? 'Write the ending of this story, following on from the choice just made.'
+          : session.turns.length
+            ? 'Write the next beat, following on from the choice just made.'
+            : 'Write the opening beat of this playthrough.',
       ]
         .filter((line) => line !== null)
         .join('\n'),
     };
   },
+};
+
+/**
+ * What the model may do about ending the story, by phase.
+ *
+ * The model decides when a story lands, within the window `storyPhase` sets.
+ * An ending is a beat with no choices; it should feel earned by what the reader
+ * chose, not like the story running out.
+ */
+const ENDING_SHAPE = [
+  '- An ending is one beat with isEnding true and no choices. It resolves what',
+  '  this story has been about: what the reader wanted, what the others wanted,',
+  '  and what the reader chose along the way. Their choices decide how it ends —',
+  '  the same story ends differently for someone who chose differently.',
+  '- It closes, rather than stopping: the last thing that happens, and what it',
+  '  leaves the reader with. No cliffhanger, no "to be continued".',
+];
+
+const PHASE_RULES: Record<StoryPhase, string[]> = {
+  open: [
+    '- Do not resolve the story yet. A beat ends on a decision, not a conclusion.',
+    '  isEnding is false and there are 2-4 choices.',
+  ],
+  closing: [
+    '- The story is near its end. Steer toward a resolution. When the beat you',
+    '  are writing is the natural place for it to end, end it; until then, keep',
+    '  ending on a decision. Do not end it just because you may.',
+    ...ENDING_SHAPE,
+  ],
+  must_end: ['- This beat is the ending of the story. It must end now.', ...ENDING_SHAPE],
 };
 
 /**

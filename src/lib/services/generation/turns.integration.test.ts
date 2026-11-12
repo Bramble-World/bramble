@@ -1,9 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '@/index';
-import { storylineSessions, turnSurfaces, users } from '@/db/schema/tables';
+import {
+  storylines as storylinesTable,
+  storylineSessions,
+  turnSurfaces,
+  users,
+} from '@/db/schema/tables';
 import {
   ConflictError,
+  GenerationUnusableError,
   NotFoundError,
   StorylineNotReadyError,
   ValidationError,
@@ -594,6 +600,95 @@ describe('the playhead', () => {
   });
 });
 
+/**
+ * Stories end. A short budget brings the closing window to beat 2, where the
+ * fake ends as soon as it may.
+ */
+describe('endings', () => {
+  beforeEach(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 6 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+  afterAll(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+
+  async function playToTheEnd() {
+    const session = await freshSession();
+    const first = await advanceSession(userId, session.id, { generator: fake });
+    expect(first.isEnding).toBe(false);
+    await commitChoice(userId, first.id, first.choices[0].id);
+    const ending = await advanceSession(userId, session.id, { generator: fake });
+    return { session, first, ending };
+  }
+
+  it('writes an ending with no choices and ends the session with it', async () => {
+    const { session, ending } = await playToTheEnd();
+
+    expect(ending.isEnding).toBe(true);
+    expect(ending.choices).toStrictEqual([]);
+    const snapshot = await sessions.sessionSnapshot(userId, session.id);
+    expect(snapshot.state).toBe('ended');
+    expect(snapshot.session.endedAt).toBeInstanceOf(Date);
+    expect(snapshot.turn?.id).toBe(ending.id);
+    expect(snapshot.history).toHaveLength(1);
+  });
+
+  it('tells the model it may end the story, and when it must', async () => {
+    await playToTheEnd();
+
+    const [opening, closing] = fake.calls.filter((c) => c.promptName === 'turn.generate');
+    expect(opening.system).toContain('Do not resolve the story yet');
+    expect(closing.system).toContain('Do not end it just because you may.');
+  });
+
+  it('serves the ending again for free, without calling the model', async () => {
+    const { session, ending } = await playToTheEnd();
+    const calls = fake.calls.length;
+
+    expect((await generateTurn(userId, session.id, { generator: fake })).id).toBe(ending.id);
+    expect((await advanceSession(userId, session.id, { generator: fake })).id).toBe(ending.id);
+    expect(fake.calls.length).toBe(calls);
+  });
+
+  it('refuses an answer to the ending', async () => {
+    const { first, ending } = await playToTheEnd();
+
+    await expect(commitChoice(userId, ending.id, first.choices[0].id)).rejects.toBeInstanceOf(
+      ConflictError
+    );
+  });
+
+  it('retries once when the model ends the story too early, then gives up', async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+    fake.register(turnPrompt, () => ({
+      isEnding: true,
+      headline: 'It is over.',
+      narrative: 'And that was that.',
+      choices: [],
+      surfaceKind: 'none',
+      clockTime: null,
+      dateLabel: null,
+      notifications: [],
+    }));
+    const session = await freshSession();
+
+    await expect(generateTurn(userId, session.id, { generator: fake })).rejects.toBeInstanceOf(
+      GenerationUnusableError
+    );
+    expect(fake.calls.filter((c) => c.promptName === 'turn.generate')).toHaveLength(2);
+    expect(await sessionReader.getOpenTurn(db, session.id)).toBeNull();
+  });
+});
+
 describe('playing several turns', () => {
   it('runs the loop repeatedly without colliding', async () => {
     const session = await freshSession();
@@ -746,6 +841,7 @@ describe('surfaces', () => {
   }
 
   const phoneBeat = (notifications: TurnOutput['notifications']): TurnOutput => ({
+    isEnding: false,
     headline: 'Maya just texted you at 1:47.',
     narrative: 'You read it with the sound off.',
     choices: [

@@ -60,6 +60,14 @@ export const storylineSessions = pgTable(
       onDelete: 'set null',
     }),
 
+    /**
+     * When this playthrough's ending was written. Null while the story is going.
+     *
+     * Set in the same transaction as the ending turn, so an ended session always
+     * has one to show.
+     */
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+
     ...timestamps,
   },
   (table) => [

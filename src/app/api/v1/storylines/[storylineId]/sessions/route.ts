@@ -60,6 +60,7 @@ export const POST = withUser(async (user, request, { params }: Params) => {
         turnsAnswered: snapshot.turnsAnswered,
         turn: snapshot.turn,
         history: snapshot.history,
+        endedAt: snapshot.session.endedAt,
       }),
     },
     { status: 201 }

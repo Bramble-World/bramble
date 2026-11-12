@@ -84,6 +84,7 @@ export function turnView(turn: TurnWithChoices): TurnView {
     id: turn.id,
     headline: turn.headline,
     narrative: turn.narrativeContent,
+    isEnding: turn.isEnding,
     choices: turn.choices.map(choiceView),
     surfaces: turn.surfaces.map(surfaceView),
   };
@@ -124,8 +125,9 @@ export function storylineDetailView(
     startable: storyline.status === 'ready',
     cast: metCast.map(personView),
   };
-  // No durationMinutes and no coverImageUrl. Neither has honest backing, and
-  // with endless stories a duration cannot ever have one. Shipping a field the
+  // No durationMinutes and no coverImageUrl. Neither has honest backing: a
+  // story's length is a soft budget the model may overrun, so a duration would
+  // be a guess. Shipping a field the
   // client renders and then removing it is a breaking change; adding one later
   // is not.
 }
@@ -246,6 +248,7 @@ export function sessionView(input: {
   turnsAnswered: number;
   turn: TurnWithChoices | null;
   history: TurnWithChoices[];
+  endedAt: Date | null;
 }): SessionView {
   return {
     id: input.id,
@@ -253,11 +256,12 @@ export function sessionView(input: {
     state: input.state,
     turnsAnswered: input.turnsAnswered,
     turn: input.turn ? turnView(input.turn) : null,
+    endedAt: iso(input.endedAt),
     history: input.history.map(answeredTurnView),
   };
   // playheadOrder is absent: it is an internal key over events.narrativeOrder,
-  // meaningless to a reader, and paired with any total it becomes a progress
-  // figure that an endless story makes a lie.
+  // meaningless to a reader. Likewise there is no "beats left": a story's
+  // length is a soft budget the model may overrun, so a total would be a lie.
 }
 
 export type * from './views.types';

@@ -1,7 +1,8 @@
 import { db } from '@/index';
 import { NotFoundError, ValidationError } from '@/lib/utils/errors';
 import { Generator, getGenerator } from '@/lib/ai';
-import { turnPrompt } from '@/lib/ai/prompts/turn.prompt';
+import { turnIsUsable, turnPrompt } from '@/lib/ai/prompts/turn.prompt';
+import { storyPhase } from './story-phase';
 import { consequencePrompt } from '@/lib/ai/prompts/consequence.prompt';
 import * as sessions from '../sessions/sessions.service';
 import * as sessionReader from '../sessions/sessions.reader';
@@ -15,7 +16,7 @@ import { contextAsOf, scriptExhausted } from './playhead';
 import * as sessionWriter from '../sessions/sessions.writer';
 import { assertMayPlay } from '../sessions/energy.service';
 import { track } from '@/lib/analytics/analytics';
-import { ConflictError, StorylineNotReadyError } from '@/lib/utils/errors';
+import { ConflictError, GenerationUnusableError, StorylineNotReadyError } from '@/lib/utils/errors';
 import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
 import * as storylineReader from '../storylines/storylines.reader';
 
@@ -50,6 +51,10 @@ export async function generateTurn(
 ): Promise<TurnWithChoices> {
   const session = await sessions.getSession(userId, sessionId);
 
+  // A finished story has nothing more to write. Its ending is free to read
+  // again, like an open turn, and is what a retry of the last call gets.
+  if (session.endedAt) return endingOf(sessionId);
+
   const open = await sessionReader.getOpenTurn(db, sessionId);
   if (open) return open;
 
@@ -73,15 +78,19 @@ export async function generateTurn(
   // the anti-leak test asserting against a context the model never saw.
   const visible = contextAsOf(storyline, session.playheadOrder);
   const beyondScript = scriptExhausted(storyline, session.playheadOrder);
-  const { value, meta } = await generator.run(
-    turnPrompt,
-    {
-      storyline: visible,
-      session: sessionContext,
-      beyondScript,
-    },
-    { signal: deps.signal }
-  );
+  const phase = storyPhase(sessionContext.turns.length + 1, storyline.storyline.targetBeats);
+  const vars = { storyline: visible, session: sessionContext, beyondScript, phase };
+
+  // One more try when the model breaks a rule the schema cannot express (an
+  // ending too early, choices on an ending, no ending past the cap). A failed
+  // generation costs the reader nothing, so the retry is ours to pay.
+  let { value, meta } = await generator.run(turnPrompt, vars, { signal: deps.signal });
+  if (!turnIsUsable(value, phase)) {
+    ({ value, meta } = await generator.run(turnPrompt, vars, { signal: deps.signal }));
+    if (!turnIsUsable(value, phase)) {
+      throw new GenerationUnusableError('The model broke the story-length rules twice');
+    }
+  }
 
   // Senders are checked against the same cut the model was shown, so a text can
   // only come from someone the reader has already met.
@@ -93,6 +102,7 @@ export async function generateTurn(
     {
       headline: value.headline.trim() || null,
       narrativeContent: value.narrative,
+      isEnding: value.isEnding,
       choices: value.choices.map((choice) => ({
         label: choice.label,
         // The schema says nullable because structured output has no absent; the
@@ -124,9 +134,22 @@ export async function generateTurn(
         if (guestBeat !== null) {
           await track(userId, { name: 'guest_beat_played', properties: { n: guestBeat } });
         }
+        if (written.isEnding && phase !== 'open') {
+          await track(userId, {
+            name: 'story_ended',
+            properties: { turn_order: written.turnOrder, phase },
+          });
+        }
       },
     }
   );
+}
+
+async function endingOf(sessionId: string): Promise<TurnWithChoices> {
+  const ending = await sessionReader.getEndingTurn(db, sessionId);
+  // `ended_at` and the ending are written in one transaction.
+  if (!ending) throw new NotFoundError('Ending', sessionId);
+  return ending;
 }
 
 /**
@@ -377,6 +400,9 @@ export async function advanceSession(
   deps: GenerationDeps = {}
 ): Promise<TurnWithChoices> {
   const session = await sessions.getSession(userId, sessionId);
+
+  // Nothing is owed and nothing is written after the ending, so this is free.
+  if (session.endedAt) return endingOf(sessionId);
 
   // Re-checked here, not just at startSession: a storyline can fail after a
   // session has begun, and nothing would otherwise notice.

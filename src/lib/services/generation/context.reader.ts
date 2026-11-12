@@ -131,6 +131,7 @@ export async function assembleStorylineContext(
       setting: storyline.setting,
       tone: storyline.tone,
       arcSummary: storyline.arcSummary,
+      targetBeats: storyline.targetBeats,
     },
     characters,
     relationships,

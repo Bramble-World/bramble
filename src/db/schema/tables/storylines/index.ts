@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, index, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, index, pgEnum, integer } from 'drizzle-orm/pg-core';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
 
@@ -30,6 +30,16 @@ export const storylines = pgTable(
     arcSummaryGeneratedAt: timestamp('arc_summary_generated_at', {
       withTimezone: true,
     }), // compare against the latest event's createdAt to know if it's stale
+
+    /**
+     * Roughly how many beats this story should take before it ends.
+     *
+     * A soft budget, not an outline: the model decides when the story lands,
+     * and this only says when it may start closing and when it must have closed
+     * (see `storyPhase`). Every storyline has one, old ones included, so there
+     * is no endless kind of story left to special-case.
+     */
+    targetBeats: integer('target_beats').notNull().default(20),
 
     ...timestamps,
   },
