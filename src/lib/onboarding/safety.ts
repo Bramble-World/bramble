@@ -21,8 +21,18 @@ import { UpstreamBusyError } from '@/lib/utils/errors';
 export type SafetyVerdict = { flagged: boolean };
 export type SafetyCheck = (text: string) => Promise<SafetyVerdict>;
 
-/** Under the iPhone's own one-second wait, with room for the round trip. */
-export const SAFETY_CHECK_DEADLINE_MS = 800;
+/**
+ * How long each try at moderation gets: a first try, then one more if the
+ * first timed out or OpenAI failed on its side.
+ *
+ * Together under the iPhone's three-second wait, with room for the round trip,
+ * so a slow first try still ends in an answer the app is there to hear (and a
+ * care check it can show). 800 ms in one try was timing out in production.
+ */
+export const SAFETY_CHECK_ATTEMPTS_MS = [1600, 1000] as const;
+
+/** What the iPhone waits for the check before moving on without it. */
+export const IPHONE_WAIT_MS = 3000;
 
 const MODERATION_URL = 'https://api.openai.com/v1/moderations';
 const MODERATION_MODEL = 'omni-moderation-latest';
@@ -62,21 +72,35 @@ export function createModerationCheck(
   fetchImpl: typeof fetch = fetch
 ): SafetyCheck {
   return async (text) => {
-    let response: Response;
-    try {
-      response = await fetchImpl(MODERATION_URL, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: MODERATION_MODEL, input: text }),
-        signal: AbortSignal.timeout(SAFETY_CHECK_DEADLINE_MS),
-      });
-    } catch (error) {
-      // Only the kind of failure: a fetch error can quote the request.
-      console.warn('reborn safety check failed', {
-        reason: error instanceof Error ? error.name : 'unknown',
-      });
-      throw new UpstreamBusyError(5);
+    let response: Response | undefined;
+    for (const [attempt, deadline] of SAFETY_CHECK_ATTEMPTS_MS.entries()) {
+      const last = attempt === SAFETY_CHECK_ATTEMPTS_MS.length - 1;
+      try {
+        response = await fetchImpl(MODERATION_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: MODERATION_MODEL, input: text }),
+          signal: AbortSignal.timeout(deadline),
+        });
+      } catch (error) {
+        // Only the kind of failure: a fetch error can quote the request.
+        const reason = error instanceof Error ? error.name : 'unknown';
+        if (!last) {
+          console.warn('reborn safety check retrying', { reason });
+          continue;
+        }
+        console.warn('reborn safety check failed', { reason });
+        throw new UpstreamBusyError(5);
+      }
+      // OpenAI failing on its side is worth one more try; being told to slow
+      // down is not.
+      if (response.status >= 500 && !last) {
+        console.warn('reborn safety check retrying', { reason: `http ${response.status}` });
+        continue;
+      }
+      break;
     }
+    if (!response) throw new UpstreamBusyError(5);
     if (!response.ok) {
       console.warn('reborn safety check failed', { reason: `http ${response.status}` });
       throw new UpstreamBusyError(response.status === 429 ? 30 : 5);
