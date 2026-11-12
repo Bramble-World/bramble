@@ -664,6 +664,18 @@ describe('endings', () => {
     );
   });
 
+  it('keeps the story open for a client that cannot show an ending', async () => {
+    const session = await freshSession();
+    const first = await advanceSession(userId, session.id, { generator: fake, endings: false });
+    await commitChoice(userId, first.id, first.choices[0].id);
+
+    const second = await advanceSession(userId, session.id, { generator: fake, endings: false });
+
+    expect(second.isEnding).toBe(false);
+    expect(second.choices.length).toBeGreaterThanOrEqual(2);
+    expect(fake.calls.at(-1)!.system).toContain('Do not resolve the story yet');
+  });
+
   it('retries once when the model ends the story too early, then gives up', async () => {
     await db
       .update(storylinesTable)

@@ -87,7 +87,7 @@ One row per generated story.
 - `failureReason` — set when `status` is `failed`; holds enough detail to debug or explain the failure.
 - `arcSummary` — a computed, high-level description of how things changed over the storyline (e.g., "started distant, ended reconciled"). Derived from `events` after the fact, not authored directly.
 - `templateId` — the pool story this was copied from, or null. `set null` when the template goes. Also how the pool knows what a player has already played.
-- `targetBeats` — the story's soft length, 20 by default. Not an outline: the turn prompt is told it may end the story from `targetBeats - 4` and must by `targetBeats + 4` (`storyPhase` in `src/lib/services/generation/story-phase.ts`).
+- `targetBeats` — the story's soft length, 20 by default. Not an outline: the turn prompt is told it may end the story from `targetBeats - 4` and must by `targetBeats + 4` (`storyPhase` in `src/lib/services/generation/story-phase.ts`). Storylines already played when endings shipped were raised to their longest playthrough + 8 (migration `existing_stories_room_to_end`). Turns requested by the Mac app never end (`clientShowsEndings`).
 - `arcSummaryGeneratedAt` — timestamp of the last recompute. Recomputation is **session-based**: triggered when a `storylineSession` goes idle, if any `conversation_generated` events were added since the last recompute. Compare against the latest event's `createdAt` to detect staleness.
 
 ### `storylineLinks`
