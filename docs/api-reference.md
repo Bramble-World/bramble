@@ -463,7 +463,9 @@ player taps "next":
   allowed; other control characters are not.
 
 The answer is checked for safety (OpenAI's moderation endpoint) before anything
-is written. **200**:
+is written. The check gets two tries (1.6 s, then 1 s if the first timed out or
+OpenAI failed), so a response comes back within about 3 s; the iPhone waits that
+long before moving on without it. **200**:
 
 ```json
 { "ok": true, "flagged": false }

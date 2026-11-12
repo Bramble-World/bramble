@@ -1,4 +1,5 @@
 import { verifyWebhook } from '@clerk/nextjs/webhooks';
+import { withRequestLog } from '@/lib/api/request-log';
 import type { NextRequest } from 'next/server';
 import { env } from '@/env';
 import { applyClerkUserEvent } from '@/lib/services/users/users.sync';
@@ -17,7 +18,7 @@ import { handleError } from '@/lib/utils/api.handler-errors';
  *   200 — verified, including events we don't handle. Retrying won't help.
  *   500 — our failure (database down). Retrying might help, so let Clerk retry.
  */
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   if (!env.CLERK_WEBHOOK_SIGNING_SECRET) {
     return Response.json(
       { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
@@ -47,3 +48,6 @@ export async function POST(request: NextRequest) {
     return handleError(error);
   }
 }
+
+/** Logged once per request, with its status: see request-log.ts. */
+export const POST = withRequestLog(handlePOST);
