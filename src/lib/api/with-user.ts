@@ -4,6 +4,7 @@ import { handleError } from '@/lib/utils/api.handler-errors';
 import { ForbiddenError, SignupRequiredError } from '@/lib/utils/errors';
 import { withRequestClient } from '@/lib/analytics/client-context';
 import { assertClientSupported } from './client-version';
+import { withRequestLog } from './request-log';
 
 /**
  * The authenticate-then-handle wrapper every protected route uses.
@@ -24,7 +25,8 @@ import { assertClientSupported } from './client-version';
 export function withUser<Context = unknown>(
   handler: (user: PublicUser, request: Request, context: Context) => Promise<Response>
 ) {
-  return async (request: Request, context: Context): Promise<Response> => {
+  // Every request through here is logged once, with its status: see request-log.ts.
+  return withRequestLog(async (request: Request, context: Context): Promise<Response> => {
     try {
       // Before authentication: an old client with an expired token should be
       // told to update, not to sign in. Only a client that identified itself as
@@ -38,7 +40,7 @@ export function withUser<Context = unknown>(
     } catch (error) {
       return handleError(error);
     }
-  };
+  });
 }
 
 /**

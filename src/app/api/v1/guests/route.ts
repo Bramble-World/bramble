@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { withRequestLog } from '@/lib/api/request-log';
 import { json } from '@/lib/api/respond';
 import { parseOptionalBody } from '@/lib/api/params';
 import { assertClientSupported } from '@/lib/api/client-version';
@@ -42,7 +43,7 @@ const bodySchema = z.object({
  *
  * Hand-written rather than `withUser`, because there is no user yet.
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     assertClientSupported(request);
     await assertUnderIpLimit('guests', clientIp(request), GUESTS_PER_IP_PER_HOUR);
@@ -64,3 +65,6 @@ export async function POST(request: Request) {
     return handleError(error);
   }
 }
+
+/** Logged once per request, with its status: see request-log.ts. */
+export const POST = withRequestLog(handlePOST);
