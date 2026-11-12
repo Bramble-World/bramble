@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq, like, sql } from 'drizzle-orm';
 import { db } from '@/index';
-import { storylineSessions, storyTurns, users } from '@/db/schema/tables';
+import {
+  storylines as storylinesTable,
+  storylineSessions,
+  storyTurns,
+  users,
+} from '@/db/schema/tables';
 import { createFakeGenerator, FakeGenerator } from '@/lib/ai';
 import { registerFixtures } from '@/lib/ai/fixtures';
 import { RateLimitError } from '@/lib/utils/errors';
@@ -63,6 +68,12 @@ beforeEach(async () => {
   });
   storylineId = storyline.id;
   await storylines.markStatus(userId, storylineId, 'ready');
+  // Long enough that spending a whole day's energy never reaches an ending:
+  // this suite is about the allowance, not about stories finishing.
+  await db
+    .update(storylinesTable)
+    .set({ targetBeats: TURN_ENERGY_PER_DAY * 2 })
+    .where(eq(storylinesTable.id, storylineId));
 
   const self = await persons.getOrCreateSelfPerson(userId, 'Blossom');
   const maya = await persons.createPerson(userId, { name: 'Maya' });

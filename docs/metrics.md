@@ -37,6 +37,25 @@ order by 1 desc;
 is doing anything. If it sits far below 20, the limit is not the thing shaping
 behaviour and tightening it would only annoy people.
 
+## Stories finished, and how long they ran
+
+Every story ends somewhere around 16–24 beats (`storylines.target_beats`, 20 by
+default). The PostHog event is `story_ended` with `turn_order` (how many beats
+it took) and `phase`: `closing` when the model chose the moment, `must_end` when
+the cap forced it. A high share of `must_end` means the model is not finding
+endings on its own and the closing instructions need work. From the database:
+
+```sql
+select date_trunc('day', s.ended_at)  as day,
+       count(*)                       as stories_ended,
+       round(avg(t.turn_order), 1)    as avg_beats
+from storyline_sessions s
+join story_turns t on t.session_id = s.id and t.is_ending
+where s.ended_at >= now() - interval '30 days'
+group by 1
+order by 1 desc;
+```
+
 ## Readers who hit zero energy, per day
 
 Who the limit is actually biting. A reader is counted on a day if they created

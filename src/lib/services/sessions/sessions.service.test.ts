@@ -10,6 +10,7 @@ vi.mock('./sessions.reader', () => ({
   getSession: vi.fn(),
   listSessions: vi.fn(),
   getOpenTurn: vi.fn(),
+  getEndingTurn: vi.fn(),
   getSessionIn: vi.fn(),
   getTurn: vi.fn(),
   nextTurnOrder: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('./sessions.reader', () => ({
 vi.mock('./sessions.writer', () => ({
   insertSession: vi.fn(),
   insertTurn: vi.fn(),
+  markSessionEnded: vi.fn(),
   answerTurnGuarded: vi.fn(),
   touchSession: vi.fn(),
   advancePlayhead: vi.fn(),
@@ -211,5 +213,84 @@ describe('openTurn', () => {
       })
     ).resolves.toBe(open);
     expect(writer.insertTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe('endings', () => {
+  const session = { id: 'session-1', storylineId: 'story-1', lastActiveAt: new Date() };
+  const ending = {
+    id: 'ending-1',
+    sessionId: 'session-1',
+    turnOrder: 18,
+    narrativeContent: 'the end',
+    headline: null,
+    isEnding: true,
+    selectedChoiceId: null,
+    respondedAt: null,
+    choices: [],
+    surfaces: [],
+  };
+  const newEnding = {
+    headline: null,
+    narrativeContent: 'and that was that',
+    isEnding: true,
+    choices: [],
+    surfaces: [],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    reader.getSession.mockResolvedValue(session as never);
+    reader.getEndingTurn.mockResolvedValue(null);
+    reader.getOpenTurn.mockResolvedValue(null);
+    reader.nextTurnOrder.mockResolvedValue(18);
+    writer.insertTurn.mockResolvedValue('ending-1');
+    reader.getTurn.mockResolvedValue(ending as never);
+  });
+
+  it('writes an ending with no choices and ends the session with it', async () => {
+    await expect(service.openTurn(USER, 'session-1', newEnding)).resolves.toBe(ending);
+
+    expect(writer.insertTurn).toHaveBeenCalledWith({}, 'session-1', 18, newEnding);
+    expect(writer.markSessionEnded).toHaveBeenCalledWith({}, 'session-1');
+  });
+
+  it('refuses an ending that offers choices', async () => {
+    await expect(
+      service.openTurn(USER, 'session-1', { ...newEnding, choices: [{ label: 'x' }] })
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(writer.insertTurn).not.toHaveBeenCalled();
+  });
+
+  it('does not end the session for an ordinary beat', async () => {
+    await service.openTurn(USER, 'session-1', {
+      ...newEnding,
+      isEnding: false,
+      choices: [{ label: 'x' }],
+    });
+
+    expect(writer.markSessionEnded).not.toHaveBeenCalled();
+  });
+
+  it('returns the ending instead of writing past it', async () => {
+    reader.getEndingTurn.mockResolvedValue(ending as never);
+
+    await expect(
+      service.openTurn(USER, 'session-1', {
+        ...newEnding,
+        isEnding: false,
+        choices: [{ label: 'x' }],
+      })
+    ).resolves.toBe(ending);
+    expect(writer.insertTurn).not.toHaveBeenCalled();
+  });
+
+  it('refuses an answer to the ending as a conflict', async () => {
+    writer.answerTurnGuarded.mockResolvedValue(null);
+    reader.getTurnForUser.mockResolvedValue(ending as never);
+
+    await expect(service.answerTurn(USER, 'ending-1', CHOICE)).rejects.toBeInstanceOf(
+      ConflictError
+    );
   });
 });

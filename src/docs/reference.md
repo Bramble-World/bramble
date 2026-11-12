@@ -67,6 +67,7 @@ One row per generated story.
 - `status` — lifecycle state: `pending` → `generating` → `ready` / `failed`. Answers "is this storyline currently viewable," not "is a background job running" (that's a separate, deferred concern — see Architecture Decisions).
 - `failureReason` — set when `status` is `failed`; holds enough detail to debug or explain the failure.
 - `arcSummary` — a computed, high-level description of how things changed over the storyline (e.g., "started distant, ended reconciled"). Derived from `events` after the fact, not authored directly.
+- `targetBeats` — the story's soft length, 20 by default. Not an outline: the turn prompt is told it may end the story from `targetBeats - 4` and must by `targetBeats + 4` (`storyPhase` in `src/lib/services/generation/story-phase.ts`).
 - `arcSummaryGeneratedAt` — timestamp of the last recompute. Recomputation is **session-based**: triggered when a `storylineSession` goes idle, if any `conversation_generated` events were added since the last recompute. Compare against the latest event's `createdAt` to detect staleness.
 
 ### `storylineLinks`
@@ -128,6 +129,8 @@ One **playthrough** — the user interacting with a storyline through the decisi
 
 - `lastActiveAt` — touched whenever the user answers a turn. This is what makes "the session went idle" detectable: nothing asks a user to end a session, they just stop, so idleness is inferred by a sweep over `WHERE lastActiveAt < now() - <threshold>` rather than declared. Deliberately denormalised — it equals `MAX(storyTurns.respondedAt)` for the session, but deriving it would mean joining and aggregating every session's turns on every sweep. Distinct from `updatedAt`, which changes whenever the row does, for reasons the user may have had nothing to do with.
 
+- `endedAt` — when the story's ending was written; null while it is going. Set in the same transaction as the ending turn, so an ended session always has one. An ended session is never written to again: `/turn` returns its ending for free, and the ending cannot be answered.
+
 Nothing marks a session as "already summarised." Deduplication happens at the storyline level instead: if `arcSummaryGeneratedAt` is newer than the most recent event, there is nothing to recompute and the sweep skips it.
 
 ### `storyTurns`
@@ -137,7 +140,8 @@ One **decision point**. Created when the LLM presents a beat and its options; up
 - `turnOrder` — sequencing within a session.
 - `headline` — the one-sentence hook shown above everything else. Nullable only because turns written before it existed have none.
 - `narrativeContent` — what you do or feel at this decision point. On turns without a headline, the whole beat.
-- `selectedChoiceId` — nullable; filled once the user picks. `null` means the turn is still awaiting a response. A partial unique index on `(sessionId) WHERE selected_choice_id IS NULL` allows **at most one open turn per session**, which makes "present the next beat" a get-or-create rather than a convention: a retried or duplicated request returns the turn already awaiting an answer instead of opening a second one.
+- `isEnding` — the story's last beat. It has no choices and is never answered. At most one per session (a partial unique index).
+- `selectedChoiceId` — nullable; filled once the user picks. `null` on an ordinary turn means it is still awaiting a response. A partial unique index on `(sessionId) WHERE selected_choice_id IS NULL AND NOT is_ending` allows **at most one open turn per session**, which makes "present the next beat" a get-or-create rather than a convention: a retried or duplicated request returns the turn already awaiting an answer instead of opening a second one.
 - `respondedAt` — when the user answered.
 
 Note: `storyTurns.selectedChoiceId` and `turnChoices.turnId` reference each other. In practice this means a multi-step write: insert the turn (with `selectedChoiceId: null`), insert its `turnChoices` and `turnSurfaces` in the same transaction, then `UPDATE` the turn once the user picks — not a single atomic row.

@@ -34,7 +34,12 @@ export function registerFixtures(fake: FakeGenerator): void {
     const texter = others[seed % Math.max(others.length, 1)];
     const onPhone = texter !== undefined && seed % 2 === 0;
 
+    // Ends as soon as it may, so a test reaches an ending in the fewest beats
+    // the closing window allows.
+    const isEnding = vars.phase !== 'open';
+
     return {
+      isEnding,
       headline: onPhone
         ? `${texter.name} just texted you.`
         : other === 'they'
@@ -60,7 +65,7 @@ export function registerFixtures(fake: FakeGenerator): void {
         { label: 'Say the true thing', description: 'It will not be taken well.' },
         { label: 'Say the easy thing', description: null },
         { label: 'Say nothing yet', description: 'Let the silence do the work.' },
-      ].slice(0, 2 + (seed % 2)),
+      ].slice(0, isEnding ? 0 : 2 + (seed % 2)),
     };
   });
 

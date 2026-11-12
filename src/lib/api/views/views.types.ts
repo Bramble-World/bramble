@@ -124,6 +124,11 @@ export type TurnView = {
   headline: string | null;
   /** What you do or feel now. On older turns, the whole beat. */
   narrative: string;
+  /**
+   * The story's last beat. It offers no choices and is never answered: show it
+   * as the end, then move the reader on to their next story.
+   */
+  isEnding: boolean;
   choices: ChoiceView[];
   /**
    * What the beat is shown on — empty for a text-only beat. Discriminated by
@@ -163,7 +168,7 @@ export type SurfaceView = ImessageNotificationsView;
  * client carries forever, so a state with no distinct behaviour should not be
  * one.
  */
-export type SessionStateView = 'awaiting_answer' | 'awaiting_turn' | 'blocked';
+export type SessionStateView = 'awaiting_answer' | 'awaiting_turn' | 'blocked' | 'ended';
 
 /**
  * One conversation the reader handed over, and what became of it.
@@ -202,7 +207,8 @@ export type AnsweredTurnView = {
  *
  * A denominator, which this file otherwise refuses — and the exception is worth
  * stating so nobody thinks the rule was broken. Progress denominators are banned
- * because endless stories make "3 of 40" a lie: there is no 40. This is the
+ * because a story's length is a soft budget, so "3 of 20" is a lie the model is
+ * free to break. This is the
  * opposite case. Twenty is a real number the server enforces, and withholding it
  * would leave the client guessing when to grey out the button, or discovering
  * the limit only by being refused.
@@ -243,7 +249,10 @@ export type SessionView = {
   storylineId: string;
   state: SessionStateView;
   turnsAnswered: number;
+  /** The open turn, or with `ended` the story's ending. */
   turn: TurnView | null;
+  /** When the story ended. Null while it is still going. */
+  endedAt: string | null;
   /**
    * Everything already lived through, oldest first, excluding the open turn.
    *

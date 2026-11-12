@@ -49,6 +49,7 @@ const turn: TurnWithChoices = {
   turnOrder: 3,
   narrativeContent: 'She answers before you have finished typing.',
   headline: null,
+  isEnding: false,
   selectedChoiceId: null,
   respondedAt: null,
   surfaces: [],
@@ -103,11 +104,12 @@ describe('views', () => {
     expect(personView(person)).toStrictEqual({ id: 'p1', name: 'Maya', isSelf: false });
   });
 
-  it('renders a turn as headline, narrative, choices and surfaces, and nothing else', () => {
+  it('renders a turn as headline, narrative, ending, choices and surfaces, and nothing else', () => {
     expect(turnView(turn)).toStrictEqual({
       id: 't1',
       headline: null,
       narrative: 'She answers before you have finished typing.',
+      isEnding: false,
       choices: [
         { id: 'c1', label: 'Tell her the truth', description: 'It may not land.' },
         { id: 'c2', label: 'Change the subject', description: null },
@@ -243,7 +245,7 @@ describe('views', () => {
 
   /**
    * A denominator this file otherwise refuses — and the exception is the point.
-   * Progress denominators are banned because endless stories make them a lie;
+   * Progress denominators are banned because a story's length is only a budget;
    * twenty is a real number the server enforces.
    */
   it('reports a balance with the ceiling it is measured against', () => {
