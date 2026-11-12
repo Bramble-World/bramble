@@ -1,10 +1,10 @@
 {
-  "id": "7404105d-a865-4bb2-994b-398ce56b4583",
-  "prevIds": [
-    "65b43fed-7a26-41eb-9f9a-ed64615cdc58"
-  ],
   "version": "8",
   "dialect": "postgres",
+  "id": "7404105d-a865-4bb2-994b-398ce56b4583",
+  "prevIds": [
+    "00551b88-eb35-4a56-911d-eb35fdb46e4c"
+  ],
   "ddl": [
     {
       "values": [
@@ -53,6 +53,47 @@
         "failed"
       ],
       "name": "import_status",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "seed",
+        "reborn",
+        "reddit"
+      ],
+      "name": "story_template_origin",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "too_thin",
+        "not_a_story",
+        "unclear",
+        "identifier",
+        "minors",
+        "abuse",
+        "self_harm",
+        "quotes_answer",
+        "low_quality",
+        "moderation",
+        "generation_failed"
+      ],
+      "name": "story_template_reason",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "pending",
+        "generating",
+        "ready",
+        "declined",
+        "rejected",
+        "failed"
+      ],
+      "name": "story_template_status",
       "entityType": "enums",
       "schema": "public"
     },
@@ -165,6 +206,12 @@
     {
       "isRlsEnabled": false,
       "name": "relationship_states",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "story_templates",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1651,6 +1698,188 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "story_template_origin",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "origin",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "source_answer_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "slug",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "story_template_status",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'pending'",
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "story_template_reason",
+      "typeSchema": "public",
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "reason",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "smallint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "quality_score",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "content",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "attempts",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "next_attempt_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "started_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
       "table": "story_turns"
     },
     {
@@ -1979,6 +2208,32 @@
       "table": "storyline_sessions"
     },
     {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "next_template_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storyline_sessions"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "next_session_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storyline_sessions"
+    },
+    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -2143,6 +2398,19 @@
       "generated": null,
       "identity": null,
       "name": "target_beats",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storylines"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "template_id",
       "entityType": "columns",
       "schema": "public",
       "table": "storylines"
@@ -3361,6 +3629,90 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_story_templates_user",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "source_answer_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_story_templates_answer",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"status\" IN ('pending', 'generating')",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_story_templates_claimable",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "origin",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"status\" = 'ready'",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_story_templates_ready",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "session_id",
           "isExpression": false,
           "asc": true,
@@ -3710,6 +4062,34 @@
       "method": "btree",
       "concurrently": false,
       "name": "idx_storylines_user",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "storylines"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "template_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_storylines_template",
       "entityType": "indexes",
       "schema": "public",
       "table": "storylines"
@@ -4377,6 +4757,40 @@
     {
       "nameExplicit": false,
       "columns": [
+        "user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "users",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "story_templates_user_id_users_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "source_answer_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "reborn_answers",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "story_templates_source_answer_id_reborn_answers_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "story_templates"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "session_id"
       ],
       "schemaTo": "public",
@@ -4496,6 +4910,40 @@
     {
       "nameExplicit": false,
       "columns": [
+        "next_template_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "story_templates",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "storyline_sessions_next_template_id_story_templates_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storyline_sessions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "next_session_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "storyline_sessions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "storyline_sessions_next_session_id_storyline_sessions_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storyline_sessions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "user_id"
       ],
       "schemaTo": "public",
@@ -4506,6 +4954,23 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "storylines_user_id_users_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storylines"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "template_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "story_templates",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "storylines_template_id_story_templates_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "storylines"
@@ -4701,6 +5166,16 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "story_templates_pkey",
+      "schema": "public",
+      "table": "story_templates",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "story_turns_pkey",
       "schema": "public",
       "table": "story_turns",
@@ -4787,6 +5262,17 @@
       "name": "push_devices_token_key",
       "schema": "public",
       "table": "push_devices",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "slug"
+      ],
+      "nullsNotDistinct": false,
+      "name": "story_templates_slug_key",
+      "schema": "public",
+      "table": "story_templates",
       "entityType": "uniques"
     },
     {
