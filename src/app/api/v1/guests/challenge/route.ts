@@ -1,4 +1,5 @@
 import { json } from '@/lib/api/respond';
+import { withRequestLog } from '@/lib/api/request-log';
 import { assertClientSupported } from '@/lib/api/client-version';
 import { handleError } from '@/lib/utils/api.handler-errors';
 import { issueChallenge } from '@/lib/services/guests/attestation';
@@ -22,7 +23,7 @@ import {
  * POST rather than GET because each call creates server state, and a GET that
  * an intermediary repeated or prefetched would mint challenges nobody asked for.
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     assertClientSupported(request);
     await assertUnderIpLimit('guest-challenges', clientIp(request), CHALLENGES_PER_IP_PER_HOUR);
@@ -33,3 +34,6 @@ export async function POST(request: Request) {
     return handleError(error);
   }
 }
+
+/** Logged once per request, with its status: see request-log.ts. */
+export const POST = withRequestLog(handlePOST);
