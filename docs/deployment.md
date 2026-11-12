@@ -478,3 +478,24 @@ docker run --rm --env-file .env.local bramble:local node dist/sweeps/import-swee
 Locally, without Doppler, `pnpm dev:all` runs the Next dev server and the worker
 together; `pnpm worker` runs the worker alone, and `pnpm sweep:arc` /
 `pnpm sweep:imports` run the sweeps on demand.
+
+## Request logs
+
+Every API request writes one JSON line on the `web` service (`src/lib/api/request-log.ts`):
+
+```json
+{
+  "event": "request",
+  "requestId": "3f9a1c2e",
+  "method": "POST",
+  "route": "/api/v1/sessions/:id/turn",
+  "status": 429,
+  "code": "RATE_LIMITED",
+  "ms": 41,
+  "client": "ios/1.2 (16)"
+}
+```
+
+Ids in the path are replaced (`:id`, `:n`), and the query string is dropped. `code` is the error response's code, never its message. The response carries `X-Request-Id`, so a request seen on a phone can be found here. Bodies, headers other than the client's build, and who made the request are never logged. Health checks aren't logged.
+
+Find them with `porter app logs bramble --project 19721 --cluster 6001 --service web --search '"route":"/api/v1/sessions/:id/turn"'`, or search a status such as `"status":5`.

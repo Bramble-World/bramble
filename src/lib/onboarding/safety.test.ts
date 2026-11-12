@@ -4,7 +4,8 @@ import {
   createModerationCheck,
   FLAGGING_CATEGORIES,
   isFlagged,
-  SAFETY_CHECK_DEADLINE_MS,
+  IPHONE_WAIT_MS,
+  SAFETY_CHECK_ATTEMPTS_MS,
 } from './safety';
 
 const ANSWER = 'my brother hit me when i was little';
@@ -81,7 +82,48 @@ describe('createModerationCheck', () => {
     }
   );
 
-  it('gives itself less than the iPhone waits', () => {
-    expect(SAFETY_CHECK_DEADLINE_MS).toBeLessThan(1000);
+  it('gives both tries less than the iPhone waits, with room for the round trip', () => {
+    const total = SAFETY_CHECK_ATTEMPTS_MS.reduce((sum, ms) => sum + ms, 0);
+    expect(total).toBeLessThanOrEqual(IPHONE_WAIT_MS - 400);
+  });
+
+  it('tries once more when the first try times out, and answers from the second', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ results: [{ categories: { 'self-harm': true } }] }), {
+          status: 200,
+        })
+      );
+
+    await expect(createModerationCheck('sk-test', fetchImpl)(ANSWER)).resolves.toEqual({
+      flagged: true,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('brother');
+    warn.mockRestore();
+  });
+
+  it('tries once more when OpenAI fails on its side, but not when it says slow down', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const down = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('oops', { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ results: [{ categories: {} }] }), { status: 200 })
+      );
+    await expect(createModerationCheck('sk-test', down)(ANSWER)).resolves.toEqual({
+      flagged: false,
+    });
+    expect(down).toHaveBeenCalledTimes(2);
+
+    const busy = vi.fn<typeof fetch>(async () => new Response('slow down', { status: 429 }));
+    await expect(createModerationCheck('sk-test', busy)(ANSWER)).rejects.toBeInstanceOf(
+      UpstreamBusyError
+    );
+    expect(busy).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

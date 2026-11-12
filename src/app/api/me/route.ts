@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { withRequestLog } from '@/lib/api/request-log';
 import { requireCurrentUser } from '@/lib/services/auth/auth.service';
 import { handleError } from '@/lib/utils/api.handler-errors';
 
 // The reference shape for every protected handler: call requireCurrentUser with
 // the Request, and let the thrown AppError fall through to handleError. The auth
 // layer never builds a Response, so the error envelope stays defined in one place.
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const user = await requireCurrentUser(request);
     // clerkId is an internal join key and is deliberately not returned.
@@ -25,3 +26,6 @@ export async function GET(request: Request) {
     return handleError(error);
   }
 }
+
+/** Logged once per request, with its status: see request-log.ts. */
+export const GET = withRequestLog(handleGET);
