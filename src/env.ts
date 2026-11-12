@@ -70,6 +70,13 @@ export const env = createEnv({
      */
     IMPORT_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
     /**
+     * How many worker lanes write pool stories from reborn answers. 0, the
+     * default, writes none: answers still queue their stories, and they are
+     * written once this is raised. The switch for turning the pool on, since
+     * every story is two model calls.
+     */
+    POOL_WORKER_CONCURRENCY: z.coerce.number().int().min(0).max(8).default(0),
+    /**
      * The oldest macOS build this server will serve, or 0 to serve any.
      *
      * A number rather than a version string: builds are monotonic and directly
@@ -208,6 +215,7 @@ export const env = createEnv({
     REDIS_URL: process.env.REDIS_URL,
     IMPORT_MASTER_KEY: process.env.IMPORT_MASTER_KEY,
     IMPORT_WORKER_CONCURRENCY: process.env.IMPORT_WORKER_CONCURRENCY,
+    POOL_WORKER_CONCURRENCY: process.env.POOL_WORKER_CONCURRENCY,
     MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
     IOS_TESTFLIGHT_URL: process.env.IOS_TESTFLIGHT_URL,
     POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,

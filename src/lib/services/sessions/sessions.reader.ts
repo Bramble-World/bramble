@@ -67,6 +67,7 @@ const sessionColumns = {
   lastActiveAt: storylineSessions.lastActiveAt,
   playheadOrder: storylineSessions.playheadOrder,
   startedFromEventId: storylineSessions.startedFromEventId,
+  endedAt: storylineSessions.endedAt,
 };
 
 export async function getSession(userId: string, sessionId: string): Promise<PublicSession | null> {
@@ -114,7 +115,39 @@ export async function getOpenTurn(
   sessionId: string
 ): Promise<TurnWithChoices | null> {
   const turn = await tx.query.storyTurns.findFirst({
-    where: { sessionId, selectedChoiceId: { isNull: true } },
+    where: { sessionId, selectedChoiceId: { isNull: true }, isEnding: false },
+    with: turnWith,
+  });
+  if (!turn) return null;
+  const [resolved] = await resolveTurnSurfaces(tx, [turn]);
+  return resolved;
+}
+
+/**
+ * Whether this playthrough is the next story some ended one went on to — the
+ * case whose first beat is free.
+ */
+export async function isNextStorySession(tx: Executor, sessionId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: storylineSessions.id })
+    .from(storylineSessions)
+    .where(eq(storylineSessions.nextSessionId, sessionId))
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * The story's last beat, once it has been written.
+ *
+ * Unanswered by design, so it is never the open turn; a partial unique index
+ * keeps it to one per session.
+ */
+export async function getEndingTurn(
+  tx: Executor,
+  sessionId: string
+): Promise<TurnWithChoices | null> {
+  const turn = await tx.query.storyTurns.findFirst({
+    where: { sessionId, isEnding: true },
     with: turnWith,
   });
   if (!turn) return null;
@@ -558,7 +591,14 @@ export async function turnsCreatedSince(
     })
     .from(storyTurns)
     .innerJoin(storylineSessions, eq(storylineSessions.id, storyTurns.sessionId))
-    .where(and(eq(storylineSessions.userId, userId), gte(storyTurns.createdAt, since)));
+    .where(
+      and(
+        eq(storylineSessions.userId, userId),
+        gte(storyTurns.createdAt, since),
+        // The first beat of a story begun from an ending spends nothing.
+        eq(storyTurns.free, false)
+      )
+    );
 
   return {
     used: row?.used ?? 0,

@@ -1,9 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '@/index';
-import { storylineSessions, turnSurfaces, users } from '@/db/schema/tables';
+import {
+  storylines as storylinesTable,
+  storylineSessions,
+  turnSurfaces,
+  users,
+} from '@/db/schema/tables';
 import {
   ConflictError,
+  GenerationUnusableError,
   NotFoundError,
   StorylineNotReadyError,
   ValidationError,
@@ -18,6 +24,7 @@ import * as storylines from '../storylines/storylines.service';
 import * as sessions from '../sessions/sessions.service';
 import * as timeline from '../timeline/timeline.service';
 import { advanceSession, commitChoice, generateConsequences, generateTurn } from './turns.service';
+import { writeEnding } from '../endings/ending.service';
 
 /**
  * The decision loop, end to end, against the fake generator and a real database.
@@ -594,6 +601,107 @@ describe('the playhead', () => {
   });
 });
 
+/**
+ * Stories end. A short budget brings the closing window to beat 2, where the
+ * fake ends as soon as it may.
+ */
+describe('endings', () => {
+  beforeEach(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 6 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+  afterAll(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+
+  async function playToTheEnd() {
+    const session = await freshSession();
+    const first = await advanceSession(userId, session.id, { generator: fake });
+    expect(first.isEnding).toBe(false);
+    await commitChoice(userId, first.id, first.choices[0].id);
+    const ending = await advanceSession(userId, session.id, { generator: fake });
+    return { session, first, ending };
+  }
+
+  it('writes an ending with no choices and ends the session with it', async () => {
+    const { session, ending } = await playToTheEnd();
+
+    expect(ending.isEnding).toBe(true);
+    expect(ending.choices).toStrictEqual([]);
+    const snapshot = await sessions.sessionSnapshot(userId, session.id);
+    expect(snapshot.state).toBe('ended');
+    expect(snapshot.session.endedAt).toBeInstanceOf(Date);
+    expect(snapshot.turn?.id).toBe(ending.id);
+    expect(snapshot.history).toHaveLength(1);
+  });
+
+  it('tells the model it may end the story, and when it must', async () => {
+    await playToTheEnd();
+
+    const [opening, closing] = fake.calls.filter((c) => c.promptName === 'turn.generate');
+    expect(opening.system).toContain('Do not resolve the story yet');
+    expect(closing.system).toContain('Do not end it just because you may.');
+  });
+
+  it('serves the ending again for free, without calling the model', async () => {
+    const { session, ending } = await playToTheEnd();
+    const calls = fake.calls.length;
+
+    expect((await generateTurn(userId, session.id, { generator: fake })).id).toBe(ending.id);
+    expect((await advanceSession(userId, session.id, { generator: fake })).id).toBe(ending.id);
+    expect(fake.calls.length).toBe(calls);
+  });
+
+  it('refuses an answer to the ending', async () => {
+    const { first, ending } = await playToTheEnd();
+
+    await expect(commitChoice(userId, ending.id, first.choices[0].id)).rejects.toBeInstanceOf(
+      ConflictError
+    );
+  });
+
+  it('keeps the story open for a client that cannot show an ending', async () => {
+    const session = await freshSession();
+    const first = await advanceSession(userId, session.id, { generator: fake, endings: false });
+    await commitChoice(userId, first.id, first.choices[0].id);
+
+    const second = await advanceSession(userId, session.id, { generator: fake, endings: false });
+
+    expect(second.isEnding).toBe(false);
+    expect(second.choices.length).toBeGreaterThanOrEqual(2);
+    expect(fake.calls.at(-1)!.system).toContain('Do not resolve the story yet');
+  });
+
+  it('retries once when the model ends the story too early, then gives up', async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+    fake.register(turnPrompt, () => ({
+      isEnding: true,
+      headline: 'It is over.',
+      narrative: 'And that was that.',
+      choices: [],
+      surfaceKind: 'none',
+      clockTime: null,
+      dateLabel: null,
+      notifications: [],
+    }));
+    const session = await freshSession();
+
+    await expect(generateTurn(userId, session.id, { generator: fake })).rejects.toBeInstanceOf(
+      GenerationUnusableError
+    );
+    expect(fake.calls.filter((c) => c.promptName === 'turn.generate')).toHaveLength(2);
+    expect(await sessionReader.getOpenTurn(db, session.id)).toBeNull();
+  });
+});
+
 describe('playing several turns', () => {
   it('runs the loop repeatedly without colliding', async () => {
     const session = await freshSession();
@@ -746,6 +854,7 @@ describe('surfaces', () => {
   }
 
   const phoneBeat = (notifications: TurnOutput['notifications']): TurnOutput => ({
+    isEnding: false,
     headline: 'Maya just texted you at 1:47.',
     narrative: 'You read it with the sound off.',
     choices: [
@@ -853,5 +962,63 @@ describe('surfaces', () => {
     await db.delete(storylineSessions).where(eq(storylineSessions.id, session.id));
 
     expect(await db.query.turnSurfaces.findMany({ where: { turnId: turn.id } })).toStrictEqual([]);
+  });
+});
+
+describe('the ending page', () => {
+  beforeEach(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 6 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+  afterAll(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+
+  async function endedSession() {
+    const session = await freshSession();
+    const first = await advanceSession(userId, session.id, { generator: fake });
+    await commitChoice(userId, first.id, first.choices[0].id);
+    await advanceSession(userId, session.id, { generator: fake });
+    return { session, first };
+  }
+
+  it('is written once, from the playthrough alone', async () => {
+    const { session } = await endedSession();
+
+    const ending = await writeEnding(userId, session.id, { generator: fake });
+    const again = await writeEnding(userId, session.id, { generator: fake });
+
+    expect(ending?.title).toBe('the long way home');
+    expect(again).toEqual(ending);
+    const calls = fake.calls.filter((c) => c.promptName === 'ending.summarise');
+    expect(calls).toHaveLength(1);
+    // Neither the storyline's timeline nor its arc summary reaches the prompt:
+    // only the beats the reader lived.
+    expect(calls[0].prompt).not.toContain('Where things stood');
+    expect(calls[0].prompt).not.toContain('They had not spoken in three weeks.');
+  });
+
+  it('keeps only key choices the reader actually made', async () => {
+    const { session, first } = await endedSession();
+
+    const ending = await writeEnding(userId, session.id, { generator: fake });
+
+    expect(ending?.keyChoices).toEqual([
+      { turnId: first.id, label: `you chose to ${first.choices[0].label.toLowerCase()}` },
+    ]);
+    expect(ending?.peopleMet).toContain('Maya');
+  });
+
+  it('writes nothing for a story that is still going', async () => {
+    const session = await freshSession();
+    await advanceSession(userId, session.id, { generator: fake });
+
+    expect(await writeEnding(userId, session.id, { generator: fake })).toBeNull();
+    expect(fake.calls.some((c) => c.promptName === 'ending.summarise')).toBe(false);
   });
 });

@@ -97,6 +97,24 @@ export type AnalyticsEvent =
       };
     }
   | {
+      name: 'story_ended';
+      properties: {
+        /** How many beats the story took, the ending included. */
+        turns: number;
+        /** Whether the model chose to end it, or the length cap made it. */
+        phase: 'closing' | 'must_end';
+      };
+    }
+  | {
+      name: 'next_story_started';
+      properties: {
+        /** Where the pool story came from. Never which one, and never its author. */
+        origin: 'seed' | 'reborn' | 'reddit';
+        /** The countdown ran out, the reader tapped "begin now", or began it later from the notebook. */
+        how: 'countdown' | 'begin_now' | 'later';
+      };
+    }
+  | {
       name: 'push_sent';
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
@@ -133,4 +151,8 @@ export const ALLOWED_PROPERTY_KEYS = [
   'method',
   'merged',
   'kind',
+  'phase',
+  'origin',
+  'how',
+  'turns',
 ] as const;

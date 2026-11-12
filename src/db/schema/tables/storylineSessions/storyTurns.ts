@@ -1,4 +1,12 @@
-import { index, pgTable, text, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
 import { storylineSessions } from '../storylineSessions';
 import { turnChoices } from './turnChoices';
 import { timestamps } from '../../../util/timestamps';
@@ -18,6 +26,22 @@ export const storyTurns = pgTable(
     // The one-sentence hook shown above everything else. Null on turns written
     // before turns had one; those render as narrative and choices alone.
     headline: text(),
+
+    /**
+     * The last beat of the story: it offers no choices and is never answered.
+     *
+     * Its own column rather than "a turn with no choices", because "awaiting an
+     * answer" is keyed on `selected_choice_id IS NULL`, and an ending would
+     * otherwise read as a turn the reader can never close.
+     */
+    isEnding: boolean('is_ending').notNull().default(false),
+
+    /**
+     * Written without spending energy: the first beat of a story the reader went
+     * on to from an ending, so autoplay never spends battery they didn't choose
+     * to. It still waits for battery like any beat — free is about the count.
+     */
+    free: boolean().notNull().default(false),
 
     // Filled in once the user answers; null while the turn is awaiting a response.
     //
@@ -104,8 +128,14 @@ export const storyTurns = pgTable(
     // next turn" a get-or-create against the database rather than a convention,
     // so a lost response cannot leave a session with two unanswered turns and no
     // way to tell which one the user is looking at.
+    //
+    // An ending is unanswered forever by design, so it is not an open turn.
     uniqueIndex('idx_story_turns_one_open_per_session')
       .on(table.sessionId)
-      .where(sql`${table.selectedChoiceId} IS NULL`),
+      .where(sql`${table.selectedChoiceId} IS NULL AND NOT ${table.isEnding}`),
+    // At most one ending per session, for the same get-or-create reason.
+    uniqueIndex('idx_story_turns_one_ending_per_session')
+      .on(table.sessionId)
+      .where(sql`${table.isEnding}`),
   ]
 );

@@ -11,6 +11,7 @@ import {
   sessionView,
   storylineDetailView,
   turnView,
+  endingView,
   worldEventView,
 } from './index';
 
@@ -49,6 +50,7 @@ const turn: TurnWithChoices = {
   turnOrder: 3,
   narrativeContent: 'She answers before you have finished typing.',
   headline: null,
+  isEnding: false,
   selectedChoiceId: null,
   respondedAt: null,
   surfaces: [],
@@ -103,11 +105,12 @@ describe('views', () => {
     expect(personView(person)).toStrictEqual({ id: 'p1', name: 'Maya', isSelf: false });
   });
 
-  it('renders a turn as headline, narrative, choices and surfaces, and nothing else', () => {
+  it('renders a turn as headline, narrative, ending, choices and surfaces, and nothing else', () => {
     expect(turnView(turn)).toStrictEqual({
       id: 't1',
       headline: null,
       narrative: 'She answers before you have finished typing.',
+      isEnding: false,
       choices: [
         { id: 'c1', label: 'Tell her the truth', description: 'It may not land.' },
         { id: 'c2', label: 'Change the subject', description: null },
@@ -243,7 +246,7 @@ describe('views', () => {
 
   /**
    * A denominator this file otherwise refuses — and the exception is the point.
-   * Progress denominators are banned because endless stories make them a lie;
+   * Progress denominators are banned because a story's length is only a budget;
    * twenty is a real number the server enforces.
    */
   it('reports a balance with the ceiling it is measured against', () => {
@@ -395,5 +398,47 @@ describe('nothing internal escapes any view', () => {
     ['a voice sample', 'i really did think you knew'],
   ])('never serialises %s', (_label, content) => {
     expect(JSON.stringify(everyView())).not.toContain(content);
+  });
+});
+
+describe('endingView', () => {
+  const answered = (id: string, picked: number): TurnWithChoices => ({
+    ...turn,
+    id,
+    selectedChoiceId: `${id}-c${picked}`,
+    choices: [0, 1, 2].map((i) => ({
+      id: `${id}-c${i}`,
+      turnId: id,
+      label: `choice ${i}`,
+      description: null,
+      orderIndex: i,
+    })),
+  });
+
+  it('colours each key choice by the choice the reader actually picked', () => {
+    const view = endingView(
+      {
+        title: 'the train home',
+        summary: 'you never said it. you watched from the train.',
+        keyChoices: [
+          { turnId: 't1', label: 'you texted back' },
+          { turnId: 't2', label: 'you stayed' },
+          { turnId: 'gone', label: 'you did something no longer there' },
+        ],
+        storyNights: 2,
+        peopleMet: ['Maya'],
+      },
+      [answered('t1', 2), answered('t2', 0)]
+    );
+
+    expect(view).toStrictEqual({
+      title: 'the train home',
+      summary: 'you never said it. you watched from the train.',
+      keyChoices: [
+        { label: 'you texted back', position: 2 },
+        { label: 'you stayed', position: 0 },
+      ],
+      facts: { choices: 2, storyNights: 2, peopleMet: ['Maya'] },
+    });
   });
 });

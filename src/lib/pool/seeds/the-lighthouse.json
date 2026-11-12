@@ -1,0 +1,51 @@
+{
+  "title": "the lighthouse",
+  "hook": "a lighthouse, an island, and someone the sea brought in.",
+  "openingLines": [
+    "three weeks alone on the island.",
+    "the worst storm since you came.",
+    "at dawn, a boat on the rocks."
+  ],
+  "setting": "A small island off a rough coast in autumn, a lighthouse, a cottage, one boat a week.",
+  "tone": "quiet, mysterious, and hopeful",
+  "self": {
+    "description": "You came here to stop being needed by anyone.",
+    "want": "To be left alone, or so you keep saying.",
+    "avoids": "Calling the mainland."
+  },
+  "cast": [
+    {
+      "name": "Saoirse",
+      "pronouns": "she",
+      "relationshipType": "a stranger from the sea",
+      "role": "supporting",
+      "description": "Wry, stubborn, hiding something big.",
+      "want": "A few days without anyone looking for her.",
+      "avoids": "Saying her real name.",
+      "voiceTone": "teasing, guarded, sudden honesty",
+      "closeness": null,
+      "tension": "she won't say who she's running from"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The job",
+      "description": "You answered an advert: lighthouse caretaker, island, no visitors.",
+      "engagementScore": 4
+    },
+    {
+      "title": "The storm",
+      "description": "Last night the worst storm since you arrived.",
+      "engagementScore": 6
+    },
+    {
+      "title": "The boat",
+      "description": "At dawn a small boat lies on the rocks. A woman inside opens her eyes and says \"don't call anyone.\"",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "The weekly supply boat comes in two days.",
+    "Saoirse left a wedding, her own, by sea."
+  ]
+}

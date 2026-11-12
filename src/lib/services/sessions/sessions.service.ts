@@ -213,18 +213,29 @@ export async function openTurn(
   // Zero, not `< 2`: one option is a degenerate turn but a renderable one, and
   // the minimum that makes a turn interesting belongs to the model's schema
   // rather than to the column's integrity.
-  if (turn.choices.length === 0) {
+  //
+  // The one exception is the story's ending, which is a different kind of turn
+  // rather than a dead end: it is never answered, and the session is marked
+  // ended with it, so a client knows to show "the end" instead of buttons.
+  if (turn.isEnding) {
+    if (turn.choices.length > 0) throw new ValidationError('An ending offers no choices');
+  } else if (turn.choices.length === 0) {
     throw new ValidationError('A turn must offer at least one choice');
   }
 
   await getSession(userId, sessionId);
 
   return db.transaction(async (tx) => {
+    // An ended story has nothing more to write; whoever asks gets its ending.
+    const ending = await reader.getEndingTurn(tx, sessionId);
+    if (ending) return ending;
+
     const open = await reader.getOpenTurn(tx, sessionId);
     if (open) return open;
 
     const turnOrder = await reader.nextTurnOrder(tx, sessionId);
     const turnId = await writer.insertTurn(tx, sessionId, turnOrder, turn);
+    if (turn.isEnding) await writer.markSessionEnded(tx, sessionId);
     // Read back rather than assembled here, so a fresh turn and a resumed one
     // are the same shape by construction — surfaces resolved, choices ordered.
     const written = await reader.getTurn(tx, turnId);
@@ -263,6 +274,11 @@ export async function answerTurn(
       // The guard covers four cases in one statement, so the reason is worked
       // out only once it has already failed — off the happy path, where an extra
       // read costs nothing and a clear error is worth a lot.
+      // An ending is never answered. Refused as a conflict rather than a bad
+      // choice: the request is well-formed, the story is just over.
+      if ((await reader.getTurnForUser(tx, userId, turnId))?.isEnding) {
+        throw new ConflictError('This story has ended');
+      }
       if (!(await reader.turnIsUnanswered(tx, turnId))) {
         // Self-reconciling: a retry of a request whose response was lost finds
         // its own answer already recorded. Failing that with a 409 would strand
@@ -298,7 +314,8 @@ export async function answerTurn(
 /**
  * Where a playthrough is, and what to show — the resume probe.
  *
- * Three states with one remedy each, and no fourth. A client that died between
+ * Four states with one remedy each: answer, ask for a turn, wait, or read the
+ * ending and move on. A client that died between
  * answering and having consequences written, one that died after, and a session
  * that has only just started are all `awaiting_turn`: the remedy is identical, so
  * telling them apart would give a shipped binary a branch to get wrong forever.
@@ -311,7 +328,7 @@ export async function sessionSnapshot(
   sessionId: string
 ): Promise<{
   session: PublicSession;
-  state: 'awaiting_answer' | 'awaiting_turn' | 'blocked';
+  state: 'awaiting_answer' | 'awaiting_turn' | 'blocked' | 'ended';
   turnsAnswered: number;
   turn: TurnWithChoices | null;
   /**
@@ -327,7 +344,8 @@ export async function sessionSnapshot(
 
   const [storyline, open, turnsAnswered, history] = await Promise.all([
     storylineReader.getStoryline(userId, session.storylineId),
-    reader.getOpenTurn(db, sessionId),
+    // An ended session shows its ending where an open turn would go.
+    session.endedAt ? reader.getEndingTurn(db, sessionId) : reader.getOpenTurn(db, sessionId),
     reader.countAnsweredTurns(db, sessionId),
     reader.listAnsweredTurns(db, sessionId),
   ]);
@@ -336,8 +354,12 @@ export async function sessionSnapshot(
   // rather than something settled at start. `blocked` still carries the open
   // turn if there is one — it is already the reader's to see, and hiding it
   // would blank a screen they were mid-way through.
-  const state =
-    !storyline || storyline.status !== 'ready'
+  //
+  // `ended` comes first: a finished story stays finished whatever happens to
+  // its storyline afterwards, and its ending is already the reader's.
+  const state = session.endedAt
+    ? 'ended'
+    : !storyline || storyline.status !== 'ready'
       ? 'blocked'
       : open
         ? 'awaiting_answer'
