@@ -36,6 +36,13 @@ export const storyTurns = pgTable(
      */
     isEnding: boolean('is_ending').notNull().default(false),
 
+    /**
+     * Written without spending energy: the first beat of a story the reader went
+     * on to from an ending, so autoplay never spends battery they didn't choose
+     * to. It still waits for battery like any beat — free is about the count.
+     */
+    free: boolean().notNull().default(false),
+
     // Filled in once the user answers; null while the turn is awaiting a response.
     //
     // The explicit AnyPgColumn return type is required, not stylistic. This and

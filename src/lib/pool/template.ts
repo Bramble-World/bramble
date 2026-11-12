@@ -17,6 +17,11 @@ import { z } from 'zod';
 
 export const TEMPLATE_PRONOUNS = ['he', 'she', 'they'] as const;
 
+/** The card's one-line hook. */
+export const HOOK_MAX_CHARS = 90;
+/** Each opening line fits on one or two lines at 34 pt. */
+export const OPENING_LINE_MAX_CHARS = 40;
+
 const castMemberSchema = z.object({
   name: z.string().min(1).max(40).describe('A first name, invented. Never a name from the source.'),
   pronouns: z.enum(TEMPLATE_PRONOUNS),
@@ -39,11 +44,25 @@ const castMemberSchema = z.object({
 
 export const storyTemplateSchema = z.object({
   title: z.string().min(1).max(60).describe('Lowercase, a few words: "the night before".'),
-  premise: z
+  hook: z
     .string()
     .min(1)
-    .max(280)
-    .describe('One or two sentences on what this story is about and what is at stake.'),
+    .max(HOOK_MAX_CHARS)
+    .describe(
+      'One line for the "next story" card: the setting and the situation, lowercase. Never what happens in the opening.'
+    ),
+  openingLines: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .max(OPENING_LINE_MAX_CHARS)
+        .refine((line) => line === line.toLowerCase(), 'Opening lines are lowercase')
+    )
+    .length(3)
+    .describe(
+      `Three short lines shown one at a time before the story starts, from the opening: the last of them is the moment it begins. Lowercase, at most ${OPENING_LINE_MAX_CHARS} characters each. They build suspense and give away nothing past the first beat.`
+    ),
   setting: z.string().min(1).describe('Where and when, in a sentence. Invented, never the source.'),
   tone: z.string().min(1).describe('The register to play it in: "tender and a little absurd".'),
   self: z.object({

@@ -40,7 +40,7 @@ behaviour and tightening it would only annoy people.
 ## Stories finished, and how long they ran
 
 Every story ends somewhere around 16–24 beats (`storylines.target_beats`, 20 by
-default). The PostHog event is `story_ended` with `turn_order` (how many beats
+default). The PostHog event is `story_ended` with `turns` (how many beats
 it took) and `phase`: `closing` when the model chose the moment, `must_end` when
 the cap forced it. A high share of `must_end` means the model is not finding
 endings on its own and the closing instructions need work. From the database:
@@ -70,8 +70,10 @@ order by 1, 2, 4 desc;
 ```
 
 The PostHog event `next_story_started` carries `origin` (`seed`, `reborn`) and
-`autoplay` (whether the countdown started it). The share of `story_ended` that
-are followed by a `next_story_started` is the autoplay rate.
+`how` (`countdown`, `begin_now`, or `later` from the notebook). The share of
+`story_ended` followed by a `next_story_started` is how often players go on; the
+share with `how = countdown` is the autoplay rate. The app sends
+`next_story_stayed` and `countdown_paused` itself.
 
 ## Readers who hit zero energy, per day
 

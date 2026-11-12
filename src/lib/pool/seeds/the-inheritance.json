@@ -1,6 +1,11 @@
 {
   "title": "the inheritance",
-  "premise": "Your grandmother left her house to you, not to your mother. Your mother found out at the reading of the will, an hour ago. She's waiting in the car.",
+  "hook": "a house by the sea left to you, and a mother waiting in the car.",
+  "openingLines": [
+    "the will was read an hour ago.",
+    "the house is yours.",
+    "your mother hasn't said a word."
+  ],
   "setting": "A small coastal town in early spring, a solicitor's office, then a long drive along the cliffs.",
   "tone": "restrained family drama with sudden warmth",
   "self": {

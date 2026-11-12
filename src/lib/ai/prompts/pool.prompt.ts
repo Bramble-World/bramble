@@ -104,6 +104,11 @@ export const rewritePrompt: PromptSpec<{ answer: PoolAnswer; targetBeats: number
         '- The opening is two or three things that have already happened, oldest',
         '  first; the last one is now, the moment the story begins.',
         '- Lowercase title. Write to the player as "you".',
+        '- The hook is one line for a "next story" card: the setting and the',
+        '  situation, nothing that happens. The opening lines are three short lines',
+        '  from the opening, shown one at a time before play; the last is the',
+        '  moment the story begins. The hook must not give away what the opening',
+        '  lines reveal, and the lines must reveal nothing past that moment.',
         '',
         ENGAGEMENT_RUBRIC,
       ].join('\n'),
@@ -117,6 +122,7 @@ export const CHECK_REJECT_CODES = [
   'abuse',
   'self_harm',
   'quotes_answer',
+  'spoils_opening',
 ] as const;
 
 /** Only a story the check scores at least this high goes into the pool. */
@@ -156,6 +162,8 @@ export const checkPrompt: PromptSpec<{ answer: PoolAnswer; story: StoryTemplate 
       '- minors: a minor is in danger, or in anything sexual.',
       '- abuse: it is about abuse.',
       '- self_harm: it is about self-harm or suicide.',
+      '- spoils_opening: the hook gives away what the opening lines reveal, or',
+      '  the opening lines give away anything past the moment the story begins.',
       'Otherwise pass it.',
       '',
       'Then score it 1-5 as a story to play, whatever the verdict:',

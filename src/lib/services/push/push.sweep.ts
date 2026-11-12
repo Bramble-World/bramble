@@ -32,7 +32,9 @@ async function factsFor(userId: string): Promise<{ facts: PushFacts; lastTurnId:
       and(
         eq(storylineSessions.userId, userId),
         gte(storyTurns.createdAt, new Date(last.createdAt.getTime() - ENERGY_WINDOW_MS)),
-        lte(storyTurns.createdAt, last.createdAt)
+        lte(storyTurns.createdAt, last.createdAt),
+        // Counted as energy counts them: a free beat spent nothing.
+        eq(storyTurns.free, false)
       )
     );
 

@@ -1,6 +1,11 @@
 {
   "title": "the understudy",
-  "premise": "You've been the understudy for the lead for two years. Tonight the lead has lost her voice an hour before curtain, and she's begging you not to tell the director.",
+  "hook": "opening night, a lead who's lost her voice, and the understudy who knows every line.",
+  "openingLines": [
+    "fifty-eight minutes to curtain.",
+    "noor hasn't sung a note all day.",
+    "\"please don't tell him.\""
+  ],
   "setting": "Backstage at a small, proud theatre in a cold northern city, opening night of the winter season.",
   "tone": "backstage chaos with real heartbreak underneath",
   "self": {

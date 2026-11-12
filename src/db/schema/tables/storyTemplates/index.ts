@@ -54,6 +54,7 @@ export const storyTemplateReasonEnum = pgEnum('story_template_reason', [
   'abuse',
   'self_harm',
   'quotes_answer',
+  'spoils_opening',
   'low_quality',
   'moderation',
   // The job gave up.

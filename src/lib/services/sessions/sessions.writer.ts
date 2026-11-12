@@ -59,6 +59,7 @@ export async function insertTurn(
       narrativeContent: turn.narrativeContent,
       headline: turn.headline,
       isEnding: turn.isEnding ?? false,
+      free: turn.free ?? false,
     })
     .returning({ id: storyTurns.id });
 

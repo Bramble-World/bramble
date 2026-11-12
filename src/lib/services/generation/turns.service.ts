@@ -72,12 +72,18 @@ export async function generateTurn(
   // retry or a concurrent loser, both of which produce nothing, cost nothing.
   // A guest is checked against their beat limit instead; same placement, same
   // reasons.
+  //
+  // The first beat of a story begun from an ending is free — autoplay never
+  // spends battery the reader didn't choose to spend — but it still waits for
+  // battery like any other: the check above stands, only the count skips it.
   const { guestBeat } = await assertMayPlay(userId);
 
-  const [storyline, sessionContext] = await Promise.all([
+  const [storyline, sessionContext, isNextStory] = await Promise.all([
     assembleStorylineContext(userId, session.storylineId),
     assembleSessionContext(userId, sessionId),
+    sessionReader.isNextStorySession(db, sessionId),
   ]);
+  const free = isNextStory && sessionContext.turns.length === 0;
 
   const generator = deps.generator ?? getGenerator();
   // The cut happens here rather than inside the prompt's render, so that what
@@ -114,6 +120,7 @@ export async function generateTurn(
       headline: value.headline.trim() || null,
       narrativeContent: value.narrative,
       isEnding: value.isEnding,
+      free,
       choices: value.choices.map((choice) => ({
         label: choice.label,
         // The schema says nullable because structured output has no absent; the
@@ -148,7 +155,7 @@ export async function generateTurn(
         if (written.isEnding && phase !== 'open') {
           await track(userId, {
             name: 'story_ended',
-            properties: { turn_order: written.turnOrder, phase },
+            properties: { turns: written.turnOrder, phase },
           });
         }
       },

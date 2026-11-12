@@ -11,6 +11,7 @@ import {
   sessionView,
   storylineDetailView,
   turnView,
+  endingView,
   worldEventView,
 } from './index';
 
@@ -397,5 +398,47 @@ describe('nothing internal escapes any view', () => {
     ['a voice sample', 'i really did think you knew'],
   ])('never serialises %s', (_label, content) => {
     expect(JSON.stringify(everyView())).not.toContain(content);
+  });
+});
+
+describe('endingView', () => {
+  const answered = (id: string, picked: number): TurnWithChoices => ({
+    ...turn,
+    id,
+    selectedChoiceId: `${id}-c${picked}`,
+    choices: [0, 1, 2].map((i) => ({
+      id: `${id}-c${i}`,
+      turnId: id,
+      label: `choice ${i}`,
+      description: null,
+      orderIndex: i,
+    })),
+  });
+
+  it('colours each key choice by the choice the reader actually picked', () => {
+    const view = endingView(
+      {
+        title: 'the train home',
+        summary: 'you never said it. you watched from the train.',
+        keyChoices: [
+          { turnId: 't1', label: 'you texted back' },
+          { turnId: 't2', label: 'you stayed' },
+          { turnId: 'gone', label: 'you did something no longer there' },
+        ],
+        storyNights: 2,
+        peopleMet: ['Maya'],
+      },
+      [answered('t1', 2), answered('t2', 0)]
+    );
+
+    expect(view).toStrictEqual({
+      title: 'the train home',
+      summary: 'you never said it. you watched from the train.',
+      keyChoices: [
+        { label: 'you texted back', position: 2 },
+        { label: 'you stayed', position: 0 },
+      ],
+      facts: { choices: 2, storyNights: 2, peopleMet: ['Maya'] },
+    });
   });
 });

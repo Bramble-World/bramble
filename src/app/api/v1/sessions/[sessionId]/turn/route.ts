@@ -1,4 +1,6 @@
+import { after } from 'next/server';
 import { withUser } from '@/lib/api/with-user';
+import { writeEnding } from '@/lib/services/endings/ending.service';
 import { json } from '@/lib/api/respond';
 import { uuidParam } from '@/lib/api/params';
 import { turnView } from '@/lib/api/views';
@@ -56,5 +58,16 @@ export const POST = withUser(async (user, request, { params }: Params) => {
   //
   // Null for a guest: their limit is beats, not energy, and past it this route
   // answers 403 SIGNUP_REQUIRED instead of 429. See `assertMayPlay`.
+  // The ending page is written after the response, so the last beat isn't held
+  // up by it. A no-op once written; a failure is retried by the next call here.
+  // Only the id is logged: the error can carry the playthrough.
+  if (turn.isEnding) {
+    after(() =>
+      writeEnding(user.id, sessionId).catch(() => {
+        console.log(JSON.stringify({ event: 'ending_write_failed', sessionId }));
+      })
+    );
+  }
+
   return json({ turn: turnView(turn), energy: await readerEnergy(user) });
 });
