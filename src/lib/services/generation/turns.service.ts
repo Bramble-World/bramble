@@ -16,7 +16,13 @@ import { contextAsOf, scriptExhausted } from './playhead';
 import * as sessionWriter from '../sessions/sessions.writer';
 import { assertMayPlay } from '../sessions/energy.service';
 import { track } from '@/lib/analytics/analytics';
-import { ConflictError, GenerationUnusableError, StorylineNotReadyError } from '@/lib/utils/errors';
+import {
+  ConflictError,
+  GenerationFailedError,
+  GenerationUnusableError,
+  StorylineNotReadyError,
+} from '@/lib/utils/errors';
+import { failureFields } from '@/lib/ai/failure';
 import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
 import * as storylineReader from '../storylines/storylines.reader';
 
@@ -101,7 +107,10 @@ export async function generateTurn(
   // One more try when the model breaks a rule the schema cannot express (an
   // ending too early, choices on an ending, no ending past the cap). A failed
   // generation costs the reader nothing, so the retry is ours to pay.
-  let { value, meta } = await generator.run(turnPrompt, vars, { signal: deps.signal });
+  let { value, meta } = await runOnceMore(
+    () => generator.run(turnPrompt, vars, { signal: deps.signal }),
+    deps.signal
+  );
   if (!turnIsUsable(value, phase)) {
     ({ value, meta } = await generator.run(turnPrompt, vars, { signal: deps.signal }));
     if (!turnIsUsable(value, phase)) {
@@ -161,6 +170,23 @@ export async function generateTurn(
       },
     }
   );
+}
+
+/**
+ * One more try when the provider failed in a way that might not happen twice:
+ * a server error, or no status at all (a dropped connection). Not a 4xx, which
+ * would fail the same way again, nor once the caller has gone. A failed
+ * generation costs the reader nothing, so the retry is ours to pay.
+ */
+async function runOnceMore<T>(run: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof GenerationFailedError) || signal?.aborted) throw error;
+    const { status } = failureFields(error.cause);
+    if (status !== undefined && status < 500) throw error;
+    return run();
+  }
 }
 
 async function endingOf(sessionId: string): Promise<TurnWithChoices> {
@@ -245,20 +271,24 @@ export async function generateConsequences(
   if (!chosen) throw new ValidationError('The recorded choice is not one this turn offered');
 
   const generator = deps.generator ?? getGenerator();
-  const { value } = await generator.run(
-    consequencePrompt,
-    {
-      storyline,
-      decision: {
-        headline: turn.headline,
-        narrativeContent: turn.narrativeContent,
-        surfaceLines: turn.surfaces.map(surfaceHistoryLine),
-        chosenLabel: chosen.label,
-        chosenDescription: chosen.description,
-        rejectedLabels: turn.choices.filter((c) => c.id !== chosen.id).map((c) => c.label),
-      },
-    },
-    { signal: deps.signal }
+  const { value } = await runOnceMore(
+    () =>
+      generator.run(
+        consequencePrompt,
+        {
+          storyline,
+          decision: {
+            headline: turn.headline,
+            narrativeContent: turn.narrativeContent,
+            surfaceLines: turn.surfaces.map(surfaceHistoryLine),
+            chosenLabel: chosen.label,
+            chosenDescription: chosen.description,
+            rejectedLabels: turn.choices.filter((c) => c.id !== chosen.id).map((c) => c.label),
+          },
+        },
+        { signal: deps.signal }
+      ),
+    deps.signal
   );
 
   // Consequences land where the reader is, not where a model guesses. Asked for
