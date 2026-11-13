@@ -16,6 +16,18 @@ import { isGuestToken, verifyGuestToken } from './guest-token';
 export const GUEST_TOKEN_HEADER = 'x-bramble-guest';
 
 /**
+ * What Clerk is handed: the request's address and headers, never its body.
+ *
+ * `authenticateRequest` copies the request it's given (`new Request(request)`),
+ * and a request whose body a route has already read can't be copied: it throws
+ * "Response body object should not be disturbed or locked", a 500. Clerk reads
+ * only the URL and headers, so it gets those, whenever in a route it's called.
+ */
+function forClerk(request: Request): Request {
+  return new Request(request.url, { method: request.method, headers: request.headers });
+}
+
+/**
  * Resolves the Clerk user id from an `Authorization: Bearer <session jwt>` header.
  *
  * Takes a Request rather than calling `auth()`, deliberately. `auth()` throws
@@ -41,7 +53,7 @@ export async function requireClerkUserId(request: Request): Promise<string> {
     throw new UnauthorizedError();
   }
 
-  const state = await clerkBackend.authenticateRequest(request, {
+  const state = await clerkBackend.authenticateRequest(forClerk(request), {
     acceptsToken: 'session_token',
   });
 
@@ -67,7 +79,7 @@ export async function requireClerkUserId(request: Request): Promise<string> {
  */
 export async function clerkFirstFactorAgeMinutes(request: Request): Promise<number | null> {
   if (!clerkEnabled) throw new UnauthorizedError();
-  const state = await clerkBackend.authenticateRequest(request, {
+  const state = await clerkBackend.authenticateRequest(forClerk(request), {
     acceptsToken: 'session_token',
   });
   if (!state.isAuthenticated) throw new UnauthorizedError();
