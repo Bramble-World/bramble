@@ -1,0 +1,63 @@
+{
+  "title": "group project",
+  "hook": "the project's due at 8 a.m. your partners: your crush and the girl who hates you.",
+  "openingLines": [
+    "the slides are 4% done.",
+    "the group chat is called \"bio slay\".",
+    "nobody has said anything since 9."
+  ],
+  "setting": "Junior year, a Sunday night in February, three people in a FaceTime that keeps freezing.",
+  "tone": "rom-com chaos with a real grudge underneath",
+  "self": {
+    "description": "Sixteen, straight-A stress, secretly great at slides.",
+    "want": "To pass, and maybe more with Theo.",
+    "avoids": "Doing all the work again."
+  },
+  "cast": [
+    {
+      "name": "Theo",
+      "pronouns": "he",
+      "relationshipType": "your lab partner, and your crush",
+      "role": "supporting",
+      "description": "Funny, slightly useless, notices more than he lets on.",
+      "want": "To impress you without trying too hard.",
+      "avoids": "Admitting he likes you.",
+      "voiceTone": "dry jokes, sends memes at bad times",
+      "closeness": null,
+      "tension": "you've never talked outside class"
+    },
+    {
+      "name": "Harper",
+      "pronouns": "she",
+      "relationshipType": "your ex-friend",
+      "role": "antagonist",
+      "description": "Smart, guarded, cut you off in eighth grade and never said why.",
+      "want": "To get through tonight without talking to you.",
+      "avoids": "The real reason she left.",
+      "voiceTone": "one-word answers, then a paragraph",
+      "closeness": "you were best friends until eighth grade",
+      "tension": "neither of you mentions it"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The assignment",
+      "description": "Ms. Patel put you, Theo and Harper together. Harper laughed out loud.",
+      "engagementScore": 6
+    },
+    {
+      "title": "The silence",
+      "description": "The group chat \"bio slay\" has been dead since 9 p.m.",
+      "engagementScore": 7
+    },
+    {
+      "title": "The call",
+      "description": "At 11:40 Theo FaceTimes the group: \"ok so i may not have done my part\".",
+      "engagementScore": 8
+    }
+  ],
+  "background": [
+    "Harper stopped talking to you because of something your mom said to her mom.",
+    "Theo picked this group on purpose."
+  ]
+}

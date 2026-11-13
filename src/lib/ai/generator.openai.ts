@@ -146,7 +146,9 @@ function logFailure(
     JSON.stringify({
       event: 'generation_failed',
       prompt: promptName,
-      as: translated.name,
+      // The error's code, not its class name: the server bundle drops class
+      // names, so `name` logged as "".
+      as: (translated as { code?: string }).code ?? translated.name,
       ...failureFields(error),
       callerGaveUp: signal?.aborted ?? false,
       durationMs,
@@ -164,7 +166,9 @@ function logFailure(
 function isAbort(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
   const e = error as { name?: unknown; code?: unknown; cause?: unknown };
-  if (e.name === 'AbortError' || e.name === 'TimeoutError') return true;
+  // `ResponseAborted` is Next's, for a client that has disconnected.
+  if (e.name === 'AbortError' || e.name === 'TimeoutError' || e.name === 'ResponseAborted')
+    return true;
   if (e.code === 20 || e.code === 'ABORT_ERR') return true;
   return e.cause ? isAbort(e.cause) : false;
 }

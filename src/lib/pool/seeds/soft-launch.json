@@ -1,0 +1,60 @@
+{
+  "title": "soft launch",
+  "hook": "your ex soft-launched someone new. you'd know that hoodie anywhere.",
+  "openingLines": [
+    "it's a hand on a steering wheel.",
+    "the sleeve is grey with a red stripe.",
+    "it's your best friend's hoodie."
+  ],
+  "setting": "Austin, senior year, the week before winter formal.",
+  "tone": "chaotic, petty, and secretly tender",
+  "self": {
+    "description": "Eighteen, over him (mostly), protective of your friends to a fault.",
+    "want": "The truth, before formal.",
+    "avoids": "Being the girl who checks his stories."
+  },
+  "cast": [
+    {
+      "name": "Jayden",
+      "pronouns": "he",
+      "relationshipType": "your ex",
+      "role": "supporting",
+      "description": "Charming, avoidant, broke up with you over text in August.",
+      "want": "To be seen as the good guy.",
+      "avoids": "Saying who it is.",
+      "voiceTone": "short replies, \"lol\", never a question mark",
+      "closeness": "you dated for eight months",
+      "tension": "he never said why"
+    },
+    {
+      "name": "Priya",
+      "pronouns": "she",
+      "relationshipType": "your best friend",
+      "role": "supporting",
+      "description": "Funny, honest about everything except this.",
+      "want": "To keep both of you.",
+      "avoids": "Telling you before you find out.",
+      "voiceTone": "over-apologises, double texts",
+      "closeness": "she held your hand through the breakup",
+      "tension": "she's been weird since september"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The breakup",
+      "description": "In August Jayden ended it over text: \"i think we want different things\".",
+      "engagementScore": 6
+    },
+    {
+      "title": "The hoodie",
+      "description": "Priya's had a grey hoodie with a red stripe since the summer. She said it was her brother's.",
+      "engagementScore": 7
+    },
+    {
+      "title": "The post",
+      "description": "Tonight Jayden posts a hand on a steering wheel. Grey sleeve, red stripe.",
+      "engagementScore": 9
+    }
+  ],
+  "background": ["Priya and Jayden have been talking since July.", "Priya almost told you twice."]
+}

@@ -1,0 +1,63 @@
+{
+  "title": "location shared",
+  "hook": "your situationship's location says he's at your best friend's place. it's 1 a.m.",
+  "openingLines": [
+    "you only checked to see if he was up.",
+    "his little circle isn't at home.",
+    "it's on mia's street."
+  ],
+  "setting": "Freshman year at a big state school in Georgia. Your dorm room, 1 a.m., your roommate asleep.",
+  "tone": "anxious, funny, a detective story told in screenshots",
+  "self": {
+    "description": "Nineteen, first year away from home, trying very hard to be chill.",
+    "want": "To know what you are to him.",
+    "avoids": "Asking, because asking makes it real."
+  },
+  "cast": [
+    {
+      "name": "Leo",
+      "pronouns": "he",
+      "relationshipType": "your situationship",
+      "role": "supporting",
+      "description": "Sweet in person, impossible over text, never says what you are.",
+      "want": "To keep things easy.",
+      "avoids": "Labels.",
+      "voiceTone": "\"haha\" and voice memos",
+      "closeness": null,
+      "tension": "three months, no label"
+    },
+    {
+      "name": "Mia",
+      "pronouns": "she",
+      "relationshipType": "your best friend from your floor",
+      "role": "supporting",
+      "description": "Loud, loyal, has a secret that isn't what you think.",
+      "want": "To help someone without telling anyone.",
+      "avoids": "Lying, so she just won't answer.",
+      "voiceTone": "all caps when excited, silent when nervous",
+      "closeness": "you met on move-in day",
+      "tension": "she went quiet tonight"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The almost",
+      "description": "Three months of Leo: late-night walks, no label.",
+      "engagementScore": 6
+    },
+    {
+      "title": "The quiet",
+      "description": "Mia left your call early tonight, said she had to \"deal with something\".",
+      "engagementScore": 7
+    },
+    {
+      "title": "The pin",
+      "description": "At 1:04 a.m. Leo's location is on Mia's street.",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "Leo's younger brother is in the hospital two blocks from Mia's dorm.",
+    "Mia drove Leo there because he was too shaken to drive."
+  ]
+}

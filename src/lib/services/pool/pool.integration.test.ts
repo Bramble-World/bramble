@@ -60,7 +60,7 @@ async function writeNext() {
 /** Plays a pool story to its ending, with a short budget so it ends at beat 2. */
 async function finishAStory(userId: string) {
   const sessionId = await db.transaction((tx) =>
-    instantiateTemplate(tx, userId, seedId, SEED_STORIES['the-spare-key'])
+    instantiateTemplate(tx, userId, seedId, SEED_STORIES['close-friends'])
   );
   const session = await sessions.getSession(userId, sessionId);
   await db.update(storylines).set({ targetBeats: 6 }).where(eq(storylines.id, session.storylineId));
@@ -82,7 +82,7 @@ beforeAll(async () => {
       origin: 'seed',
       slug: SEED_SLUG,
       status: 'ready',
-      content: SEED_STORIES['the-spare-key'],
+      content: SEED_STORIES['close-friends'],
     })
     .returning({ id: storyTemplates.id });
   seedId = seed.id;
@@ -227,7 +227,7 @@ describe('the next story', () => {
   it('offers nothing while a story is going', async () => {
     const player = await newUser('player');
     const sessionId = await db.transaction((tx) =>
-      instantiateTemplate(tx, player, seedId, SEED_STORIES['the-spare-key'])
+      instantiateTemplate(tx, player, seedId, SEED_STORIES['close-friends'])
     );
 
     expect(await nextStoryFor(player, sessionId)).toBeNull();
@@ -368,7 +368,7 @@ describe('the first beat of the next story', () => {
     const next = await startedNext(player);
     // Spend what's left in another story, so the battery is at 0%.
     const other = await db.transaction((tx) =>
-      instantiateTemplate(tx, player, seedId, SEED_STORIES['night-bus'])
+      instantiateTemplate(tx, player, seedId, SEED_STORIES['the-account'])
     );
     while ((await energyFor(player)).remaining > 0) {
       const turn = await advanceSession(player, other, { generator: fake, endings: false });
