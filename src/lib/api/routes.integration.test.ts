@@ -1313,3 +1313,36 @@ describe('endings and the next story', () => {
     expect(response.status).toBe(404);
   });
 });
+
+/**
+ * A reader who locks the phone mid-beat drops the request. The beat is still
+ * written, so the app's next call gets it from the open turn instead of
+ * "try again" and the whole wait again.
+ */
+describe('a beat the app stopped waiting for', () => {
+  it('is still written, and the next call returns it', async () => {
+    asOwner();
+    const started = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`),
+        ctx({ storylineId })
+      )
+    ).json();
+    const sessionId: string = started.session.id;
+
+    const gone = new AbortController();
+    gone.abort();
+    const request = new Request(`http://api.test/api/v1/sessions/${sessionId}/turn`, {
+      method: 'POST',
+      signal: gone.signal,
+    });
+    const first = await turnRoute.POST(request, ctx({ sessionId }));
+    expect(first.status).toBe(200);
+    const written = (await first.json()).turn;
+
+    const again = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+    expect(again.turn.id).toBe(written.id);
+  });
+});

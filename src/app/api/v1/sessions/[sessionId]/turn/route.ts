@@ -42,14 +42,17 @@ export const POST = withUser(async (user, request, { params }: Params) => {
   // automatic retries, so one request bills three model calls. This converts
   // that into one paid call and one clean, safely retryable 504.
   //
-  // `request.signal` joins it, so a reader who closes the app stops the spend
-  // instead of paying for a turn nobody will read.
+  // The app leaving does NOT stop it. A beat takes 20-30 s, and a reader who
+  // locks the phone or switches apps meanwhile drops the request; stopping
+  // then threw the work away, and they came back to "try again" and the whole
+  // wait again (seen in production, 2026-11-13: every failure was the app
+  // leaving). Finished, the beat is saved, and the app's next call gets it
+  // instantly from the open turn, at no extra cost.
   const turn = await withDeadline(
     // The Mac app can't show an ending, so its stories don't get one.
     (signal) =>
       advanceSession(user.id, sessionId, { signal, endings: clientShowsEndings(request) }),
-    TURN_DEADLINE_MS,
-    request.signal
+    TURN_DEADLINE_MS
   );
 
   // Read after the turn is written, so the balance in this response already
