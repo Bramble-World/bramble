@@ -1,3 +1,4 @@
+import { failureFields } from './failure';
 import {
   LanguageModel,
   NoObjectGeneratedError,
@@ -82,7 +83,9 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
         // prompt carries story content (invariants.md §1) — but discarding the
         // cause entirely makes a production failure impossible to diagnose, and
         // `cause` is what Sentry and `console.error` already follow.
-        throw translate(error, spec.name);
+        const translated = translate(error, spec.name);
+        logFailure(spec.name, translated, error, opts?.signal, Date.now() - startedAt);
+        throw translated;
       }
     },
   };
@@ -130,6 +133,25 @@ function translate(error: unknown, promptName: string): Error {
   }
 
   return withCause(new GenerationFailedError(`Generation failed for "${promptName}"`), error);
+}
+
+function logFailure(
+  promptName: string,
+  translated: Error,
+  error: unknown,
+  signal: AbortSignal | undefined,
+  durationMs: number
+): void {
+  console.warn(
+    JSON.stringify({
+      event: 'generation_failed',
+      prompt: promptName,
+      as: translated.name,
+      ...failureFields(error),
+      callerGaveUp: signal?.aborted ?? false,
+      durationMs,
+    })
+  );
 }
 
 /**

@@ -9,6 +9,7 @@ import {
 } from '@/db/schema/tables';
 import {
   ConflictError,
+  GenerationFailedError,
   GenerationUnusableError,
   NotFoundError,
   StorylineNotReadyError,
@@ -1020,5 +1021,56 @@ describe('the ending page', () => {
 
     expect(await writeEnding(userId, session.id, { generator: fake })).toBeNull();
     expect(fake.calls.some((c) => c.promptName === 'ending.summarise')).toBe(false);
+  });
+});
+
+describe('a provider failure', () => {
+  const failing = (status: number | undefined) =>
+    Object.assign(new GenerationFailedError('Generation failed for "turn.generate"'), {
+      cause:
+        status === undefined
+          ? new Error('socket hang up')
+          : { name: 'AI_APICallError', statusCode: status },
+    });
+
+  it('is tried once more when it might not happen twice, and the beat is written', async () => {
+    let calls = 0;
+    fake.register(turnPrompt, (): TurnOutput => {
+      calls += 1;
+      if (calls === 1) throw failing(503);
+      return {
+        isEnding: false,
+        headline: 'Maya has gone quiet.',
+        narrative: 'You wait.',
+        choices: [
+          { label: 'Text her', description: null },
+          { label: 'Leave it', description: null },
+        ],
+        surfaceKind: 'none',
+        clockTime: null,
+        dateLabel: null,
+        notifications: [],
+      };
+    });
+    const session = await freshSession();
+
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+
+    expect(turn.choices.length).toBeGreaterThanOrEqual(2);
+    expect(calls).toBe(2);
+  });
+
+  it('is not tried again after a 4xx, which would fail the same way', async () => {
+    let calls = 0;
+    fake.register(turnPrompt, () => {
+      calls += 1;
+      throw failing(400);
+    });
+    const session = await freshSession();
+
+    await expect(generateTurn(userId, session.id, { generator: fake })).rejects.toBeInstanceOf(
+      GenerationFailedError
+    );
+    expect(calls).toBe(1);
   });
 });
