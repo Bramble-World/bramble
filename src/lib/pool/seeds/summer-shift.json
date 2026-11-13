@@ -1,0 +1,63 @@
+{
+  "title": "summer shift",
+  "hook": "your first summer job at a boba shop, and the new hire wants you in his videos.",
+  "openingLines": [
+    "the tapioca is burnt again.",
+    "the new guy has a ring light in his bag.",
+    "\"just act natural,\" he says."
+  ],
+  "setting": "A strip-mall boba shop in Phoenix, the first hot week of June.",
+  "tone": "light, funny, about being seen for the first time",
+  "self": {
+    "description": "Sixteen, saving for a car, allergic to attention.",
+    "want": "The car, and to be left alone. Mostly.",
+    "avoids": "Going viral."
+  },
+  "cast": [
+    {
+      "name": "Eli",
+      "pronouns": "he",
+      "relationshipType": "your new coworker",
+      "role": "supporting",
+      "description": "A creator with 400k followers, nicer off camera.",
+      "want": "A video that blows up.",
+      "avoids": "Admitting he needs this job.",
+      "voiceTone": "talks like a voiceover, then normal",
+      "closeness": "you met on tuesday",
+      "tension": "he filmed you without asking"
+    },
+    {
+      "name": "Rosa",
+      "pronouns": "she",
+      "relationshipType": "your manager",
+      "role": "supporting",
+      "description": "Tired, fair, owns the shop with her mom.",
+      "want": "The shop to survive the summer.",
+      "avoids": "Asking for help.",
+      "voiceTone": "blunt, warm underneath",
+      "closeness": null,
+      "tension": null
+    }
+  ],
+  "opening": [
+    {
+      "title": "The job",
+      "description": "You got the job because you were the only one who showed up on time.",
+      "engagementScore": 4
+    },
+    {
+      "title": "The new hire",
+      "description": "Eli starts Tuesday with a ring light and 400k followers.",
+      "engagementScore": 6
+    },
+    {
+      "title": "The video",
+      "description": "Thursday morning you're on his page. 2 million views.",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "The shop is about to close; Rosa hasn't told anyone.",
+    "Eli's videos could save it."
+  ]
+}
