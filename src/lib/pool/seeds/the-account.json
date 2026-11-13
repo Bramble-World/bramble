@@ -1,0 +1,63 @@
+{
+  "title": "the account",
+  "hook": "an anon account posts your school's secrets. today's is one only you and your bff knew.",
+  "openingLines": [
+    "@whispersof_wh has 2,000 followers.",
+    "everyone checks it at lunch.",
+    "today's post is about you."
+  ],
+  "setting": "A small high school in Oregon, the week of homecoming, junior year.",
+  "tone": "paranoid, smart, a mystery you solve between classes",
+  "self": {
+    "description": "Sixteen, trusting, about to stop being.",
+    "want": "To find out who's behind it.",
+    "avoids": "Accusing the one person you can't lose."
+  },
+  "cast": [
+    {
+      "name": "Grace",
+      "pronouns": "she",
+      "relationshipType": "your best friend",
+      "role": "supporting",
+      "description": "The only one who knew. Insists it wasn't her.",
+      "want": "For you to believe her.",
+      "avoids": "Telling you who she told.",
+      "voiceTone": "calm, too calm",
+      "closeness": "best friends since you were six",
+      "tension": "you've never doubted her before"
+    },
+    {
+      "name": "Marcus",
+      "pronouns": "he",
+      "relationshipType": "the student council president",
+      "role": "antagonist",
+      "description": "Polished, helpful, knows everyone's business.",
+      "want": "Homecoming king, and control.",
+      "avoids": "Being linked to the account.",
+      "voiceTone": "like a press release",
+      "closeness": null,
+      "tension": "he offered to \"help investigate\""
+    }
+  ],
+  "opening": [
+    {
+      "title": "The account",
+      "description": "Since September, @whispersof_wh has posted a secret a week. No one knows who runs it.",
+      "engagementScore": 6
+    },
+    {
+      "title": "The secret",
+      "description": "Only you and Grace knew you're moving after this year.",
+      "engagementScore": 7
+    },
+    {
+      "title": "Lunch",
+      "description": "At 12:05 the account posts it, with a countdown to your last day.",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "Grace told her brother, who's Marcus's best friend.",
+    "Marcus runs the account to win homecoming."
+  ]
+}

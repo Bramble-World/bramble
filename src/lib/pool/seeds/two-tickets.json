@@ -1,63 +1,63 @@
 {
   "title": "two tickets",
-  "hook": "two tickets, a best friend who bailed, and her new girlfriend asking to come.",
+  "hook": "you won two tickets to the tour. there are three of you.",
   "openingLines": [
-    "you bought these in march.",
-    "priya cancelled this morning.",
-    "an unknown number: \"hi, it's sol.\""
+    "you've refreshed the email four times.",
+    "\"congratulations! 2 tickets\".",
+    "the group chat is called \"us three\"."
   ],
-  "setting": "A summer evening in a sprawling city, from a crowded train to a festival field.",
-  "tone": "light, sharp, with a sting in it",
+  "setting": "Chicago, the week before the tour stop, the spring of sophomore year.",
+  "tone": "giddy, guilty, very online",
   "self": {
-    "description": "You and your best friend used to do everything together.",
-    "want": "To keep your best friend, whatever that means now.",
-    "avoids": "Admitting you're jealous."
+    "description": "Fifteen, the one who entered every giveaway for the three of you.",
+    "want": "To keep \"us three\" as three.",
+    "avoids": "Choosing."
   },
   "cast": [
     {
-      "name": "Priya",
+      "name": "Lily",
       "pronouns": "she",
       "relationshipType": "your best friend",
       "role": "supporting",
-      "description": "Loyal, scattered, falling hard for someone new.",
-      "want": "For her two favourite people to like each other.",
-      "avoids": "Telling you she's moving in with Sol.",
-      "voiceTone": "fast, apologetic, emoji-heavy",
-      "closeness": "best friends since you were eleven",
-      "tension": "she cancelled on you three times this month"
+      "description": "Has loved this artist since 2019, has already made a sign.",
+      "want": "To be the one you pick, without asking.",
+      "avoids": "Saying she wants it.",
+      "voiceTone": "heart emojis, then nothing",
+      "closeness": "your oldest friend",
+      "tension": "she's been left out before"
     },
     {
-      "name": "Sol",
-      "pronouns": "she",
-      "relationshipType": "your best friend's girlfriend",
+      "name": "Ari",
+      "pronouns": "they",
+      "relationshipType": "your best friend",
       "role": "supporting",
-      "description": "Funny, direct, nervous about you specifically.",
-      "want": "Your approval, more than she'll admit.",
-      "avoids": "Mentioning the apartment.",
-      "voiceTone": "dry and disarming",
-      "closeness": null,
-      "tension": "you've been cold to her twice"
+      "description": "Newer to the group, funnier, could buy a resale ticket but won't say.",
+      "want": "To belong.",
+      "avoids": "Making it awkward.",
+      "voiceTone": "self-deprecating jokes",
+      "closeness": "closer every month",
+      "tension": "they think you prefer lily"
     }
   ],
   "opening": [
     {
-      "title": "The tickets",
-      "description": "In March you bought two tickets the minute they went on sale.",
-      "engagementScore": 4
+      "title": "The giveaway",
+      "description": "For a year you entered every giveaway \"for us three\".",
+      "engagementScore": 5
     },
     {
-      "title": "The cancellation",
-      "description": "This morning Priya texted: something came up, so sorry, love you.",
-      "engagementScore": 7
-    },
-    {
-      "title": "The message",
-      "description": "An unknown number: \"hi, it's Sol. this is weird. can i come?\"",
+      "title": "The email",
+      "description": "On Monday: two tickets, non-transferable, your name.",
       "engagementScore": 8
+    },
+    {
+      "title": "The chat",
+      "description": "Lily sends a photo of the sign she made: three names on it.",
+      "engagementScore": 9
     }
   ],
   "background": [
-    "Priya and Sol signed a lease last week.",
-    "Priya told Sol you're the most important person in her life."
+    "Ari could afford a third ticket but is embarrassed to say so.",
+    "Lily has never been to a concert."
   ]
 }
