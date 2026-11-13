@@ -1,0 +1,63 @@
+{
+  "title": "close friends",
+  "hook": "your best friend posted to close friends from a party you didn't know about.",
+  "openingLines": [
+    "it's 11:48 on a saturday.",
+    "you open her story without thinking.",
+    "you weren't supposed to see this."
+  ],
+  "setting": "Suburban Ohio, junior year, a Saturday night in October. You're home in bed with your phone.",
+  "tone": "sharp, funny, a little devastating: the specific pain of being left out by your person",
+  "self": {
+    "description": "Seventeen, funny in the group chat, quietly the one who plans everything.",
+    "want": "To know if you're still her person.",
+    "avoids": "Looking like you care this much."
+  },
+  "cast": [
+    {
+      "name": "Kenzie",
+      "pronouns": "she",
+      "relationshipType": "your best friend since fourth grade",
+      "role": "supporting",
+      "description": "Magnetic, loyal in her own messy way, pulling away since she started hanging out with the volleyball girls.",
+      "want": "To have both worlds without choosing.",
+      "avoids": "Admitting she's been drifting on purpose.",
+      "voiceTone": "fast, lowercase, lots of \"ok but\"",
+      "closeness": "you share a google doc of inside jokes",
+      "tension": "she's been \"busy\" three weekends in a row"
+    },
+    {
+      "name": "Ava",
+      "pronouns": "she",
+      "relationshipType": "the new girl in kenzie's orbit",
+      "role": "antagonist",
+      "description": "Effortlessly popular, nicer to you in person than online.",
+      "want": "Kenzie to herself.",
+      "avoids": "Being the obvious villain.",
+      "voiceTone": "sweet with a knife in it",
+      "closeness": null,
+      "tension": "she's the one who posted the party"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The drift",
+      "description": "Kenzie's been saying \"so tired\" every Saturday for a month.",
+      "engagementScore": 6
+    },
+    {
+      "title": "The plans",
+      "description": "You texted her at 7 about a movie. Delivered, no reply.",
+      "engagementScore": 7
+    },
+    {
+      "title": "The story",
+      "description": "At 11:48 you're on her close friends story, at a party, Ava's arm around her.",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "Kenzie added you to close friends herself, years ago, and forgot.",
+    "Ava told Kenzie you'd \"probably think it's lame\"."
+  ]
+}

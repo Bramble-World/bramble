@@ -1,0 +1,63 @@
+{
+  "title": "new roommate",
+  "hook": "your random college roommate made middle school hell for you. she doesn't remember.",
+  "openingLines": [
+    "move-in day, 94 degrees.",
+    "her name is on the door next to yours.",
+    "\"hiii roomie!!\" she says."
+  ],
+  "setting": "A dorm in Michigan, move-in week of freshman year.",
+  "tone": "awkward, funny, and about who people become",
+  "self": {
+    "description": "Eighteen, reinvented, nobody here knows the old you.",
+    "want": "A fresh start.",
+    "avoids": "Being who you were in seventh grade."
+  },
+  "cast": [
+    {
+      "name": "Brooke",
+      "pronouns": "she",
+      "relationshipType": "your roommate",
+      "role": "supporting",
+      "description": "Bubbly, anxious, desperately wants a best friend here.",
+      "want": "To be liked.",
+      "avoids": "Remembering who she used to be.",
+      "voiceTone": "exclamation points, real ones",
+      "closeness": "you share a 12-by-15 room",
+      "tension": "she made your seventh grade miserable"
+    },
+    {
+      "name": "Mom",
+      "pronouns": "she",
+      "relationshipType": "your mom",
+      "role": "supporting",
+      "description": "Remembers everything Brooke did.",
+      "want": "To march into housing and fix it.",
+      "avoids": "Letting you handle it.",
+      "voiceTone": "calls, never texts",
+      "closeness": null,
+      "tension": null
+    }
+  ],
+  "opening": [
+    {
+      "title": "Seventh grade",
+      "description": "For a year Brooke made sure nobody sat with you.",
+      "engagementScore": 7
+    },
+    {
+      "title": "The housing email",
+      "description": "In July you get your roommate's name and stare at it for an hour.",
+      "engagementScore": 7
+    },
+    {
+      "title": "Move-in",
+      "description": "Brooke hugs you at the door: \"we're gonna be best friends, i can feel it.\"",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "Brooke spent the last two years in therapy, partly about who she was.",
+    "She remembers. She's pretending not to."
+  ]
+}

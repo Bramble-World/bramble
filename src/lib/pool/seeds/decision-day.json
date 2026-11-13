@@ -1,0 +1,63 @@
+{
+  "title": "decision day",
+  "hook": "you got into your dream school. your best friend didn't. you promised to go together.",
+  "openingLines": [
+    "the portal opens at 7 p.m.",
+    "you scream before you finish reading.",
+    "then her text comes in."
+  ],
+  "setting": "Late March, senior year, New Jersey. Decision day for the school you both applied to.",
+  "tone": "huge, bittersweet, the first real fork in the road",
+  "self": {
+    "description": "Seventeen, applied on a dare and actually got in.",
+    "want": "To say yes without losing her.",
+    "avoids": "Celebrating where she can see."
+  },
+  "cast": [
+    {
+      "name": "Nia",
+      "pronouns": "she",
+      "relationshipType": "your best friend",
+      "role": "supporting",
+      "description": "Ambitious, proud, the one who was supposed to get in.",
+      "want": "For it to not be your fault.",
+      "avoids": "Crying in front of anyone.",
+      "voiceTone": "perfect punctuation when upset",
+      "closeness": "you made a pact in ninth grade",
+      "tension": "she was always the \"smart one\""
+    },
+    {
+      "name": "Mom",
+      "pronouns": "she",
+      "relationshipType": "your mom",
+      "role": "supporting",
+      "description": "Has already ordered the sweatshirt.",
+      "want": "Your future, loudly.",
+      "avoids": "Hearing that you might not go.",
+      "voiceTone": "voice notes, three minutes long",
+      "closeness": "close, a little smothering",
+      "tension": null
+    }
+  ],
+  "opening": [
+    {
+      "title": "The pact",
+      "description": "In ninth grade you and Nia swore: same school or no school.",
+      "engagementScore": 6
+    },
+    {
+      "title": "The portal",
+      "description": "At 7:00 the confetti animation plays on your screen.",
+      "engagementScore": 8
+    },
+    {
+      "title": "Her text",
+      "description": "At 7:03 Nia texts: \"how'd it go\". Just that.",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "Nia was waitlisted, not rejected; she hasn't told anyone.",
+    "Your mom already posted on Facebook."
+  ]
+}

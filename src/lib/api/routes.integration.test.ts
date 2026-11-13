@@ -1168,7 +1168,7 @@ describe('endings and the next story', () => {
       origin: 'seed',
       slug: SEED_SLUG,
       status: 'ready',
-      content: SEED_STORIES['night-bus'],
+      content: SEED_STORIES['the-account'],
     });
     await db
       .update(storylineTable)

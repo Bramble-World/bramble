@@ -1,0 +1,63 @@
+{
+  "title": "the leak",
+  "hook": "your group chat just leaked to the whole grade. the worst message has your name on it.",
+  "openingLines": [
+    "your phone won't stop buzzing.",
+    "forty notifications, all one screenshot.",
+    "you didn't type that."
+  ],
+  "setting": "Sophomore year, a Tuesday at lunch, a high school in Southern California.",
+  "tone": "tense, twisty, a whodunit in the group chat",
+  "self": {
+    "description": "Fifteen, in a group chat of six that was supposed to be private.",
+    "want": "To clear your name before sixth period.",
+    "avoids": "Snitching on your friends."
+  },
+  "cast": [
+    {
+      "name": "Zoe",
+      "pronouns": "she",
+      "relationshipType": "your friend in the group chat",
+      "role": "supporting",
+      "description": "The funniest one, the meanest one, has your old phone.",
+      "want": "For this to blow over.",
+      "avoids": "Admitting she used your old phone.",
+      "voiceTone": "all lowercase, never apologises",
+      "closeness": "friends since seventh grade",
+      "tension": "she's been distant all week"
+    },
+    {
+      "name": "Sofia",
+      "pronouns": "she",
+      "relationshipType": "the girl the message was about",
+      "role": "supporting",
+      "description": "Quiet, kind, the last person who deserved it.",
+      "want": "To know who actually said it.",
+      "avoids": "Making a scene.",
+      "voiceTone": "formal, careful",
+      "closeness": null,
+      "tension": "you've never been mean to her, until now"
+    }
+  ],
+  "opening": [
+    {
+      "title": "The chat",
+      "description": "Six of you, a group chat called \"no adults\", two years of it.",
+      "engagementScore": 5
+    },
+    {
+      "title": "The old phone",
+      "description": "Last month you gave Zoe your old phone, still logged in.",
+      "engagementScore": 7
+    },
+    {
+      "title": "Lunch",
+      "description": "At 12:10 a screenshot goes round the grade: a cruel message about Sofia, from you.",
+      "engagementScore": 9
+    }
+  ],
+  "background": [
+    "Zoe typed it from your old phone as a joke and screenshotted it to one person.",
+    "That person forwarded it."
+  ]
+}

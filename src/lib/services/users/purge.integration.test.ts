@@ -88,7 +88,7 @@ async function makeAccount(clerkId: string, email: string) {
       userId,
       sourceAnswerId: answer.id,
       status: 'ready',
-      content: SEED_STORIES['last-shift'],
+      content: SEED_STORIES['summer-shift'],
     })
     .returning({ id: storyTemplates.id });
 
@@ -130,7 +130,7 @@ beforeAll(async () => {
   ownerStorylineIds = [owner.storylineId];
   // The bystander is playing a copy of the owner's pool story.
   await db.transaction((tx) =>
-    instantiateTemplate(tx, bystanderId, owner.templateId, SEED_STORIES['last-shift'])
+    instantiateTemplate(tx, bystanderId, owner.templateId, SEED_STORIES['summer-shift'])
   );
 });
 
@@ -182,7 +182,7 @@ describe('purgeUsersByEmail', () => {
       .select({ templateId: storylineTable.templateId, title: storylineTable.title })
       .from(storylineTable)
       .where(eq(storylineTable.userId, bystanderId));
-    expect(copies).toContainEqual({ templateId: null, title: SEED_STORIES['last-shift'].title });
+    expect(copies).toContainEqual({ templateId: null, title: SEED_STORIES['summer-shift'].title });
   });
 
   it('is a no-op for an email with no account', async () => {
