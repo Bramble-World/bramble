@@ -499,3 +499,20 @@ Every API request writes one JSON line on the `web` service (`src/lib/api/reques
 Ids in the path are replaced (`:id`, `:n`), and the query string is dropped. `code` is the error response's code, never its message. The response carries `X-Request-Id`, so a request seen on a phone can be found here. Bodies, headers other than the client's build, and who made the request are never logged. Health checks aren't logged.
 
 Find them with `porter app logs bramble --project 19721 --cluster 6001 --service web --search '"route":"/api/v1/sessions/:id/turn"'`, or search a status such as `"status":5`.
+
+A failed model call writes its own line, with the provider's fixed fields only:
+
+```json
+{
+  "event": "generation_failed",
+  "prompt": "turn.generate",
+  "as": "GenerationFailedError",
+  "name": "AI_RetryError",
+  "status": 500,
+  "type": "server_error",
+  "callerGaveUp": false,
+  "durationMs": 21877
+}
+```
+
+`callerGaveUp` is true when the app had already disconnected. A beat or consequence that fails with a 5xx, or with no status (a dropped connection), is tried once more before the request fails; a 4xx is not.
