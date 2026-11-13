@@ -75,7 +75,13 @@ export function createFakeGenerator(): FakeGenerator {
       calls.length = 0;
     },
 
-    async run<Vars, Out>(spec: PromptSpec<Vars, Out>, vars: Vars): Promise<GenerationResult<Out>> {
+    async run<Vars, Out>(
+      spec: PromptSpec<Vars, Out>,
+      vars: Vars,
+      opts?: { signal?: AbortSignal }
+    ): Promise<GenerationResult<Out>> {
+      // As the real client does: a call made on an aborted signal never starts.
+      opts?.signal?.throwIfAborted();
       const fixture = fixtures.get(spec.name);
       if (!fixture) {
         throw new InternalServerError(`No fake fixture registered for the prompt "${spec.name}"`);
