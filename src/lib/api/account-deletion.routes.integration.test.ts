@@ -9,8 +9,10 @@ import { SignJWT, exportPKCS8, generateKeyPair, jwtVerify, type CryptoKey } from
  * Stubbed at the edges only:
  *
  * - **Clerk.** The session (`requireCurrentUser` resolving to the account's
- *   real row, and the first-factor age the session token would carry) and the backend client's `getUser` and
- *   `deleteUser`.
+ *   real row) and the backend client: `authenticateRequest` answers with the
+ *   first-factor age the session token would carry, after copying the request
+ *   as the real one does (so a route that read the body before asking fails
+ *   here as it did in production), plus `getUser` and `deleteUser`.
  * - **Apple and PostHog**, as `fetch`. Every call is recorded and answered the
  *   way Apple's /auth/token and /auth/revoke and PostHog's bulk_delete answer,
  *   so the test checks what was sent — including that the client secret is a
@@ -35,7 +37,7 @@ vi.mock('@/env', async (importOriginal) => {
 });
 vi.mock('@/lib/services/auth/auth.service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/auth/auth.service')>();
-  return { ...actual, requireCurrentUser: vi.fn(), clerkFirstFactorAgeMinutes: vi.fn() };
+  return { ...actual, requireCurrentUser: vi.fn() };
 });
 // Capturing is not under test, and with a project token set it would post to
 // PostHog's ingestion host through the stubbed fetch.
@@ -44,8 +46,9 @@ vi.mock('@/lib/analytics/analytics', async (importOriginal) => {
   return { ...actual, track: async () => {}, trackAlias: async () => {} };
 });
 vi.mock('@/lib/services/auth/auth.client', () => ({
-  clerkBackend: { users: { getUser: vi.fn(), deleteUser: vi.fn() } },
+  clerkBackend: { authenticateRequest: vi.fn(), users: { getUser: vi.fn(), deleteUser: vi.fn() } },
 }));
+vi.mock('@/lib/services/auth/auth.config', () => ({ clerkEnabled: true }));
 
 const { env } = await import('@/env');
 const { db } = await import('@/index');
@@ -53,6 +56,7 @@ const { imports, users } = await import('@/db/schema/tables');
 const auth = vi.mocked(await import('@/lib/services/auth/auth.service'));
 const { clerkBackend } = await import('@/lib/services/auth/auth.client');
 const clerk = vi.mocked(clerkBackend.users);
+const authenticateRequest = vi.mocked(clerkBackend.authenticateRequest);
 const { createFakeGenerator } = await import('@/lib/ai');
 const { registerFixtures } = await import('@/lib/ai/fixtures');
 const persons = await import('@/lib/services/persons/persons.service');
@@ -188,9 +192,14 @@ async function signedIn(
     .from(users)
     .where(eq(users.clerkId, clerkId));
   auth.requireCurrentUser.mockResolvedValue(user);
-  auth.clerkFirstFactorAgeMinutes.mockResolvedValue(
-    options.minutesAgo === undefined ? 2 : options.minutesAgo
-  );
+  const minutesAgo = options.minutesAgo === undefined ? 2 : options.minutesAgo;
+  authenticateRequest.mockImplementation(async (request) => {
+    new Request(request as Request);
+    return {
+      isAuthenticated: true,
+      toAuth: () => ({ factorVerificationAge: minutesAgo === null ? null : [minutesAgo, -1] }),
+    } as never;
+  });
   clerk.getUser.mockResolvedValue({
     id: clerkId,
     externalAccounts: options.apple ? [{ provider: 'oauth_apple', providerUserId: APPLE_SUB }] : [],

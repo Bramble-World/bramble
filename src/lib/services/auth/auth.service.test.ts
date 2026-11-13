@@ -9,7 +9,7 @@ vi.mock('./auth.config', () => ({ clerkEnabled: true }));
 vi.mock('@/lib/services/users/users.service', () => ({ getOrCreateFromClerk: vi.fn() }));
 
 const { clerkBackend } = await import('./auth.client');
-const { requireClerkUserId } = await import('./auth.service');
+const { clerkFirstFactorAgeMinutes, requireClerkUserId } = await import('./auth.service');
 const authenticateRequest = vi.mocked(clerkBackend.authenticateRequest);
 
 const req = (headers?: Record<string, string>) =>
@@ -59,6 +59,44 @@ describe('requireClerkUserId', () => {
     await expect(requireClerkUserId(req({ authorization: 'Bearer expired' }))).rejects.toThrowError(
       'Unauthorized'
     );
+  });
+});
+
+describe('a request whose body a route has already read', () => {
+  // What Clerk's authenticateRequest does first: copy the request. Copying one
+  // whose body was read throws, which was a 500 on DELETE /api/v1/me.
+  const copiesLikeClerk = (state: unknown) => async (request: Request) => {
+    new Request(request);
+    return state as never;
+  };
+  const readBody = async () => {
+    const request = new Request('http://localhost/api/v1/me', {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer good', 'content-type': 'application/json' },
+      body: JSON.stringify({ appleAuthorizationCode: 'code' }),
+    });
+    await request.text();
+    return request;
+  };
+
+  it('still reads the first-factor age', async () => {
+    authenticateRequest.mockImplementation(
+      copiesLikeClerk({ isAuthenticated: true, toAuth: () => ({ factorVerificationAge: [3, -1] }) })
+    );
+    await expect(clerkFirstFactorAgeMinutes(await readBody())).resolves.toBe(3);
+  });
+
+  it('still resolves the Clerk user', async () => {
+    authenticateRequest.mockImplementation(copiesLikeClerk(signedIn('user_123')));
+    await expect(requireClerkUserId(await readBody())).resolves.toBe('user_123');
+  });
+
+  it('hands Clerk the headers, not the body', async () => {
+    authenticateRequest.mockImplementation(copiesLikeClerk(signedIn('user_123')));
+    await requireClerkUserId(await readBody());
+    const sent = authenticateRequest.mock.calls[0][0] as Request;
+    expect(sent.headers.get('authorization')).toBe('Bearer good');
+    expect(sent.body).toBeNull();
   });
 });
 
