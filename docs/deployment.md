@@ -277,9 +277,16 @@ appearing, check this first.
 ## Deleting an account on request
 
 The privacy policy (`/privacy`) promises that emailing great@brambleworld.com
-deletes an account and all its data **within 30 days**. Deleting the user in
-the Clerk dashboard is not enough: the `user.deleted` webhook only soft-deletes,
-and every story stays. Run the script inside the cluster, where the database is:
+deletes an account and all its data **within 30 days**. Two ways, both complete:
+
+- **Delete the user in the Clerk dashboard.** Clerk's `user.deleted` webhook
+  then deletes their PostHog person and every row they own, as the app's own
+  deletion does (`deleteAccountRemovedFromClerk` in
+  `src/lib/services/users/account-deletion.ts`). If PostHog fails, the webhook
+  answers 5xx and Clerk delivers it again. It can't revoke Sign in with Apple:
+  that needs a fresh Apple sign-in, which only the app can get.
+- **Run the script** inside the cluster, where the database is, when you only
+  have an email:
 
 ```sh
 # Check the request came from the account's own email address first.

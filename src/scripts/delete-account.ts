@@ -3,9 +3,10 @@
  *
  * For a player who can't delete in the app (DELETE /api/v1/me): no app, or no
  * way to sign in. The privacy policy promises that emailing us deletes an
- * account within 30 days. Deleting the user in Clerk is not enough: its webhook only soft-deletes,
- * so every story would stay. This removes the user rows (everything they own
- * cascades) and then the Clerk accounts with that email.
+ * account within 30 days. Deleting the user in the Clerk dashboard does the same
+ * (its webhook deletes the rows and the PostHog person); this is for when all you
+ * have is an email. It removes the user rows (everything they own cascades) and
+ * then the Clerk accounts with that email.
  *
  * Production's database is only reachable from inside the cluster, so it runs
  * there from the bundle:
