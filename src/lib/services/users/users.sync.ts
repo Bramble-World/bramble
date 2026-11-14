@@ -1,5 +1,6 @@
 import type { WebhookEvent } from '@clerk/nextjs/webhooks';
 import * as writer from './users.writer';
+import { deleteAccountRemovedFromClerk } from './account-deletion';
 import { identityFromWebhookData } from './users.identity';
 
 /** What happened, so the route can log it without re-deriving anything. */
@@ -12,8 +13,8 @@ export type SyncOutcome =
  *
  * Everything here is idempotent and order-independent, because webhooks can be
  * redelivered and can arrive after the lazy provisioning path has already run:
- * create is insert-if-absent, update targets a live row, delete is guarded on
- * deletedAt IS NULL. An event for a user we have never seen is a no-op, not an
+ * create is insert-if-absent, update targets a live row, and deleting an account
+ * that's already gone deletes nothing. An event for a user we have never seen is a no-op, not an
  * error — there is nothing to repair.
  *
  * Caveat: 'noop' is currently broader than that. It also covers two cases where an
@@ -62,7 +63,8 @@ export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutc
 
     case 'user.deleted': {
       if (!event.data.id) return { handled: true, event: event.type, action: 'noop' };
-      const deleted = await writer.softDeleteUserByClerkId(event.data.id);
+      // Everything goes, as when the player deletes in the app: see account-deletion.ts.
+      const deleted = await deleteAccountRemovedFromClerk(event.data.id);
       return { handled: true, event: event.type, action: deleted ? 'deleted' : 'noop' };
     }
 
