@@ -412,7 +412,7 @@ describe("Clerk's user.deleted webhook", () => {
     expect(await rowsOwnedBy(bystander)).toBeGreaterThan(5);
     // The Clerk user is already gone, and Apple can't be revoked without a fresh sign-in.
     expect(clerk.deleteUser).not.toHaveBeenCalled();
-    expect(calls.some((c) => c.url.startsWith('https://appleid.apple.com'))).toBe(false);
+    expect(calls.some((c) => new URL(c.url).host === 'appleid.apple.com')).toBe(false);
 
     // A redelivery, or the webhook after the app's own deletion, finds nothing.
     calls.length = 0;
