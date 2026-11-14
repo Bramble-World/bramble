@@ -127,35 +127,13 @@ export async function updatePreferencesById(
 }
 
 /**
- * Soft-deletes a user. Idempotent: the `deletedAt IS NULL` guard means a
- * redelivered webhook is a no-op rather than moving the deletion timestamp,
- * and an unknown clerkId simply returns null.
- */
-export async function softDeleteUserByClerkId(clerkId: string): Promise<PublicUser | null> {
-  const [user] = await db
-    .update(users)
-    .set({ deletedAt: new Date() })
-    .where(and(eq(users.clerkId, clerkId), isNull(users.deletedAt)))
-    .returning({
-      id: users.id,
-      clerkId: users.clerkId,
-      email: users.email,
-      shareUsage: users.shareUsage,
-      isGuest: users.isGuest,
-    });
-
-  return user ?? null;
-}
-
-/**
  * Permanently deletes every user row with this email, live or soft-deleted, and
  * with it everything the account owns: storylines, people, motifs, imports and
  * playthroughs all cascade from `users`. Returns what was deleted so the caller
  * can remove the matching Clerk accounts.
  *
- * Distinct from `softDeleteUserByClerkId` on purpose. Clerk's `user.deleted`
- * webhook only marks the row; this is what honours a request to delete
- * someone's data (privacy policy, "Deleting your account").
+ * Used by the script that honours a request by email to delete someone's data
+ * (privacy policy, "Deleting your account").
  */
 export async function purgeUsersByEmail(
   email: string
