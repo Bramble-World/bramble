@@ -6,6 +6,7 @@ import { clerkBackend } from '@/lib/services/auth/auth.client';
 import { exchangeAppleCode, revokeAppleToken } from '@/lib/services/auth/apple-sign-in';
 import { deleteAnalyticsPerson } from '@/lib/analytics/person-deletion';
 import { PublicUser } from './users.types';
+import { getUserByClerkIdIncludingDeleted } from './users.reader';
 import { ReverificationRequiredError } from '@/lib/utils/errors';
 
 /**
@@ -96,4 +97,48 @@ export async function deleteAccount(user: PublicUser, proof: DeletionProof): Pro
     });
     throw error;
   }
+}
+
+/**
+ * Deletes the account of a player removed in Clerk (its dashboard or API), on
+ * Clerk's `user.deleted` webhook. The Clerk user is already gone, so two things
+ * are left, the same two the app's deletion removes:
+ *
+ * 1. their PostHog person and every event it sent;
+ * 2. every row they own — the `users` row, and everything cascading from it.
+ *
+ * PostHog first, as above: if it fails, the rows are still there, the webhook
+ * answers 5xx and Clerk delivers it again. Deleting rows that are already gone
+ * deletes nothing, so a redelivery, or the webhook that follows the app's own
+ * deletion, is a no-op.
+ *
+ * **Sign in with Apple isn't revoked here.** Revoking needs a token from a fresh
+ * Apple sign-in, which only the app can get; Bramble never stores one. The
+ * Apple ID stays linked to Bramble in the player's Apple settings until they
+ * remove it there.
+ *
+ * Accounts soft-deleted by the webhook before this existed are found and
+ * deleted too, if Clerk delivers their event again.
+ *
+ * Returns whether there was an account to delete.
+ */
+export async function deleteAccountRemovedFromClerk(clerkId: string): Promise<boolean> {
+  const user = await getUserByClerkIdIncludingDeleted(clerkId);
+  if (!user) return false;
+
+  try {
+    await deleteAnalyticsPerson(user.id);
+    await db.delete(users).where(eq(users.id, user.id));
+  } catch (error) {
+    Sentry.captureException(error, {
+      tags: { flow: 'account_deletion_from_clerk' },
+      extra: { userId: user.id },
+    });
+    console.error('account deletion from clerk failed', {
+      userId: user.id,
+      reason: error instanceof Error ? error.name : 'unknown',
+    });
+    throw error;
+  }
+  return true;
 }

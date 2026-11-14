@@ -7,11 +7,12 @@ vi.mock('./users.reader', () => ({
 vi.mock('./users.writer', () => ({
   insertUserIfAbsent: vi.fn(),
   updateUserByClerkId: vi.fn(),
-  softDeleteUserByClerkId: vi.fn(),
 }));
+vi.mock('./account-deletion', () => ({ deleteAccountRemovedFromClerk: vi.fn() }));
 
 const reader = vi.mocked(await import('./users.reader'));
 const writer = vi.mocked(await import('./users.writer'));
+const { deleteAccountRemovedFromClerk } = vi.mocked(await import('./account-deletion'));
 const { applyClerkUserEvent } = await import('./users.sync');
 
 const row = { id: 'uuid-1', clerkId: 'user_1', email: 'a@b.com' };
@@ -105,15 +106,16 @@ describe('user.updated', () => {
 });
 
 describe('user.deleted', () => {
-  it('soft-deletes the user', async () => {
-    writer.softDeleteUserByClerkId.mockResolvedValue(row);
+  it('deletes the account and everything in it', async () => {
+    deleteAccountRemovedFromClerk.mockResolvedValue(true);
     await expect(
       applyClerkUserEvent({ type: 'user.deleted', data: { id: 'user_1' } } as never)
     ).resolves.toMatchObject({ action: 'deleted' });
+    expect(deleteAccountRemovedFromClerk).toHaveBeenCalledWith('user_1');
   });
 
   it('is a no-op on redelivery or an unknown user', async () => {
-    writer.softDeleteUserByClerkId.mockResolvedValue(null);
+    deleteAccountRemovedFromClerk.mockResolvedValue(false);
     await expect(
       applyClerkUserEvent({ type: 'user.deleted', data: { id: 'user_1' } } as never)
     ).resolves.toMatchObject({ action: 'noop' });
@@ -123,7 +125,7 @@ describe('user.deleted', () => {
     await expect(
       applyClerkUserEvent({ type: 'user.deleted', data: {} } as never)
     ).resolves.toMatchObject({ action: 'noop' });
-    expect(writer.softDeleteUserByClerkId).not.toHaveBeenCalled();
+    expect(deleteAccountRemovedFromClerk).not.toHaveBeenCalled();
   });
 });
 
@@ -134,6 +136,6 @@ describe('unhandled events', () => {
     ).resolves.toEqual({ handled: false, event: 'session.created' });
     expect(writer.insertUserIfAbsent).not.toHaveBeenCalled();
     expect(writer.updateUserByClerkId).not.toHaveBeenCalled();
-    expect(writer.softDeleteUserByClerkId).not.toHaveBeenCalled();
+    expect(deleteAccountRemovedFromClerk).not.toHaveBeenCalled();
   });
 });

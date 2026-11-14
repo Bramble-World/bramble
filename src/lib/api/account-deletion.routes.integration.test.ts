@@ -66,6 +66,7 @@ const timeline = await import('@/lib/services/timeline/timeline.service');
 const motifs = await import('@/lib/services/motifs/motifs.service');
 const { generateTurn } = await import('@/lib/services/generation/turns.service');
 const meRoute = await import('@/app/api/v1/me/route');
+const { applyClerkUserEvent } = await import('@/lib/services/users/users.sync');
 
 const APPLE_SUB = '001234.apple-user.0001';
 const CLERK_IDS = [
@@ -74,12 +75,17 @@ const CLERK_IDS = [
   'user_delete_gone',
   'user_delete_stale',
   'user_delete_bystander',
+  'user_delete_webhook',
+  'user_delete_webhook_soft',
+  'user_delete_webhook_retry',
 ];
 
 let applePublicKey: CryptoKey;
 const calls: Array<{ url: string; body: string; authorization: string | null }> = [];
 /** What Apple says to the next code; a test can make it refuse. */
 let appleTokenStatus = 200;
+/** How PostHog answers the next deletion; a test can make it fail. */
+let posthogStatus = 202;
 
 async function idToken(sub: string): Promise<string> {
   // Apple signs these; the server reads `sub` without verifying (see
@@ -107,7 +113,7 @@ const fakeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
   }
   if (url === 'https://appleid.apple.com/auth/revoke') return new Response(null, { status: 200 });
   if (url === 'https://posthog.test/api/environments/4242/persons/bulk_delete/') {
-    return new Response(null, { status: 202 });
+    return new Response(null, { status: posthogStatus });
   }
   throw new Error(`unexpected fetch: ${url}`);
 });
@@ -236,6 +242,7 @@ beforeAll(async () => {
 beforeEach(() => {
   calls.length = 0;
   appleTokenStatus = 200;
+  posthogStatus = 202;
   clerk.deleteUser.mockReset().mockResolvedValue({} as never);
 });
 
@@ -379,5 +386,64 @@ describe('DELETE /api/v1/me', () => {
     await signedIn('user_delete_stale', { minutesAgo: 1 });
     const res = await meRoute.DELETE(deleteMe({ password: 'nope' }), {});
     expect(res.status).toBe(400);
+  });
+});
+
+describe("Clerk's user.deleted webhook", () => {
+  const deleted = (clerkId: string) =>
+    applyClerkUserEvent({ type: 'user.deleted', data: { id: clerkId } } as never);
+  const posthogCalls = () =>
+    calls.filter(
+      (c) => c.url === 'https://posthog.test/api/environments/4242/persons/bulk_delete/'
+    );
+
+  it('deletes the PostHog person and every row, as the app does', async () => {
+    const account = await makeAccount('user_delete_webhook');
+    expect(await rowsOwnedBy(account)).toBeGreaterThan(5);
+
+    await expect(deleted('user_delete_webhook')).resolves.toMatchObject({ action: 'deleted' });
+
+    expect(posthogCalls()).toHaveLength(1);
+    expect(JSON.parse(posthogCalls()[0].body)).toEqual({
+      distinct_ids: [account.userId],
+      delete_events: true,
+    });
+    expect(await rowsOwnedBy(account)).toBe(0);
+    expect(await rowsOwnedBy(bystander)).toBeGreaterThan(5);
+    // The Clerk user is already gone, and Apple can't be revoked without a fresh sign-in.
+    expect(clerk.deleteUser).not.toHaveBeenCalled();
+    expect(calls.some((c) => new URL(c.url).host === 'appleid.apple.com')).toBe(false);
+
+    // A redelivery, or the webhook after the app's own deletion, finds nothing.
+    calls.length = 0;
+    await expect(deleted('user_delete_webhook')).resolves.toMatchObject({ action: 'noop' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('deletes an account the old webhook only soft-deleted', async () => {
+    const account = await makeAccount('user_delete_webhook_soft');
+    await db
+      .update(users)
+      .set({ deletedAt: new Date() })
+      .where(eq(users.clerkId, 'user_delete_webhook_soft'));
+
+    await expect(deleted('user_delete_webhook_soft')).resolves.toMatchObject({
+      action: 'deleted',
+    });
+    expect(await rowsOwnedBy(account)).toBe(0);
+  });
+
+  it('keeps every row when PostHog fails, so Clerk delivers it again', async () => {
+    const account = await makeAccount('user_delete_webhook_retry');
+    posthogStatus = 500;
+
+    await expect(deleted('user_delete_webhook_retry')).rejects.toThrow();
+    expect(await rowsOwnedBy(account)).toBeGreaterThan(5);
+
+    posthogStatus = 202;
+    await expect(deleted('user_delete_webhook_retry')).resolves.toMatchObject({
+      action: 'deleted',
+    });
+    expect(await rowsOwnedBy(account)).toBe(0);
   });
 });
