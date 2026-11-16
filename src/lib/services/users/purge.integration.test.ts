@@ -5,6 +5,7 @@ import {
   imports,
   pushDevices,
   rebornAnswers,
+  storyReports,
   storylines as storylineTable,
   storyTemplates,
   users,
@@ -96,6 +97,8 @@ async function makeAccount(clerkId: string, email: string) {
   registerFixtures(fake);
   const session = await sessions.startSession(userId, storyline.id);
   await generateTurn(userId, session.id, { generator: fake });
+  // A story they reported.
+  await db.insert(storyReports).values({ userId, storylineId: storyline.id, reason: 'harmful' });
 
   return { userId, storylineId: storyline.id, templateId: template.id };
 }

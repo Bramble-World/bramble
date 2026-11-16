@@ -954,6 +954,30 @@ next story.
 
 The new session becomes the reader's `current` story in `GET /world`.
 
+### `POST /api/v1/sessions/{sessionId}/report`
+
+"Report this story": the reader telling us a story shouldn't be in Bramble. Any
+session the caller owns, guests included, at any point, ended or not.
+
+```json
+{ "reason": "harmful", "turnId": "…" }
+```
+
+- `reason` (required) is one of `harmful`, `sexual`, `hateful`, `self_harm`,
+  `real_person` (it seems to be about a real person), `other`. There is **no
+  free-text field**: a player who wants to say more emails support.
+- `turnId` (optional) is the beat on screen. It must be a beat of this session,
+  or the answer is `404`.
+
+Returns `200 { "report": { "id": "…", "reason": "harmful" } }`. Free (no model
+call, no energy). **Safe to repeat:** one report per reader per story, and
+reporting again keeps the latest reason and beat.
+
+A report doesn't change the story. The team is alerted and reviews it, then keeps
+it or takes it out of the pool (for players who haven't started it; anyone
+already in it keeps their copy). The app should say so: "thanks. we'll look at
+it." Nothing about the report is returned later.
+
 ---
 
 ## Conversation import
