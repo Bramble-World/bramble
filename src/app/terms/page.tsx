@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function Terms() {
   return (
-    <LegalPage title="Terms of Service" effective="November 10, 2026">
+    <LegalPage title="Terms of Service" effective="November 16, 2026">
       <p>
         These terms are an agreement between you and {LEGAL_ENTITY} (&ldquo;Bramble&rdquo;,
         &ldquo;we&rdquo;, &ldquo;us&rdquo;) for the Bramble apps for iPhone and Mac, our website,
@@ -24,21 +24,21 @@ export default function Terms() {
       <h2>Who can use Bramble</h2>
       <p>
         You must be at least 16. If you&rsquo;re under 18, or under the age of majority where you
-        live, a parent or guardian must agree to these terms for you. You need an account, with
-        accurate details; keep your sign-in secure, because you&rsquo;re responsible for what
-        happens on your account.
+        live, a parent or guardian must agree to these terms for you. On iPhone you can start
+        playing without an account; to keep your story you need one, with accurate details. Keep
+        your sign-in secure, because you&rsquo;re responsible for what happens on your account.
       </p>
 
-      <h2>Bramble is in beta</h2>
+      <h2>Bramble is new</h2>
       <p>
         Bramble is early, and it will change: features will appear, change and go away, and things
-        will break. We may limit how much you can use it (for example, how many conversations you
-        can import or how many scenes you can play each day), and we may change or end the beta at
-        any time. If we end Bramble, we&rsquo;ll try to give you notice first. Bramble updates
-        itself automatically; updates are part of Bramble and these terms apply to them.
+        will break. We may limit how much you can use it (for example, how many scenes you can play
+        each day, or how many conversations you can import on Mac), and we may change or end Bramble
+        at any time. If we end Bramble, we&rsquo;ll try to give you notice first. Updates are part
+        of Bramble, and these terms apply to them.
       </p>
 
-      <h2>The conversations you import</h2>
+      <h2>The conversations you import (Mac)</h2>
       <p>
         Bramble works from your own conversations, which include other people. When you import one,
         you promise that:
@@ -81,12 +81,13 @@ export default function Terms() {
 
       <h2>Your stories are fiction</h2>
       <p>
-        Stories in Bramble are written by an AI model. They&rsquo;re inspired by real conversations,
-        but they&rsquo;re fiction: they can be inaccurate, invent things that never happened,
-        portray real people in ways they wouldn&rsquo;t recognise, or be unexpected or upsetting.
-        They are not statements of fact about anyone, and they don&rsquo;t represent our views.
-        Don&rsquo;t present them as true, or rely on them for decisions about your relationships,
-        health, money or anything else important.
+        Stories in Bramble are written by an AI model. They may be inspired by real conversations,
+        by the people you name, or by other players&rsquo; answers about their past, but
+        they&rsquo;re fiction: they can be inaccurate, invent things that never happened, portray
+        real people in ways they wouldn&rsquo;t recognise, or be unexpected or upsetting. They are
+        not statements of fact about anyone, and they don&rsquo;t represent our views. Don&rsquo;t
+        present them as true, or rely on them for decisions about your relationships, health, money
+        or anything else important.
       </p>
       <p>
         As between you and us, you may use your stories for your own personal, non-commercial
@@ -94,8 +95,20 @@ export default function Terms() {
         the people in them.
       </p>
 
+      <h2>Reporting a story</h2>
+      <p>
+        If a story or a scene in Bramble seems harmful, hateful, sexual, about a real person, or
+        wrong in some other way, report it from the story in the app, or email <Mail />. We review
+        every report, and we may stop offering a story to other players or change how stories are
+        written. We may not tell you what we decided.
+      </p>
+
       <h2>Things you may not do</h2>
       <ul>
+        <li>
+          write answers that name or identify a real person, or that are hateful, sexual or meant to
+          harm someone;
+        </li>
         <li>
           use Bramble, or anything it creates, to harass, threaten, defame, embarrass or harm
           anyone;
@@ -121,21 +134,22 @@ export default function Terms() {
       <p>
         Bramble, including the app, its design, and the software and models we use, belongs to us
         and our licensors. We give you a personal, non-transferable, revocable licence to use the
-        app on Macs you own or control, under these terms. If you send us feedback or ideas, we may
-        use them without owing you anything.
+        app on Apple devices you own or control, under these terms and, for the iPhone app, the
+        Usage Rules in Apple&rsquo;s Media Services Terms and Conditions. If you send us feedback or
+        ideas, we may use them without owing you anything.
       </p>
       <p>
-        Bramble relies on services from other companies, such as Apple&rsquo;s Messages and macOS,
-        and our AI provider. We aren&rsquo;t responsible for them, and changes they make can affect
-        what Bramble can do.
+        Bramble relies on services from other companies, such as Apple&rsquo;s iOS and macOS, and
+        our AI provider. We aren&rsquo;t responsible for them, and changes they make can affect what
+        Bramble can do.
       </p>
 
       <h2>Ending things</h2>
       <p>
-        You can stop using Bramble at any time, and ask us to delete your account by emailing{' '}
-        <Mail />. We can end your access as described above. The sections on your stories being
-        fiction, our part, disclaimers, limits on liability, indemnity and the law that applies
-        continue after your account ends.
+        You can stop using Bramble at any time, delete your account in the iPhone app&rsquo;s
+        Settings, or ask us to delete it by emailing <Mail />. We can end your access as described
+        above. The sections on your stories being fiction, our part, disclaimers, limits on
+        liability, indemnity and the law that applies continue after your account ends.
       </p>
 
       <h2>Disclaimers</h2>
@@ -159,10 +173,10 @@ export default function Terms() {
 
       <h2>Indemnity</h2>
       <p>
-        If someone makes a claim against us because of conversations you imported, how you used
-        Bramble or what it created for you, or your breaking these terms or the law, you&rsquo;ll
-        cover our reasonable costs of dealing with it, including legal fees, as far as the law
-        allows.
+        If someone makes a claim against us because of conversations you imported, answers you
+        wrote, how you used Bramble or what it created for you, or your breaking these terms or the
+        law, you&rsquo;ll cover our reasonable costs of dealing with it, including legal fees, as
+        far as the law allows.
       </p>
 
       <h2>The law that applies</h2>
@@ -172,6 +186,22 @@ export default function Terms() {
         located in {GOVERNING_STATE}, and you and we agree to their jurisdiction. If you&rsquo;re a
         consumer living outside the US, you keep any protections your local law gives you that
         can&rsquo;t be waived, and you may bring claims in your local courts.
+      </p>
+
+      <h2>If you got Bramble from the App Store</h2>
+      <p>
+        These terms are between you and us, not Apple. We, not Apple, are responsible for the iPhone
+        app and its content. Apple has no obligation to provide maintenance or support for it. If
+        the app fails to meet a warranty that applies to it, you may tell Apple, and Apple will
+        refund what you paid for it, if anything; beyond that, Apple has no warranty obligation for
+        the app. We, not Apple, are responsible for any claims about the app, including product
+        liability claims, claims that it fails to meet a legal or regulatory requirement, and claims
+        under consumer protection, privacy or similar laws, and for investigating and dealing with
+        any claim that the app infringes someone&rsquo;s intellectual property. You confirm that
+        you&rsquo;re not in a country subject to a US government embargo or on a US government list
+        of prohibited or restricted parties. Apple and its subsidiaries are third-party
+        beneficiaries of these terms and, once you accept them, may enforce them against you as a
+        third-party beneficiary.
       </p>
 
       <h2>Changes to these terms</h2>

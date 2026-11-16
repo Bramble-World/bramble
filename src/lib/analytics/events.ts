@@ -115,6 +115,15 @@ export type AnalyticsEvent =
       };
     }
   | {
+      name: 'story_reported';
+      properties: {
+        /** The reason the reader picked: a code, never their words or the story's. */
+        reason: 'harmful' | 'sexual' | 'hateful' | 'self_harm' | 'real_person' | 'other';
+        /** Where the story came from; `none` for a story that is not from the pool. Never which one. */
+        origin: 'seed' | 'reborn' | 'reddit' | 'none';
+      };
+    }
+  | {
       name: 'push_sent';
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
@@ -155,4 +164,5 @@ export const ALLOWED_PROPERTY_KEYS = [
   'origin',
   'how',
   'turns',
+  'reason',
 ] as const;

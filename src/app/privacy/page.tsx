@@ -14,7 +14,10 @@ import { LEGAL_ENTITY, LegalPage, Mail } from '@/components/legal/legal-page';
  * per-address count (GUEST_LIFETIME_MS, guest-sweep.ts, attestation.ts,
  * ip-limit.ts, and guests.routes.integration.test.ts), and the last-life answers: checked before they
  * are kept, a flagged one never kept, moved on sign-up and deleted with the account (safety.ts,
- * reborn-answers.service.ts, guests.routes.integration.test.ts and purge.integration.test.ts). Change the
+ * reborn-answers.service.ts, guests.routes.integration.test.ts and purge.integration.test.ts), and story
+ * reports: codes only, deleted with the account (reports.service.ts, reports.routes.integration.test.ts,
+ * purge.integration.test.ts). The age question and the AI notice are the iPhone app's
+ * (Onboarding/BeforeYouStart). Change the
  * behaviour and this page has to change with it, in the same PR.
  */
 export const metadata: Metadata = {
@@ -24,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 10, 2026">
+    <LegalPage title="Privacy Policy" effective="November 16, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -59,6 +62,10 @@ export default function Privacy() {
           On iPhone you can play before signing up. What you enter and play then is kept for 7 days
           and deleted automatically unless you save it by signing up.
         </li>
+        <li>
+          Stories are written by an AI model from OpenAI. Before you start on iPhone, the app tells
+          you what it sends to OpenAI and asks you to agree.
+        </li>
         <li>We don&rsquo;t sell your data, and we don&rsquo;t use it for advertising.</li>
         <li>
           You can delete your account and everything in it from Settings in the iPhone app, or by
@@ -77,6 +84,15 @@ export default function Privacy() {
         We keep a copy of your email address with your account so we can recognise you and contact
         you about your account. Clerk also records sign-in activity, such as your device, browser
         and IP address, to keep your account secure.
+      </p>
+
+      <h3>Before you start (iPhone)</h3>
+      <p>
+        The first time you open Bramble on iPhone, it asks the year you were born, because Bramble
+        is only for people 16 and older. The year isn&rsquo;t sent to us or kept: the app keeps only
+        whether you&rsquo;re old enough, on your iPhone, so it doesn&rsquo;t ask again. The same
+        screen tells you that what you type is sent to OpenAI to write your stories, and asks you to
+        agree before anything is sent.
       </p>
 
       <h3>Playing before you sign up (iPhone)</h3>
@@ -135,6 +151,16 @@ export default function Privacy() {
         Choosing &ldquo;i&rsquo;d rather not say&rdquo; on a question you&rsquo;d already answered
         deletes that answer. Deleting your account deletes your answers, and stories written from
         them are taken out of the stories other players are offered.
+      </p>
+
+      <h3>Reporting a story</h3>
+      <p>
+        If you report a story in the app, we keep the reason you picked from our list, which story
+        and which scene you reported, and when. There&rsquo;s no space to write anything; to tell us
+        more, email us. Reports reach us as an alert that carries only the reason and a random ID.
+        To decide what to do, someone on our team reads your copy of that story, the one you
+        reported. If it came from the stories we offer other players, we may stop offering it. Your
+        report is deleted with your account.
       </p>
 
       <h3>Messages and contacts on your Mac</h3>
@@ -317,6 +343,7 @@ export default function Privacy() {
           your account. An answer the safety check flags is never kept.
         </li>
         <li>Your account and stories: until you delete them, or ask us to.</li>
+        <li>Your story reports: until you delete your account.</li>
         <li>Download-page IP addresses: 15 minutes.</li>
         <li>
           Usage data and crash reports: for as long as our providers keep them for us, after which
