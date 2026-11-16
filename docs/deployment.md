@@ -274,6 +274,32 @@ verifies every delivery and rejects unsigned requests, so an absent secret means
 nothing gets through — closed by default, and silent. If user records stop
 appearing, check this first.
 
+## Reviewing reported stories
+
+Players can report a story from the app (App Store guideline 1.2). A report
+changes nothing by itself: each one raises a **Sentry warning** (`A player
+reported a story`, tag `flow:story_report`, one issue per report) so whoever is
+on the Sentry project hears about it, and the team reviews it. Aim to look within
+a day.
+
+```bash
+porter app run bramble -- node dist/scripts/review-reports.js list
+porter app run bramble -- node dist/scripts/review-reports.js show <reportId>
+porter app run bramble -- node dist/scripts/review-reports.js keep <reportId>
+porter app run bramble -- node dist/scripts/review-reports.js pull <reportId>
+porter app run bramble -- node dist/scripts/review-reports.js restore <templateId>
+```
+
+- `show` prints the reported story as the reporter saw it, the reported beat
+  marked. It's the one place the team reads a player's story, because that player
+  asked us to. Don't paste it anywhere else.
+- `pull` takes the story's pool template out of the pool (`rejected`, reason
+  `reported`) and closes every open report on it. Players already in it keep their
+  copy. A pulled seed stays pulled on redeploy until `restore`.
+- A story not from the pool (the scripted first story) can't be pulled; fix the
+  prompt or the script, then `keep`.
+- Make sure the Sentry project's alert rule mails on a new issue (the default).
+
 ## Deleting an account on request
 
 The privacy policy (`/privacy`) promises that emailing great@brambleworld.com

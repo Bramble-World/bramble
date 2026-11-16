@@ -19,6 +19,7 @@ export {
   storyTemplateStatusEnum,
   storyTemplateReasonEnum,
 } from './storyTemplates';
+export { storyReports, storyReportReasonEnum, storyReportStatusEnum } from './storyReports';
 export { imports, importStatusEnum, importStageEnum } from './imports';
 export { motifs } from './motifs';
 export { motifParticipants } from './motifs/motifParticipants';

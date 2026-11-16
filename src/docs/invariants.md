@@ -70,6 +70,13 @@ product's central claim, not an implementation detail.
   whole text goes through moderation. Nothing declined or rejected keeps its
   content. The pool lane logs ids, attempts and outcome codes, never an error,
   because a failure's cause can carry the answer.
+- **A story report is codes, never words.** `story_reports` holds the reason
+  code and which beat; there is no free-text column and the route has no such
+  field, because what a reader would write is about the story. The alert (a
+  Sentry warning), the log line and `story_reported` carry ids and codes only.
+  `review-reports show` is the one place the team reads a player's story, and
+  only that reporter's copy of the story they reported (the privacy policy says
+  so).
 
 **Fails:** silently, and as a privacy breach rather than a bug. Nothing detects
 it. Worth an explicit check in code review of anything touching the generation
