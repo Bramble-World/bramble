@@ -75,6 +75,18 @@ The PostHog event `next_story_started` carries `origin` (`seed`, `reborn`) and
 share with `how = countdown` is the autoplay rate. The app sends
 `next_story_stayed` and `countdown_paused` itself.
 
+## Story reports
+
+Players reporting a story (`POST .../report`). Each report also raises its own
+Sentry warning (tag `flow:story_report`), which is the alert; the PostHog event
+`story_reported` carries `reason` and `origin` (`seed`, `reborn`, or `none` for
+a story not from the pool). The review queue is the table, read with
+`review-reports list` (`docs/deployment.md`):
+
+```sql
+select status, reason, count(*) from story_reports group by 1, 2 order by 1, 3 desc;
+```
+
 ## Readers who hit zero energy, per day
 
 Who the limit is actually biting. A reader is counted on a day if they created

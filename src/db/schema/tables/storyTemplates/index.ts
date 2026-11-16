@@ -59,6 +59,8 @@ export const storyTemplateReasonEnum = pgEnum('story_template_reason', [
   'moderation',
   // The job gave up.
   'generation_failed',
+  // The team pulled it after a player's report (src/scripts/review-reports.ts).
+  'reported',
 ]);
 
 /**
