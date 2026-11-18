@@ -9,6 +9,7 @@ import {
   storylines as storylineTable,
   storyTemplates,
   users,
+  chatgptContexts,
 } from '@/db/schema/tables';
 import { SEED_STORIES } from '@/lib/pool/seeds';
 import { instantiateTemplate } from '@/lib/services/pool/next.service';
@@ -92,6 +93,25 @@ async function makeAccount(clerkId: string, email: string) {
       content: SEED_STORIES['summer-shift'],
     })
     .returning({ id: storyTemplates.id });
+
+  // A story asked for in ChatGPT, still being written from what it sent.
+  const [context] = await db
+    .insert(chatgptContexts)
+    .values({
+      userId,
+      content: {
+        about: 'my best friend and I stopped talking',
+        people: [{ name: 'Maya', relationship: 'best friend', details: '' }],
+        you: null,
+      },
+    })
+    .returning({ id: chatgptContexts.id });
+  await db.insert(storyTemplates).values({
+    origin: 'chatgpt',
+    userId,
+    sourceContextId: context.id,
+    status: 'pending',
+  });
 
   const fake = createFakeGenerator();
   registerFixtures(fake);

@@ -33,12 +33,14 @@ import { Executor } from '../executor';
 
 export type NextStory = {
   templateId: string;
-  origin: 'seed' | 'reborn' | 'reddit';
+  origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt';
   title: string;
   hook: string;
   openingLines: string[];
-  /** Written from another player's past, rather than by the team. */
+  /** Written from another player's past: not by the team, and not their own from ChatGPT. */
   fromPool: boolean;
+  /** Written for this reader from what they shared in ChatGPT. */
+  fromChatGPT: boolean;
 };
 
 /** How the reader went on to the next story. */
@@ -46,19 +48,49 @@ export const NEXT_STORY_HOW = ['countdown', 'begin_now', 'later'] as const;
 export type NextStoryHow = (typeof NEXT_STORY_HOW)[number];
 
 /**
- * Picks a pool story for this reader: ready, never their own, never one they
- * have played, and not by the author of the story they just finished. Players'
- * stories first, seeds when there are none left for them.
- *
- * Literal identifiers throughout, for the subquery reason given on
- * `playthroughsForEvents`.
+ * The oldest story written for this reader from ChatGPT that they haven't
+ * started yet. It goes before anything from the pool: they asked for it.
  */
-async function choose(tx: Executor, userId: string, lastAuthor: string | null) {
+async function ownFromChatGPT(tx: Executor, userId: string) {
   const [row] = await tx
     .select({ id: storyTemplates.id })
     .from(storyTemplates)
     .where(
       sql`"story_templates"."status" = 'ready'
+        and "story_templates"."origin" = 'chatgpt'
+        and "story_templates"."user_id" = ${userId}
+        and not exists (
+          select 1 from "storylines" "played"
+          where "played"."user_id" = ${userId} and "played"."template_id" = "story_templates"."id"
+        )`
+    )
+    .orderBy(storyTemplates.createdAt)
+    .limit(1);
+  return row?.id ?? null;
+}
+
+/**
+ * Picks the next story for this reader. Their own stories from ChatGPT first.
+ * Otherwise one from the pool: ready, never their own, never one they have
+ * played, and not by the author of the story they just finished. Players'
+ * stories first, seeds when there are none left for them.
+ *
+ * A `chatgpt` story is never in the pool: it is only ever offered to the
+ * player it was written for (invariants.md §3).
+ *
+ * Literal identifiers throughout, for the subquery reason given on
+ * `playthroughsForEvents`.
+ */
+async function choose(tx: Executor, userId: string, lastAuthor: string | null) {
+  const own = await ownFromChatGPT(tx, userId);
+  if (own) return own;
+
+  const [row] = await tx
+    .select({ id: storyTemplates.id })
+    .from(storyTemplates)
+    .where(
+      sql`"story_templates"."status" = 'ready'
+        and "story_templates"."origin" <> 'chatgpt'
         and ("story_templates"."user_id" is null or "story_templates"."user_id" <> ${userId})
         and (${lastAuthor}::uuid is null or "story_templates"."user_id" is null
              or "story_templates"."user_id" <> ${lastAuthor}::uuid)
@@ -115,6 +147,11 @@ export async function nextStoryFor(userId: string, sessionId: string): Promise<N
     .where(eq(storylineSessions.id, sessionId));
 
   let template = row?.next ? await templateIfReady(db, row.next) : null;
+  // A story they asked ChatGPT for, written since the card was chosen, takes
+  // its place: it's the one they're waiting for.
+  if (template && template.origin !== 'chatgpt' && (await ownFromChatGPT(db, userId))) {
+    template = null;
+  }
   if (!template) {
     const chosen = await choose(db, userId, await authorOf(db, session.storylineId));
     if (!chosen) return null;
@@ -132,7 +169,8 @@ export async function nextStoryFor(userId: string, sessionId: string): Promise<N
     title: template.content.title,
     hook: template.content.hook,
     openingLines: template.content.openingLines,
-    fromPool: template.origin !== 'seed',
+    fromPool: template.origin === 'reborn' || template.origin === 'reddit',
+    fromChatGPT: template.origin === 'chatgpt',
   };
 }
 

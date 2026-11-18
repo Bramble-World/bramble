@@ -15,6 +15,7 @@ import {
   storylineSessions,
   storylines,
   users,
+  chatgptContexts,
 } from '@/db/schema/tables';
 import { ConflictError, ForbiddenError, UnauthorizedError } from '@/lib/utils/errors';
 import { track, trackAlias } from '@/lib/analytics/analytics';
@@ -62,6 +63,7 @@ export const USER_OWNED_TABLES = [
   rebornAnswers,
   storyTemplates,
   storyReports,
+  chatgptContexts,
 ] as const;
 
 export type ClaimMethod = 'apple' | 'passkey' | 'email';

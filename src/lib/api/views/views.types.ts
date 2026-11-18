@@ -272,7 +272,7 @@ export type EndingView = {
   };
 };
 
-/** A pool story offered after one ends. No id: `POST .../next` starts it. */
+/** The story offered after one ends: from the pool, or the reader's own from ChatGPT. No id: `POST .../next` starts it. */
 export type NextStoryView = {
   title: string;
   /** One line: the setting and the situation. */
@@ -281,6 +281,8 @@ export type NextStoryView = {
   openingLines: string[];
   /** Written from another player's past; shows "written from someone else's past." */
   fromPool: boolean;
+  /** Written for this reader from what they shared in ChatGPT; shows "made with chatgpt." */
+  fromChatGPT: boolean;
 };
 
 export type SessionView = {

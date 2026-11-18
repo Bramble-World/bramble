@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function Terms() {
   return (
-    <LegalPage title="Terms of Service" effective="November 16, 2026">
+    <LegalPage title="Terms of Service" effective="November 18, 2026">
       <p>
         These terms are an agreement between you and {LEGAL_ENTITY} (&ldquo;Bramble&rdquo;,
         &ldquo;we&rdquo;, &ldquo;us&rdquo;) for the Bramble apps for iPhone and Mac, our website,
@@ -77,6 +77,16 @@ export default function Terms() {
         abuse or someone in danger. This permission ends when you delete the answer or your account,
         and stories written from your answers are then taken out of the stories other players are
         offered.
+      </p>
+
+      <h2>Bramble in ChatGPT</h2>
+      <p>
+        You can ask ChatGPT to send Bramble something about your life, and the people in it, so we
+        can write you a story. When you do, you promise that you&rsquo;re allowed to share it, and
+        you agree to share only what you&rsquo;d be comfortable with them knowing is in a story
+        written for you. You keep ownership of what you share, and give us permission to use it only
+        to write that story for you. Those stories are yours alone: we don&rsquo;t offer them to
+        other players. Using ChatGPT is subject to OpenAI&rsquo;s own terms.
       </p>
 
       <h2>Your stories are fiction</h2>

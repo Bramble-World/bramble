@@ -59,3 +59,6 @@ next-env.d.ts
 
 # Bundled worker, sweep and migration entrypoints. Built into the image.
 /dist/
+
+# The ChatGPT plugin package, built by `pnpm chatgpt:package`.
+/bramble-chatgpt-plugin.zip
