@@ -269,6 +269,7 @@ export function sessionView(input: {
           hook: input.next.hook,
           openingLines: input.next.openingLines,
           fromPool: input.next.fromPool,
+          fromChatGPT: input.next.fromChatGPT,
         }
       : null,
     history: input.history.map(answeredTurnView),

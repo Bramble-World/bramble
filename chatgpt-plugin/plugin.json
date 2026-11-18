@@ -1,0 +1,83 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "bramble",
+  "version": "1.0.0",
+  "description": "Turn a real situation from your life into an interactive story you play in the Bramble app on iPhone.",
+  "homepage": "https://www.brambleworld.com",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Bramble",
+        "shortDescription": "Play your life as a story",
+        "longDescription": "Bramble is a choice-driven story game for iPhone. With Bramble in ChatGPT, ChatGPT can turn something real from your life into a story you play: a friendship that's drifting, a crush, a family argument, a job you're unsure about, and the one to three people in it.\n\nAsk ChatGPT to write you a Bramble story. It shows you exactly what it will send before it sends anything, and only sends it once you say ok. Bramble then writes a story of about 20 beats from it, keeping the names of the people in it, and it becomes your next story in the Bramble app on your iPhone. Your choices decide how it ends.\n\nWhat you can do:\n- Write a story from a situation in your life (up to 3 a day).\n- See how your stories are doing: writing, ready, playing or couldn't be written.\n- Delete a story, along with everything Bramble kept from it.\n\nGood to know:\n- You play the stories in the Bramble app on iPhone, not in ChatGPT. You need a Bramble account, and you sign in to it when you connect.\n- Your stories are private to you. They're never shown to other players.\n- What ChatGPT sends is deleted once your story is written; only the story keeps the details.\n- Bramble won't write stories that harm a real person, involve minors in unsafe situations, or depict abuse or self-harm.",
+        "developerName": "Bramble",
+        "category": "Entertainment",
+        "capabilities": [],
+        "websiteURL": "https://www.brambleworld.com",
+        "supportURL": "https://www.brambleworld.com/privacy#contact",
+        "privacyPolicyURL": "https://www.brambleworld.com/privacy",
+        "termsOfServiceURL": "https://www.brambleworld.com/terms",
+        "defaultPrompt": [
+          "Write me a Bramble story about my life",
+          "How are my Bramble stories doing?"
+        ],
+        "brandColor": "#141412",
+        "logo": "./assets/logo.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Write a story from a situation the user describes",
+              "prompt": "My best friend Maya has been ignoring my texts since she started dating someone. Can you make that into a Bramble story?",
+              "tools_triggered": "write_my_story",
+              "expected_behavior": "ChatGPT shows what it will send (the situation and Maya as a best friend) and asks for ok; after the user agrees it calls write_my_story and tells the user the story is being written and will be their next story in the Bramble app, with how many more they can ask for today."
+            },
+            {
+              "description": "Write a story from what ChatGPT already knows about the user",
+              "prompt": "Write me a Bramble story about something going on in my life right now.",
+              "tools_triggered": "write_my_story",
+              "expected_behavior": "ChatGPT picks a real, unresolved situation it knows about (or asks the user for one), shows what it will send and asks for ok, then calls write_my_story and reports that the story is being written."
+            },
+            {
+              "description": "Check on stories",
+              "prompt": "How are my Bramble stories doing?",
+              "tools_triggered": "my_stories",
+              "expected_behavior": "Lists the user's Bramble stories from ChatGPT with their status (writing, ready, playing or couldn't be written) and the title once written."
+            },
+            {
+              "description": "Delete a story",
+              "prompt": "Delete the Bramble story about Maya.",
+              "tools_triggered": "my_stories, delete_my_story",
+              "expected_behavior": "ChatGPT finds the story with my_stories, confirms with the user, then calls delete_my_story and says the story and everything kept from it are deleted."
+            },
+            {
+              "description": "Daily limit",
+              "prompt": "Write me another Bramble story, this time about my sister Ana borrowing my car without asking.",
+              "tools_triggered": "write_my_story",
+              "expected_behavior": "After ok, write_my_story either queues the story or, once 3 stories have been asked for today, says that's all for today and to try again tomorrow."
+            }
+          ],
+          "negative": [
+            {
+              "description": "General chat about stories that isn't a request to write one",
+              "prompt": "What makes a good short story?"
+            },
+            {
+              "description": "A request to write a story in the chat itself",
+              "prompt": "Write me a bedtime story about a dragon right here."
+            },
+            {
+              "description": "Asking for app recommendations, not for a story",
+              "prompt": "Recommend some interactive story games for iPhone."
+            }
+          ]
+        }
+      },
+      "publication": {
+        "countries": ["US"],
+        "release_notes": "First release: write a Bramble story from a situation in your life, check on your stories, and delete one."
+      }
+    }
+  }
+}

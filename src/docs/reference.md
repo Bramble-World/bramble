@@ -47,6 +47,7 @@ session) when it's offered after their story ends (`src/lib/services/pool`).
 - `origin` — `seed` (the team's, in `src/lib/pool/seeds`, upserted by `slug` after every migration), `reborn` (written from an answer), `reddit` (reserved).
 - `userId` — the author; null for a seed. Cascades from `users`, so an author leaving takes their stories out of the pool.
 - `sourceAnswerId` — the answer it was written from; cascades, so withdrawing or replacing the answer, or a guest expiring, removes it.
+- `sourceContextId` — for a `chatgpt` story, what ChatGPT sent (`chatgpt_contexts`), deleted once the story is written or refused, so `set null` on every finished row. A `chatgpt` story is written for its `user_id`, keeps the names it was given, and is only ever offered to that player.
 - `status` — `pending` → `generating` → `ready`, or `declined` (the writer said the answer can't carry a story), `rejected` (the check refused it: an identifier, a quote, minors, abuse, self-harm, moderation, or a quality score under 4), or `failed` (out of attempts). Declined and rejected are final and keep no `content`.
 - `reason` — a code for anything not ready. Never text.
 - `qualityScore` — the check's 1–5, kept on rejections too so the bar can be tuned.
