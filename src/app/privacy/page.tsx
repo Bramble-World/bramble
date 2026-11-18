@@ -460,7 +460,7 @@ export default function Privacy() {
         your data is used, we&rsquo;ll tell you in the app or by email before it takes effect.
       </p>
 
-      <h2>Contact</h2>
+      <h2 id="contact">Contact</h2>
       <p>
         {LEGAL_ENTITY}, <Mail />. See also our <Link href="/terms">Terms of Service</Link>.
       </p>

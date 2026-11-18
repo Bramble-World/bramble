@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "bramble": {
+      "type": "streamable-http",
+      "url": "https://api.brambleworld.com/api/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "provided",
+              "clientId": "wQORnph6n7lMhl8hlVXtjIBdkUhGftpi",
+              "tokenEndpointAuthMethod": "none"
+            },
+            "baseScopes": ["profile"]
+          }
+        }
+      }
+    }
+  }
+}

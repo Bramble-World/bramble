@@ -18,6 +18,7 @@
     "build": "next build",
     "build:server": "node scripts/build-server.mjs",
     "promote": "node scripts/promote.mjs",
+    "chatgpt:package": "rm -f bramble-chatgpt-plugin.zip && cd chatgpt-plugin && zip -rX ../bramble-chatgpt-plugin.zip plugin.json mcp.json assets",
     "build:doppler": "doppler run --preserve-env=NODE_ENV -- next build",
     "build:migrate": "drizzle-kit migrate && next build",
     "start": "next start",
