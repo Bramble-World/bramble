@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 16, 2026">
+    <LegalPage title="Privacy Policy" effective="November 18, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -88,11 +88,11 @@ export default function Privacy() {
 
       <h3>Before you start (iPhone)</h3>
       <p>
-        The first time you open Bramble on iPhone, it asks the year you were born, because Bramble
-        is only for people 16 and older. The year isn&rsquo;t sent to us or kept: the app keeps only
-        whether you&rsquo;re old enough, on your iPhone, so it doesn&rsquo;t ask again. The same
-        screen tells you that what you type is sent to OpenAI to write your stories, and asks you to
-        agree before anything is sent.
+        Before your first story on iPhone, Bramble asks the month and year you were born, because
+        Bramble is only for people 16 and older. They aren&rsquo;t sent to us or kept: the app keeps
+        only whether you&rsquo;re old enough, on your iPhone, so it doesn&rsquo;t ask again.
+        Deleting the app forgets that answer. The same screen tells you that what you type is sent
+        to OpenAI to write your stories, and asks you to agree before anything is sent.
       </p>
 
       <h3>Playing before you sign up (iPhone)</h3>
