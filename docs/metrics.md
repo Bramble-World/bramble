@@ -75,6 +75,14 @@ The PostHog event `next_story_started` carries `origin` (`seed`, `reborn`) and
 share with `how = countdown` is the autoplay rate. The app sends
 `next_story_stayed` and `countdown_paused` itself.
 
+## Bramble in ChatGPT
+
+`chatgpt_connected` (once per account, the first signed-in call to `/api/mcp`)
+and `chatgpt_story_requested` with `outcome` (`queued`, `limited` past three a
+day, `flagged` by moderation and not kept). Never what ChatGPT sent. A story
+from ChatGPT that's started shows as `next_story_started` with
+`origin: chatgpt`.
+
 ## Story reports
 
 Players reporting a story (`POST .../report`). Each report also raises its own

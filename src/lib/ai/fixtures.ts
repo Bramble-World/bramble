@@ -4,6 +4,7 @@ import { consequencePrompt } from './prompts/consequence.prompt';
 import { extractionPrompt } from './prompts/extraction.prompt';
 import { arcPrompt } from './prompts/arc.prompt';
 import { checkPrompt, rewritePrompt } from './prompts/pool.prompt';
+import { personalCheckPrompt, personalRewritePrompt } from './prompts/personal.prompt';
 import { endingPrompt } from './prompts/ending.prompt';
 import { SEED_STORIES } from '@/lib/pool/seeds';
 
@@ -248,6 +249,32 @@ export function registerFixtures(fake: FakeGenerator): void {
   });
 
   fake.register(checkPrompt, () => ({
+    verdict: 'pass' as const,
+    rejectCode: null,
+    qualityScore: 4,
+  }));
+
+  // A seed with the people it was given in place of the seed's own, so a test
+  // can see the names kept.
+  fake.register(personalRewritePrompt, ({ vars, seed }) => {
+    if (vars.context.about.trim().length < 20) {
+      return { verdict: 'declined' as const, declineCode: 'too_thin' as const, story: null };
+    }
+    const seeds = Object.values(SEED_STORIES);
+    const base = seeds[seed % seeds.length];
+    const cast = vars.context.people.map((person, i) => ({
+      ...base.cast[i % base.cast.length],
+      name: person.name,
+      relationshipType: person.relationship,
+    }));
+    return {
+      verdict: 'story' as const,
+      declineCode: null,
+      story: { ...base, title: `${base.title} (yours)`, cast },
+    };
+  });
+
+  fake.register(personalCheckPrompt, () => ({
     verdict: 'pass' as const,
     rejectCode: null,
     qualityScore: 4,

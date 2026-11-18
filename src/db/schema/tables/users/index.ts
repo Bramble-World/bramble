@@ -64,6 +64,13 @@ export const users = pgTable(
      */
     appAttestKeyId: text('app_attest_key_id'),
 
+    /**
+     * When this account first used Bramble in ChatGPT (a signed-in call to
+     * `/api/mcp`). The iPhone shows "connected" from it. ChatGPT doesn't tell us
+     * when someone disconnects, so it isn't cleared then.
+     */
+    chatgptConnectedAt: timestamp('chatgpt_connected_at', { withTimezone: true }),
+
     ...timestamps,
     ...softDelete,
   },

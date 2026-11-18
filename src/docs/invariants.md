@@ -70,6 +70,14 @@ product's central claim, not an implementation detail.
   whole text goes through moderation. Nothing declined or rejected keeps its
   content. The pool lane logs ids, attempts and outcome codes, never an error,
   because a failure's cause can carry the answer.
+- **What ChatGPT sends goes nowhere but OpenAI and `chatgpt_contexts`, and
+  not for long.** `write_my_story` (`/api/mcp`) moderates it first and keeps
+  nothing flagged. The pool job writes its story (`personal.rewrite`, which
+  keeps the names it was given; `personal.check`, which rejects anything a
+  named person does or has revealed that the player didn't say), then deletes
+  the context whatever the outcome, so a finished story is the only copy. Never
+  logged (the route's request log reads no body), never in analytics (outcome
+  codes only), never in an error.
 - **A story report is codes, never words.** `story_reports` holds the reason
   code and which beat; there is no free-text column and the route has no such
   field, because what a reader would write is about the story. The alert (a
@@ -136,6 +144,11 @@ back to the pool is `storylines.template_id`, `on delete set null`, so nothing a
 player plays depends on, or reveals, the author. A template's content is written
 from an answer and checked for identifiers before it is `ready`; nothing else
 of the author's is ever read when one is offered.
+
+**A `chatgpt` story is never in the pool.** It is written for its `user_id`
+from what that player's ChatGPT sent, and keeps real names, so `choose()`
+offers it to that player only (`ownFromChatGPT`) and the pool query excludes
+the origin outright. `chatgpt.integration.test.ts` holds this.
 
 ---
 

@@ -98,6 +98,14 @@ export const env = createEnv({
      */
     IOS_TESTFLIGHT_URL: z.url().optional(),
     /**
+     * Bramble in ChatGPT (`/api/mcp`): the Clerk OAuth application's client id
+     * that ChatGPT signs in with, made once in Clerk's dashboard with ChatGPT's
+     * redirect URL. An OAuth token from any other client is refused, which is
+     * what binds a token to this server. Unset means `/api/mcp` refuses everyone.
+     * Not a secret: ChatGPT is a public client and uses PKCE.
+     */
+    CHATGPT_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+    /**
      * PostHog, for server-side product events.
      *
      * Optional, and absent is the normal case: local development, the test
@@ -218,6 +226,7 @@ export const env = createEnv({
     POOL_WORKER_CONCURRENCY: process.env.POOL_WORKER_CONCURRENCY,
     MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
     IOS_TESTFLIGHT_URL: process.env.IOS_TESTFLIGHT_URL,
+    CHATGPT_OAUTH_CLIENT_ID: process.env.CHATGPT_OAUTH_CLIENT_ID,
     POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,
     POSTHOG_IOS_PROJECT_TOKEN: process.env.POSTHOG_IOS_PROJECT_TOKEN,
     POSTHOG_IOS_PROJECT_ID: process.env.POSTHOG_IOS_PROJECT_ID,

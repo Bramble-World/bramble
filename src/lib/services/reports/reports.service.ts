@@ -36,7 +36,7 @@ export type StoryReport = {
 };
 
 /** Where the reported story came from, as analytics and the alert see it. */
-export type ReportedOrigin = 'seed' | 'reborn' | 'reddit' | 'none';
+export type ReportedOrigin = 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
 
 /**
  * Files the reader's report on the story this session plays.
