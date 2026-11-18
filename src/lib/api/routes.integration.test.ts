@@ -1233,6 +1233,7 @@ describe('endings and the next story', () => {
       openingLines: offered.openingLines,
       // A seed: written by the team, not from someone else's past.
       fromPool: false,
+      fromChatGPT: false,
     });
   });
 

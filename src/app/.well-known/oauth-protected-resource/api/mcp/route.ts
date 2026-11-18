@@ -6,11 +6,11 @@ import { clerkIssuer, mcpResourceUrl } from '@/lib/services/auth/mcp-auth';
  * resource is `/api/mcp`, and Clerk is the authorization server that signs its
  * users in. ChatGPT reads this after `/api/mcp` answers 401.
  */
-export function GET(): Response {
+export function GET(request: Request): Response {
   const issuer = clerkIssuer();
   return NextResponse.json(
     {
-      resource: mcpResourceUrl(),
+      resource: mcpResourceUrl(request),
       authorization_servers: issuer ? [issuer] : [],
       scopes_supported: ['profile'],
       bearer_methods_supported: ['header'],

@@ -29,7 +29,7 @@ async function handlePOST(request: Request): Promise<Response> {
         {
           status: 401,
           headers: {
-            'WWW-Authenticate': `Bearer resource_metadata="${mcpResourceMetadataUrl()}"`,
+            'WWW-Authenticate': `Bearer resource_metadata="${mcpResourceMetadataUrl(request)}"`,
           },
         }
       );

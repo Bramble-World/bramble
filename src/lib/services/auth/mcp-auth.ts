@@ -21,17 +21,27 @@ import { clerkIdentity } from './auth.service';
 /** The path ChatGPT calls. Also the resource its tokens are for. */
 export const MCP_PATH = '/api/mcp';
 
+/**
+ * The origin ChatGPT called: api.brambleworld.com in production, whichever host
+ * staging or a tunnel serves. Taken from the request rather than configured, so
+ * the resource ChatGPT is told about is always the URL it is talking to.
+ */
+function origin(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-host');
+  const url = new URL(request.url);
+  if (!forwarded) return url.origin;
+  const proto = request.headers.get('x-forwarded-proto') ?? url.protocol.replace(':', '');
+  return `${proto}://${forwarded.split(',')[0].trim()}`;
+}
+
 /** The resource URL: what ChatGPT is told it is signing in to. */
-export function mcpResourceUrl(): string {
-  return new URL(MCP_PATH, env.NEXT_PUBLIC_APP_URL).toString();
+export function mcpResourceUrl(request: Request): string {
+  return `${origin(request)}${MCP_PATH}`;
 }
 
 /** Where ChatGPT reads which authorization server to use (RFC 9728). */
-export function mcpResourceMetadataUrl(): string {
-  return new URL(
-    `/.well-known/oauth-protected-resource${MCP_PATH}`,
-    env.NEXT_PUBLIC_APP_URL
-  ).toString();
+export function mcpResourceMetadataUrl(request: Request): string {
+  return `${origin(request)}/.well-known/oauth-protected-resource${MCP_PATH}`;
 }
 
 /**
