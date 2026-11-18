@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { storyTemplates } from '@/db/schema/tables';
+import { chatgptContexts, storyTemplates } from '@/db/schema/tables';
+import type { ChatGPTContext } from '@/lib/chatgpt/context';
 import type { StoryTemplate } from '@/lib/pool/template';
 import { Executor } from '../executor';
 
@@ -45,7 +46,42 @@ export async function enqueueForAnswer(
   });
 }
 
-export type ClaimedTemplate = { id: string; sourceAnswerId: string; attempts: number };
+/**
+ * Queues a story for one player from what ChatGPT sent, to be written at once:
+ * unlike an answer, a context is not edited afterwards, so there is nothing to
+ * wait for. Returns the template's id, which is what ChatGPT is told.
+ */
+export async function enqueueForContext(
+  tx: Executor,
+  userId: string,
+  content: ChatGPTContext
+): Promise<string> {
+  const [context] = await tx
+    .insert(chatgptContexts)
+    .values({ userId, content })
+    .returning({ id: chatgptContexts.id });
+  const [template] = await tx
+    .insert(storyTemplates)
+    .values({ origin: 'chatgpt', userId, sourceContextId: context.id, status: 'pending' })
+    .returning({ id: storyTemplates.id });
+  return template.id;
+}
+
+/**
+ * Forgets what ChatGPT sent once its story is finished, whichever way: written,
+ * declined, rejected or given up on. Afterwards the story is the only copy.
+ */
+export async function forgetContext(tx: Executor, contextId: string): Promise<void> {
+  await tx.delete(chatgptContexts).where(eq(chatgptContexts.id, contextId));
+}
+
+/** A claimed template, and what it is written from: an answer, or what ChatGPT sent. */
+export type ClaimedTemplate = {
+  id: string;
+  attempts: number;
+  sourceAnswerId: string | null;
+  sourceContextId: string | null;
+};
 
 /**
  * Takes the next template to write, or null. One statement, `skip locked`, as
@@ -70,7 +106,7 @@ export async function claimNextTemplate(tx: Executor): Promise<ClaimedTemplate |
     .where(
       sql`"story_templates"."id" = (
         select "t"."id" from "story_templates" "t"
-        where "t"."source_answer_id" is not null and (
+        where ("t"."source_answer_id" is not null or "t"."source_context_id" is not null) and (
           (
             "t"."status" = 'pending' and "t"."attempts" < ${MAX_TEMPLATE_ATTEMPTS}
             and ("t"."next_attempt_at" is null or "t"."next_attempt_at" <= now())
@@ -84,11 +120,12 @@ export async function claimNextTemplate(tx: Executor): Promise<ClaimedTemplate |
     )
     .returning({
       id: storyTemplates.id,
-      sourceAnswerId: storyTemplates.sourceAnswerId,
       attempts: storyTemplates.attempts,
+      sourceAnswerId: storyTemplates.sourceAnswerId,
+      sourceContextId: storyTemplates.sourceContextId,
     });
 
-  return row?.sourceAnswerId ? { ...row, sourceAnswerId: row.sourceAnswerId } : null;
+  return row ?? null;
 }
 
 type Reason = NonNullable<(typeof storyTemplates.$inferInsert)['reason']>;

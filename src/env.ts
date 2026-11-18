@@ -98,6 +98,23 @@ export const env = createEnv({
      */
     IOS_TESTFLIGHT_URL: z.url().optional(),
     /**
+     * Bramble in ChatGPT (`/api/mcp`): the Clerk OAuth application's client id
+     * that ChatGPT signs in with, made once in Clerk's dashboard with ChatGPT's
+     * redirect URL. An OAuth token from any other client is refused, which is
+     * what binds a token to this server. Unset means `/api/mcp` refuses everyone.
+     * Not a secret: ChatGPT is a public client and uses PKCE, so the Clerk app
+     * must be marked public (`chatgpt-plugin/mcp.json` says
+     * `tokenEndpointAuthMethod: none`).
+     */
+    CHATGPT_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+    /**
+     * Bramble in ChatGPT: the domain verification token OpenAI's plugin portal
+     * shows when the app is submitted, served as-is at
+     * `/.well-known/openai-apps-challenge`. Not a secret: it's public by design.
+     * Unset means that path is a 404.
+     */
+    OPENAI_APPS_CHALLENGE: z.string().min(1).optional(),
+    /**
      * PostHog, for server-side product events.
      *
      * Optional, and absent is the normal case: local development, the test
@@ -218,6 +235,8 @@ export const env = createEnv({
     POOL_WORKER_CONCURRENCY: process.env.POOL_WORKER_CONCURRENCY,
     MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
     IOS_TESTFLIGHT_URL: process.env.IOS_TESTFLIGHT_URL,
+    CHATGPT_OAUTH_CLIENT_ID: process.env.CHATGPT_OAUTH_CLIENT_ID,
+    OPENAI_APPS_CHALLENGE: process.env.OPENAI_APPS_CHALLENGE,
     POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,
     POSTHOG_IOS_PROJECT_TOKEN: process.env.POSTHOG_IOS_PROJECT_TOKEN,
     POSTHOG_IOS_PROJECT_ID: process.env.POSTHOG_IOS_PROJECT_ID,

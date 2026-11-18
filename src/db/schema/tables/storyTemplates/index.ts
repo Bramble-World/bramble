@@ -14,13 +14,21 @@ import { sql } from 'drizzle-orm/sql/sql';
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
 import { rebornAnswers } from '../rebornAnswers';
+import { chatgptContexts } from '../chatgptContexts';
 import type { StoryTemplate } from '@/lib/pool/template';
 
-/** Where a pool story came from. `reddit` is reserved for the later source. */
+/**
+ * Where a story came from. `reddit` is reserved for the later source.
+ *
+ * `chatgpt` is not a pool story: it was written for its `user_id` from what
+ * ChatGPT sent, keeps the names it was given, and is only ever that player's
+ * (invariants.md §3). `choose()` never offers one to anyone else.
+ */
 export const storyTemplateOriginEnum = pgEnum('story_template_origin', [
   'seed',
   'reborn',
   'reddit',
+  'chatgpt',
 ]);
 
 /**
@@ -55,6 +63,8 @@ export const storyTemplateReasonEnum = pgEnum('story_template_reason', [
   'self_harm',
   'quotes_answer',
   'spoils_opening',
+  // A `chatgpt` story had a real person do or reveal something the player didn't say.
+  'harms_real_person',
   'low_quality',
   'moderation',
   // The job gave up.
@@ -64,7 +74,8 @@ export const storyTemplateReasonEnum = pgEnum('story_template_reason', [
 ]);
 
 /**
- * The shared pool of stories, and the queue that fills it.
+ * The shared pool of stories, the stories written for one player from ChatGPT,
+ * and the queue that fills both.
  *
  * The row is the queue, as `imports` is: a worker claims the oldest claimable
  * row with `for update skip locked`. See `src/lib/services/pool`.
@@ -77,6 +88,8 @@ export const storyTemplates = pgTable(
 
     /**
      * The author: the player whose answer this was written from. Null for a seed.
+     * For a `chatgpt` story, the player it was written for, and the only one who
+     * plays it.
      *
      * Named `user_id` so the account purge and the guest merge (`USER_OWNED_TABLES`)
      * cover it like every other table a player owns. Deleting the author deletes
@@ -91,6 +104,14 @@ export const storyTemplates = pgTable(
      */
     sourceAnswerId: uuid('source_answer_id').references((): AnyPgColumn => rebornAnswers.id, {
       onDelete: 'cascade',
+    }),
+
+    /**
+     * What ChatGPT sent, for a `chatgpt` story. Deleted once the story is
+     * written or refused, which leaves this null on every finished row.
+     */
+    sourceContextId: uuid('source_context_id').references((): AnyPgColumn => chatgptContexts.id, {
+      onDelete: 'set null',
     }),
 
     /** A seed's stable name, so the seed script can upsert it. Null otherwise. */
@@ -119,6 +140,7 @@ export const storyTemplates = pgTable(
   (table) => [
     index('idx_story_templates_user').on(table.userId),
     index('idx_story_templates_answer').on(table.sourceAnswerId),
+    index('idx_story_templates_context').on(table.sourceContextId),
     index('idx_story_templates_claimable')
       .on(table.createdAt)
       .where(sql`${table.status} IN ('pending', 'generating')`),

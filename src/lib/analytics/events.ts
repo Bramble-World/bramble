@@ -109,9 +109,22 @@ export type AnalyticsEvent =
       name: 'next_story_started';
       properties: {
         /** Where the pool story came from. Never which one, and never its author. */
-        origin: 'seed' | 'reborn' | 'reddit';
+        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt';
         /** The countdown ran out, the reader tapped "begin now", or began it later from the notebook. */
         how: 'countdown' | 'begin_now' | 'later';
+      };
+    }
+  | {
+      /** The first time an account used Bramble in ChatGPT. */
+      name: 'chatgpt_connected';
+      properties: Record<string, never>;
+    }
+  | {
+      /** ChatGPT asked for a story. Never what it sent. */
+      name: 'chatgpt_story_requested';
+      properties: {
+        /** Queued to be written, over the day's limit, or flagged by moderation and not kept. */
+        outcome: 'queued' | 'limited' | 'flagged';
       };
     }
   | {
@@ -120,7 +133,7 @@ export type AnalyticsEvent =
         /** The reason the reader picked: a code, never their words or the story's. */
         reason: 'harmful' | 'sexual' | 'hateful' | 'self_harm' | 'real_person' | 'other';
         /** Where the story came from; `none` for a story that is not from the pool. Never which one. */
-        origin: 'seed' | 'reborn' | 'reddit' | 'none';
+        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
       };
     }
   | {
@@ -165,4 +178,5 @@ export const ALLOWED_PROPERTY_KEYS = [
   'how',
   'turns',
   'reason',
+  'outcome',
 ] as const;

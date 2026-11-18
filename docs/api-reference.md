@@ -145,10 +145,21 @@ No auth.
 ### `GET /api/me`
 
 ```json
-{ "id": "uuid", "email": "great@brambleworld.com", "shareUsage": true, "isGuest": false }
+{
+  "id": "uuid",
+  "email": "great@brambleworld.com",
+  "shareUsage": true,
+  "isGuest": false,
+  "chatgpt": { "connected": true, "writing": false }
+}
 ```
 
-A guest gets the same shape with `"email": null` and `"isGuest": true`.
+A guest gets the same shape with `"email": null`, `"isGuest": true` and
+`chatgpt` both false.
+
+**`chatgpt`** is Bramble in ChatGPT (`/api/mcp`, below): `connected` once the
+account has used it (it isn't cleared when someone disconnects in ChatGPT, which
+doesn't tell us), and `writing` while a story asked for there is being written.
 
 **`id` is the analytics identity.** The Mac identifies the person in PostHog as
 this uuid, lowercased, and the server sends its own events under exactly the
@@ -911,7 +922,8 @@ team's seed stories).
     "the last one is nearly empty.",
     "a stranger sits down beside you."
   ],
-  "fromPool": false
+  "fromPool": false,
+  "fromChatGPT": false
 }
 ```
 
@@ -922,6 +934,8 @@ team's seed stories).
   moment the story begins, and none gives away anything past it.
 - **`fromPool`** — written from another player's past. Show "written from
   someone else's past." when true; seed stories are the team's and say nothing.
+- **`fromChatGPT`** — written for this reader from what they shared in ChatGPT.
+  Show "made with chatgpt." when true. Never true with `fromPool`.
 
 Pool stories are already written, so `next` is ready as soon as the story ends:
 there is no "still being written" state.
@@ -931,6 +945,10 @@ the story started match. Pool stories are written by other players (from their
 answers to the reborn questions, rewritten so they can't identify anyone) or by
 the team. A reader is never offered their own story, one they've already played,
 or two by the same author in a row.
+
+The exception is a story the reader asked ChatGPT for: it comes first, ahead of
+the pool, as soon as it's written, and replaces a pool story already offered
+here if the next story hasn't started. Only that reader is ever offered it.
 
 ### `POST /api/v1/sessions/{sessionId}/next`
 
@@ -1065,6 +1083,33 @@ either — the transcript lives encrypted in Redis for at most 30 minutes and in
 the memory of the worker reading it, and nowhere else.
 
 ---
+
+## Bramble in ChatGPT
+
+### `POST /api/mcp`
+
+An MCP server (Streamable HTTP, stateless, JSON responses) for ChatGPT's Apps
+SDK: a ChatGPT user connects their Bramble account and asks for a story about
+their life, which becomes their next story on iPhone. Not for the apps.
+
+**Sign-in is OAuth 2.1, with Clerk as the authorization server.** Without a
+token, or with one Clerk doesn't accept, `401` with
+`WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource/api/mcp"`;
+that document names Clerk's issuer. Only tokens Clerk issued to ChatGPT's OAuth
+client (`CHATGPT_OAUTH_CLIENT_ID`) are accepted (`403` otherwise), and only
+here: session and guest tokens are refused, and an OAuth token is refused by
+every other route. Accounts only.
+
+Tools (`tools/list`):
+
+- **`write_my_story`** `{ about, people: [{ name, relationship, details }] (1–3), you? }`
+  — moderated, then queued; `{ outcome: "queued" | "limited" | "flagged", storyId, left }`.
+  Three a day. What was sent is deleted once the story is written or refused.
+- **`my_stories`** — `{ stories: [{ storyId, status: "writing" | "ready" | "playing" | "not_written", title, requestedAt }] }`.
+- **`delete_my_story`** `{ storyId }` — deletes the story, its copy in the
+  reader's world and the people it added; `{ deleted }`.
+
+`GET` and `DELETE` are `405`: there is no stream or session.
 
 ## What is never returned
 

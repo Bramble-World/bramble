@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withRequestLog } from '@/lib/api/request-log';
 import { requireCurrentUser } from '@/lib/services/auth/auth.service';
 import { handleError } from '@/lib/utils/api.handler-errors';
+import { chatgptStatus } from '@/lib/services/chatgpt/chatgpt.service';
 
 // The reference shape for every protected handler: call requireCurrentUser with
 // the Request, and let the thrown AppError fall through to handleError. The auth
@@ -16,11 +17,16 @@ async function handleGET(request: Request) {
     // A guest answers here too, with `email: null` and `isGuest: true`: the
     // iPhone identifies its analytics by `id` from the first screen, before
     // anyone has an email to show.
+    //
+    // `chatgpt` is whether the account uses Bramble in ChatGPT and a story is
+    // being written there now, for the iPhone's ChatGPT chip. A guest can't
+    // connect, so it's always off for them.
     return NextResponse.json({
       id: user.id,
       email: user.email,
       shareUsage: user.shareUsage,
       isGuest: user.isGuest,
+      chatgpt: user.isGuest ? { connected: false, writing: false } : await chatgptStatus(user.id),
     });
   } catch (error) {
     return handleError(error);
