@@ -1109,6 +1109,8 @@ Tools (`tools/list`):
   deleted once the story is written or refused. ChatGPT is told to call it as
   soon as the user asks, without showing them first (the iPhone's "make a story
   with chatgpt" link sends that request).
+  A queued reply carries `openUrl` (`https://www.brambleworld.com/open/desk`),
+  and ChatGPT is told to end its reply with it as "open bramble".
 - **`my_stories`** — `{ stories: [{ storyId, status: "writing" | "ready" | "playing" | "not_written", title, requestedAt, reason }] }`.
   `reason`, only for `not_written`: `too_thin | not_a_story | unclear | weak | unsafe | failed`,
   so ChatGPT can ask for what was missing. Every safety code is `unsafe`.
@@ -1116,6 +1118,13 @@ Tools (`tools/list`):
   reader's world and the people it added; `{ deleted }`.
 
 `GET` and `DELETE` are `405`: there is no stream or session.
+
+### Opening the app from a link
+
+`https://www.brambleworld.com/open/…` is a universal link: with the iPhone app
+installed it opens on the desk; without it, a page points to the app.
+`/.well-known/apple-app-site-association` claims `/open` and `/open/*` for
+`K555FJZF47.com.brambleworld.BrambleMobile`, and nothing else.
 
 ## What is never returned
 
