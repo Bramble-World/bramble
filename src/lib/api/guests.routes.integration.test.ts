@@ -658,9 +658,9 @@ describe('a guest plays three beats, then hits the wall', () => {
     );
     const body = await res.json();
     expect(body.energy).toBeNull();
-    expect(body.events.map((e: { storylineTitle: string }) => e.storylineTitle)).toContain(
-      'the night before'
-    );
+    const naming = { name: 'Jordan', relationship: 'ex', pronouns: 'they' } as const;
+    const title = choosePremise(ARE_YOU_UP, guest.id, naming).setup(naming).storyline.title;
+    expect(body.events.map((e: { storylineTitle: string }) => e.storylineTitle)).toContain(title);
   });
 });
 
