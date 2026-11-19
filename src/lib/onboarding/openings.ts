@@ -16,7 +16,8 @@
  *   model continues from at beat 2, the way it would continue from an imported
  *   conversation.
  *
- * Only one ships today. `chooseOpening` is the seam for testing more than one:
+ * Only one ships today, and behind its first screen sit several premises
+ * (premises.ts): its own `beat1` and `setup` here are the wedding. `chooseOpening` is the seam for testing more than one:
  * it is deterministic per guest, so a guest who reopens the app sees the same
  * opening they named someone into.
  */

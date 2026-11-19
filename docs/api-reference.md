@@ -402,7 +402,12 @@ Guest token only.
 - **`pronouns`** — `he` | `she` | `they`, optional. Absent means the story says
   "they".
 
-**201**, with beat 1 — scripted, so no model call:
+**201**, with beat 1 — scripted, so no model call. Which script depends on the
+guest: for an `ex` or a `crush` the server picks one of five premises behind the
+same "hey. are you up?" (the wedding below, moving away, just broke up, saw you
+tonight, found the photo; `src/lib/onboarding/premises.ts`), deterministically
+per guest. Other relationships, which only older builds offer, get the wedding.
+Clients must render whatever beat 1 arrives, not a bundled copy of it.
 
 ```json
 {
