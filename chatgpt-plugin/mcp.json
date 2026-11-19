@@ -13,7 +13,7 @@
               "clientId": "MK0w0Qx7tURqmecW",
               "tokenEndpointAuthMethod": "none"
             },
-            "baseScopes": ["profile"]
+            "baseScopes": ["openid"]
           }
         }
       }
