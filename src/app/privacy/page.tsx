@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 18, 2026">
+    <LegalPage title="Privacy Policy" effective="November 19, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -67,8 +67,8 @@ export default function Privacy() {
           you what it sends to OpenAI and asks you to agree.
         </li>
         <li>
-          If you connect Bramble in ChatGPT, ChatGPT can send us something about your life, only
-          when you say ok, and we write a story from it that only you play. We delete what it sent
+          If you connect Bramble in ChatGPT and ask it for a Bramble story, it sends us something
+          about your life, and we write a story from it that only you play. We delete what it sent
           once the story is written.
         </li>
         <li>We don&rsquo;t sell your data, and we don&rsquo;t use it for advertising.</li>
@@ -161,23 +161,26 @@ export default function Privacy() {
       <h3>Bramble in ChatGPT</h3>
       <p>
         You can connect your Bramble account in ChatGPT and ask it to write you a Bramble story
-        about your life. ChatGPT picks a real situation from what it knows about you, shows you what
-        it will send us, and sends it only once you say ok: a description of the situation, up to
-        three people in it (their first names, who they are to you, and a little about them), and
+        about your life, in ChatGPT or with the &ldquo;make a story with chatgpt&rdquo; button in
+        the iPhone app, which opens ChatGPT with that request already sent. ChatGPT picks a real
+        situation from what it knows about you and sends it to us straight away, without showing it
+        to you first: asking for the story is your ok. It sends a description of the situation, up
+        to three people in it (their first names, who they are to you, and a little about them), and
         optionally a line about you. We don&rsquo;t get your ChatGPT conversations or memory, only
-        what ChatGPT sends in that request.
+        what ChatGPT sends in that request. You can ask ChatGPT what it sent, and delete the story
+        (see below).
       </p>
       <p>
         We first send it to OpenAI&rsquo;s moderation service; if it talks about self-harm, abuse or
         someone in danger, we don&rsquo;t keep it. Otherwise we send it to OpenAI to write the
-        story, which then becomes your next story in the iPhone app. The people keep the names
-        ChatGPT sent. The story is only ever yours: it isn&rsquo;t offered to anyone else. We delete
-        what ChatGPT sent as soon as the story is written, or as soon as we decide we can&rsquo;t
-        write one from it; after that, the story is the only copy. We also note when your account
-        first connected. You can delete a story in ChatGPT (&ldquo;delete my bramble story&rdquo;),
-        which removes it and the people it added from your account, and disconnect Bramble in
-        ChatGPT&rsquo;s settings. What ChatGPT itself keeps is covered by OpenAI&rsquo;s own privacy
-        policy, not this one.
+        story, which then becomes your next story in the iPhone app; if you allow notifications, we
+        tell you when it&rsquo;s ready. The people keep the names ChatGPT sent. The story is only
+        ever yours: it isn&rsquo;t offered to anyone else. We delete what ChatGPT sent as soon as
+        the story is written, or as soon as we decide we can&rsquo;t write one from it; after that,
+        the story is the only copy. We also note when your account first connected. You can delete a
+        story in ChatGPT (&ldquo;delete my bramble story&rdquo;), which removes it and the people it
+        added from your account, and disconnect Bramble in ChatGPT&rsquo;s settings. What ChatGPT
+        itself keeps is covered by OpenAI&rsquo;s own privacy policy, not this one.
       </p>
 
       <h3>Reporting a story</h3>
@@ -276,8 +279,10 @@ export default function Privacy() {
         notifications say they&rsquo;re from Bramble and never name the people in your stories or
         quote them. We delete the token when you sign out, when you delete your account, or when
         Apple tells us it no longer works. We also record when we sent each one and what kind it
-        was: that your battery is back, or that your story is waiting. Turn them off in
-        Bramble&rsquo;s Settings or your device&rsquo;s Settings at any time.
+        was: that your battery is back, or that your story is waiting. When a story you asked for in
+        ChatGPT is ready, we send one notification saying so, and record only that it was sent in
+        our usage data, if you share it. Turn them off in Bramble&rsquo;s Settings or your
+        device&rsquo;s Settings at any time.
       </p>
 
       <h3>Updates and downloads</h3>

@@ -1,7 +1,12 @@
 export const PUSH_ENVIRONMENTS = ['sandbox', 'production'] as const;
 export type PushEnvironment = (typeof PUSH_ENVIRONMENTS)[number];
 
-export type PushKind = 'battery_back' | 'story_waiting';
+/**
+ * `story_ready` is sent once, when a story asked for in ChatGPT has been
+ * written (`announceStoryReady`), not by the sweep, and isn't kept in
+ * `push_sends`: a template becomes ready only once.
+ */
+export type PushKind = 'battery_back' | 'story_waiting' | 'story_ready';
 
 /**
  * What a notification says. Apple carries this text, and a lock screen shows it

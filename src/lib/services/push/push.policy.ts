@@ -30,6 +30,7 @@ const WAITING_AFTER_MS = [DAY, 3 * DAY];
 export const MESSAGES: Record<PushKind, PushMessage> = {
   battery_back: { title: 'your phone has charged.', body: 'your story’s waiting.' },
   story_waiting: { title: 'your story’s waiting.', body: 'pick up where you left off.' },
+  story_ready: { title: 'your story’s ready.', body: 'made from your life. it’s on your desk.' },
 };
 
 export type PushFacts = {
