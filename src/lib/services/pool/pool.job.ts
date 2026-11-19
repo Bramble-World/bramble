@@ -11,6 +11,7 @@ import {
 import { personalCheckPrompt, personalRewritePrompt } from '@/lib/ai/prompts/personal.prompt';
 import { chatgptContextSchema } from '@/lib/chatgpt/context';
 import { getSafetyCheck, type SafetyCheck } from '@/lib/onboarding/safety';
+import { announceStoryReady } from '@/lib/services/chatgpt/chatgpt.service';
 import {
   personalTemplateSchema,
   storyTemplateSchema,
@@ -155,6 +156,7 @@ export async function runTemplate(
     );
     // Finished either way: the story, if there is one, is the only copy now.
     if (outcome !== 'retrying') await forgetContext(db, contextId);
+    if (outcome === 'ready') await announceStoryReady(claim.id);
     return outcome;
   }
 

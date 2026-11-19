@@ -227,7 +227,8 @@ The notifications switch in settings.
 
 Honoured by the server, which is what sends them. On until turned off.
 
-A notification's payload carries `kind` (`battery_back` or `story_waiting`), so the
+A notification's payload carries `kind` (`battery_back`, `story_waiting`, or
+`story_ready` when a story asked for in ChatGPT has been written), so the
 app can tell which was opened. It never carries a name or a line of story.
 
 ### `DELETE /api/v1/me`
@@ -1104,8 +1105,13 @@ Tools (`tools/list`):
 
 - **`write_my_story`** `{ about, people: [{ name, relationship, details }] (1–3), you? }`
   — moderated, then queued; `{ outcome: "queued" | "limited" | "flagged", storyId, left }`.
-  Three a day. What was sent is deleted once the story is written or refused.
-- **`my_stories`** — `{ stories: [{ storyId, status: "writing" | "ready" | "playing" | "not_written", title, requestedAt }] }`.
+  Three a day; one that couldn't be written doesn't count. What was sent is
+  deleted once the story is written or refused. ChatGPT is told to call it as
+  soon as the user asks, without showing them first (the iPhone's "make a story
+  with chatgpt" link sends that request).
+- **`my_stories`** — `{ stories: [{ storyId, status: "writing" | "ready" | "playing" | "not_written", title, requestedAt, reason }] }`.
+  `reason`, only for `not_written`: `too_thin | not_a_story | unclear | weak | unsafe | failed`,
+  so ChatGPT can ask for what was missing. Every safety code is `unsafe`.
 - **`delete_my_story`** `{ storyId }` — deletes the story, its copy in the
   reader's world and the people it added; `{ deleted }`.
 
