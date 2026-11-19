@@ -173,12 +173,12 @@ their `users.id` from the first request, so no event needs re-attributing when
 they sign up as a new account; a guest who joins an **existing** account is
 aliased into it (`trackAlias`), so their beats follow them.
 
-| Event               | Properties                                    | Fired when                                              |
-| ------------------- | --------------------------------------------- | ------------------------------------------------------- |
-| `onboarding_opened` | `opening_id`                                  | `GET /api/v1/onboarding/opening` is served              |
-| `person_named`      | `relationship`, `pronouns_given` (`yes`/`no`) | the guest's story is written                            |
-| `guest_beat_played` | `n` (1–3)                                     | beat 1 is written (scripted), and beats 2 and 3 (model) |
-| `signup_completed`  | `merged`, `method` when the app sent one      | `POST /api/v1/guests/claim` succeeds                    |
+| Event               | Properties                                                                                                                                 | Fired when                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| `onboarding_opened` | `opening_id`                                                                                                                               | `GET /api/v1/onboarding/opening` is served              |
+| `person_named`      | `relationship`, `pronouns_given` (`yes`/`no`), `premise` (`wedding`, `moving_away`, `just_broke_up`, `saw_you_tonight`, `found_the_photo`) | the guest's story is written                            |
+| `guest_beat_played` | `n` (1–3)                                                                                                                                  | beat 1 is written (scripted), and beats 2 and 3 (model) |
+| `signup_completed`  | `merged`, `method` when the app sent one                                                                                                   | `POST /api/v1/guests/claim` succeeds                    |
 
 `save_shown` and `save_not_now` are sent by the app, which is the only place
 they happen. Live guests right now, from the database:

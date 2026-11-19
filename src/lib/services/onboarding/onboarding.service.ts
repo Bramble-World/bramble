@@ -16,6 +16,7 @@ import { InternalServerError, NotFoundError, ValidationError } from '@/lib/utils
 import { imessageFromModel } from '@/lib/surfaces/imessage.surface';
 import { track } from '@/lib/analytics/analytics';
 import { Naming, openingById, type Opening } from '@/lib/onboarding/openings';
+import { choosePremise, type PremiseId } from '@/lib/onboarding/premises';
 import * as sessionReader from '../sessions/sessions.reader';
 import * as sessionWriter from '../sessions/sessions.writer';
 import { TurnWithChoices } from '../sessions/sessions.types';
@@ -85,9 +86,14 @@ export async function createGuestStory(
     if (!guest) throw new NotFoundError('Guest', userId);
 
     const existing = await existingStory(tx, userId);
-    if (existing) return { story: existing, created: false };
+    if (existing) return { story: existing, created: false, premise: null };
 
-    return { story: await writeStory(tx, userId, opening, naming), created: true };
+    const premise = choosePremise(opening, userId, naming);
+    return {
+      story: await writeStory(tx, userId, opening, naming, premise),
+      created: true,
+      premise: premise.id,
+    };
   });
 
   if (result.created) {
@@ -99,22 +105,24 @@ export async function createGuestStory(
       properties: {
         relationship: naming.relationship,
         pronouns_given: options.pronounsGiven ? 'yes' : 'no',
+        premise: result.premise as PremiseId,
       },
     });
     await track(userId, { name: 'guest_beat_played', properties: { n: 1 } });
   }
 
-  return result;
+  return { story: result.story, created: result.created };
 }
 
 async function writeStory(
   tx: Executor,
   userId: string,
   opening: Opening,
-  naming: Naming
+  naming: Naming,
+  premise: { beat1: Opening['beat1']; setup: Opening['setup'] }
 ): Promise<GuestStory> {
-  const setup = opening.setup(naming);
-  const beat = opening.beat1(naming);
+  const setup = premise.setup(naming);
+  const beat = premise.beat1(naming);
 
   // The self person is provisioned with the guest; this only covers a guest
   // row made some other way, so the story never fails for want of one.

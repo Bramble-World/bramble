@@ -1,4 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ARE_YOU_UP } from '@/lib/onboarding/openings';
+import { choosePremise } from '@/lib/onboarding/premises';
 import { and, eq, getTableName, inArray, sql } from 'drizzle-orm';
 
 /**
@@ -384,39 +386,29 @@ describe('GET /api/v1/onboarding/opening', () => {
 });
 
 describe('POST /api/v1/onboarding/story', () => {
-  it('writes beat 1 from the script, with the name and pronouns in it', async () => {
+  it("writes beat 1 from the guest's premise, with the name and pronouns in it", async () => {
     const guest = await newGuest();
     const res = await nameStory(guest.token, { name: '  Jordan ', pronouns: 'she' });
     expect(res.status).toBe(201);
 
+    const naming = { name: 'Jordan', relationship: 'ex', pronouns: 'she' } as const;
+    const premise = choosePremise(ARE_YOU_UP, guest.id, naming);
+    const beat = premise.beat1(naming);
     const { story } = await res.json();
-    expect(story.storylineTitle).toBe('the night before');
+    expect(story.storylineTitle).toBe(premise.setup(naming).storyline.title);
     expect(story.person).toEqual({ id: expect.any(String), name: 'Jordan', isSelf: false });
-    expect(story.turn.headline).toBe(
-      'Jordan is getting married tomorrow. And she just texted you.'
-    );
-    expect(story.turn.narrative).toBe(
-      "You stare at the screen until it dims, then tap it awake again. Three dots appear. Then they're gone."
-    );
-    expect(story.turn.choices.map((c: { label: string }) => c.label)).toEqual([
-      'Text back: "i\'m up."',
-      'Call Jordan right now',
-      'Leave it on read and try to sleep',
-    ]);
+    expect(story.turn.headline).toBe(beat.headline);
+    expect(story.turn.narrative).toBe(beat.narrative);
+    expect(story.turn.choices.map((c: { label: string }) => c.label)).toEqual(beat.choices);
     expect(story.turn.surfaces).toEqual([
       {
         type: 'imessage_notifications',
         clockTime: '1:48',
         dateLabel: 'Saturday, June 14',
-        notifications: [
-          {
-            sender: story.person,
-            text: "i know it's late. i'm getting married tomorrow and i need to say something before i do",
-          },
-          { sender: story.person, text: 'hey. are you up?' },
-        ],
+        notifications: beat.surface.texts.map((text) => ({ sender: story.person, text })),
       },
     ]);
+    expect(beat.surface.texts.at(-1)).toBe('hey. are you up?');
 
     // What was stored: the pronouns on the person, the chip as the relationship.
     const [jordan] = await db.select().from(persons).where(eq(persons.id, story.person.id));
@@ -428,7 +420,7 @@ describe('POST /api/v1/onboarding/story', () => {
     expect(relationship.relationshipType).toBe('ex');
 
     expect(only('person_named').map((c) => c.event.properties)).toEqual([
-      { relationship: 'ex', pronouns_given: 'yes' },
+      { relationship: 'ex', pronouns_given: 'yes', premise: premise.id },
     ]);
     expect(only('guest_beat_played').map((c) => c.event.properties)).toEqual([{ n: 1 }]);
     // The name never reaches analytics, in any property.
@@ -446,6 +438,8 @@ describe('POST /api/v1/onboarding/story', () => {
     expect(only('person_named')[0].event.properties).toEqual({
       relationship: 'old_friend',
       pronouns_given: 'no',
+      // Only an ex or a crush gets the other premises; the rest keep the wedding.
+      premise: 'wedding',
     });
   });
 
