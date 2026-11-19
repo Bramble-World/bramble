@@ -1,10 +1,15 @@
 import { and, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { env } from '@/env';
 import { db } from '@/index';
 import { characters, persons, storylines, storyTemplates, users } from '@/db/schema/tables';
 import { track } from '@/lib/analytics/analytics';
+import { withIosClient } from '@/lib/analytics/client-context';
 import { contextText, type ChatGPTContext } from '@/lib/chatgpt/context';
 import { getSafetyCheck, type SafetyCheck } from '@/lib/onboarding/safety';
 import { enqueueForContext } from '../pool/pool.writer';
+import { apnsConfigured } from '../push/apns';
+import { MESSAGES } from '../push/push.policy';
+import { sendToUser } from '../push/push.service';
 
 /**
  * Bramble in ChatGPT: the stories a player asks ChatGPT for, written from what
@@ -43,6 +48,8 @@ async function requestedToday(userId: string, now: Date): Promise<number> {
       and(
         eq(storyTemplates.userId, userId),
         eq(storyTemplates.origin, 'chatgpt'),
+        // One Bramble couldn't write doesn't use up the day.
+        inArray(storyTemplates.status, ['pending', 'generating', 'ready']),
         gt(storyTemplates.createdAt, new Date(now.getTime() - DAY_MS))
       )
     );
@@ -82,8 +89,73 @@ export async function requestStory(
   return { outcome: 'queued', storyId, left: CHATGPT_STORIES_PER_DAY - used - 1 };
 }
 
+/**
+ * "your story's ready.": once, when a story asked for in ChatGPT has been
+ * written, to a player with notifications on. The text names no one. Called by
+ * the pool job; it never throws, because the story is written either way.
+ */
+export async function announceStoryReady(templateId: string): Promise<void> {
+  if (env.PUSH_ENABLED !== 'true' || !apnsConfigured()) return;
+  try {
+    const [row] = await db
+      .select({ userId: users.id })
+      .from(storyTemplates)
+      .innerJoin(users, eq(users.id, storyTemplates.userId))
+      .where(
+        and(
+          eq(storyTemplates.id, templateId),
+          eq(storyTemplates.origin, 'chatgpt'),
+          eq(users.pushEnabled, true)
+        )
+      )
+      .limit(1);
+    if (!row) return;
+    const sent = await sendToUser(row.userId, MESSAGES.story_ready, 'story_ready');
+    if (sent.delivered > 0) {
+      await withIosClient(() =>
+        track(row.userId, { name: 'push_sent', properties: { kind: 'story_ready' } })
+      );
+    }
+  } catch {
+    // A notification that didn't go is not worth failing a written story over.
+  }
+}
+
 /** How a story asked for in ChatGPT is doing, as ChatGPT and the iPhone say it. */
 export type ChatGPTStoryStatus = 'writing' | 'ready' | 'playing' | 'not_written';
+
+/**
+ * Why a story wasn't written, as ChatGPT is told it: a code, so it can ask the
+ * player for what was missing. Every safety code is `unsafe`, so the reply says
+ * nothing about what the story touched on.
+ */
+export const CHATGPT_STORY_REASONS = [
+  'too_thin',
+  'not_a_story',
+  'unclear',
+  'weak',
+  'unsafe',
+  'failed',
+] as const;
+export type ChatGPTStoryReason = (typeof CHATGPT_STORY_REASONS)[number];
+
+type TemplateReason = NonNullable<(typeof storyTemplates.$inferSelect)['reason']>;
+
+export function storyReason(reason: TemplateReason | null): ChatGPTStoryReason {
+  switch (reason) {
+    case 'too_thin':
+    case 'not_a_story':
+    case 'unclear':
+      return reason;
+    case 'low_quality':
+      return 'weak';
+    case 'generation_failed':
+    case null:
+      return 'failed';
+    default:
+      return 'unsafe';
+  }
+}
 
 export type ChatGPTStory = {
   storyId: string;
@@ -91,6 +163,8 @@ export type ChatGPTStory = {
   /** Only once it's written. */
   title: string | null;
   requestedAt: Date;
+  /** Only when it's `not_written`. */
+  reason: ChatGPTStoryReason | null;
 };
 
 /** This player's stories from ChatGPT, newest first. */
@@ -99,6 +173,7 @@ export async function listStories(userId: string): Promise<ChatGPTStory[]> {
     .select({
       id: storyTemplates.id,
       status: storyTemplates.status,
+      reason: storyTemplates.reason,
       content: storyTemplates.content,
       createdAt: storyTemplates.createdAt,
       started: sql<boolean>`exists (
@@ -110,19 +185,23 @@ export async function listStories(userId: string): Promise<ChatGPTStory[]> {
     .where(and(eq(storyTemplates.userId, userId), eq(storyTemplates.origin, 'chatgpt')))
     .orderBy(sql`${storyTemplates.createdAt} desc`);
 
-  return rows.map((row) => ({
-    storyId: row.id,
-    status:
+  return rows.map((row) => {
+    const status: ChatGPTStoryStatus =
       row.status === 'pending' || row.status === 'generating'
         ? 'writing'
         : row.status === 'ready'
           ? row.started
             ? 'playing'
             : 'ready'
-          : 'not_written',
-    title: row.status === 'ready' ? (row.content?.title ?? null) : null,
-    requestedAt: row.createdAt,
-  }));
+          : 'not_written';
+    return {
+      storyId: row.id,
+      status,
+      title: row.status === 'ready' ? (row.content?.title ?? null) : null,
+      requestedAt: row.createdAt,
+      reason: status === 'not_written' ? storyReason(row.reason) : null,
+    };
+  });
 }
 
 /** What the iPhone shows: connected at all, and a story being written now. */

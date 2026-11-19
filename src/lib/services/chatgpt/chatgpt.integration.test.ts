@@ -18,6 +18,7 @@ import {
   listStories,
   markConnected,
   requestStory,
+  storyReason,
 } from './chatgpt.service';
 
 /**
@@ -149,7 +150,19 @@ describe('writing a story from what ChatGPT sent', () => {
     const [story] = await db.select().from(storyTemplates).where(eq(storyTemplates.userId, player));
     expect(story).toMatchObject({ status: 'declined', reason: 'too_thin', content: null });
     expect(await contextsOf(player)).toHaveLength(0);
-    expect(await listStories(player)).toMatchObject([{ status: 'not_written', title: null }]);
+    expect(await listStories(player)).toMatchObject([
+      { status: 'not_written', title: null, reason: 'too_thin' },
+    ]);
+  });
+
+  it("doesn't count one it couldn't write against the day", async () => {
+    const player = await newUser('player');
+    await requestStory(player, { ...CONTEXT, about: 'idk' }, { safety: pass });
+    expect(await writeNext()).toBe('declined');
+    for (let i = 0; i < CHATGPT_STORIES_PER_DAY; i++) {
+      expect((await requestStory(player, CONTEXT, { safety: pass })).outcome).toBe('queued');
+    }
+    expect((await requestStory(player, CONTEXT, { safety: pass })).outcome).toBe('limited');
   });
 
   it('keeps nothing that moderation flags', async () => {
@@ -179,6 +192,23 @@ describe('writing a story from what ChatGPT sent', () => {
     expect(first.chatgptConnectedAt).not.toBeNull();
     expect(again.chatgptConnectedAt).toEqual(first.chatgptConnectedAt);
     expect((await chatgptStatus(player)).connected).toBe(true);
+  });
+});
+
+describe('why one was not written', () => {
+  it('says only a code, and every safety reason is the same one', () => {
+    expect(storyReason('too_thin')).toBe('too_thin');
+    expect(storyReason('low_quality')).toBe('weak');
+    expect(storyReason('generation_failed')).toBe('failed');
+    for (const code of [
+      'minors',
+      'abuse',
+      'self_harm',
+      'moderation',
+      'harms_real_person',
+    ] as const) {
+      expect(storyReason(code)).toBe('unsafe');
+    }
   });
 });
 

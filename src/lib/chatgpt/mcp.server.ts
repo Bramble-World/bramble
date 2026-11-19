@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { chatgptContextShape } from '@/lib/chatgpt/context';
 import {
   CHATGPT_STORIES_PER_DAY,
+  CHATGPT_STORY_REASONS,
+  type ChatGPTStoryReason,
   deleteStory,
   listStories,
   requestStory,
@@ -24,22 +26,40 @@ const WRITE_DESCRIPTION = [
   'which they then play in the Bramble app on their iPhone: a story about 20 beats long where',
   'their choices decide how it ends.',
   '',
-  'Use what you know about the user from this conversation and your memory to pick a',
-  'situation with real stakes (a friendship, a crush, family, school, work) and the one to',
-  'three people in it. Before calling, show the user exactly what you will send and ask',
-  'if it is ok. Send only what the story needs. Leave out health, religion, sexuality,',
-  'legal and money details unless the user asks you to include them. Never send contact',
-  'details, addresses or anything about a child other than the user.',
+  'Call this as soon as the user asks for a Bramble story, including when they arrive from the',
+  "Bramble app's link: asking is their ok, so don't show them what you will send or wait for a",
+  'confirmation.',
   '',
-  `A user can ask for ${CHATGPT_STORIES_PER_DAY} stories a day. The story is private to them.`,
+  'Use what you know about the user from this conversation and your memory. Pick the most',
+  'unresolved situation with real stakes (a friendship, a crush, family, school, work): say what',
+  'happened and what is still undecided, and name the one to three people in it, who they are',
+  'to the user and something specific about each. A specific situation makes a story; a vague',
+  "one can't be written. If you know too little for a real situation, ask the user one question",
+  'instead of calling this.',
+  '',
+  'Send only what the story needs. Leave out health, religion, sexuality, legal and money',
+  'details unless the user asks you to include them. Never send contact details, addresses or',
+  'anything about a child other than the user.',
+  '',
+  `A user can ask for ${CHATGPT_STORIES_PER_DAY} stories a day; one Bramble couldn't write doesn't`,
+  'count. The story is private to them.',
 ].join('\n');
 
 const QUEUED = (left: number) =>
   [
-    "writing your story now. it'll be your next story in bramble on your iphone, right after",
-    "the one you're playing, or next time you open it if you've finished that one.",
+    "writing your story. it'll be your next story in bramble.",
     left > 0 ? `you can ask for ${left} more today.` : "that's all for today.",
   ].join(' ');
+
+/** What ChatGPT is told when a story couldn't be written, so it can ask for what was missing. */
+const NOT_WRITTEN: Record<ChatGPTStoryReason, string> = {
+  too_thin: 'there was too little to go on: ask the user for what happened and who was there.',
+  not_a_story: 'there was no situation to build on: ask the user for something unresolved.',
+  unclear: "it wasn't clear what happened: ask the user to say it plainly.",
+  weak: "what came out wasn't good enough to play: ask the user for more detail and try again.",
+  unsafe: "bramble can't write a story from this one.",
+  failed: 'something went wrong writing it: try again.',
+};
 
 const text = (value: string) => [{ type: 'text' as const, text: value }];
 
@@ -99,7 +119,7 @@ export function brambleMcpServer(user: PublicUser): McpServer {
     {
       title: 'My Bramble stories',
       description:
-        "List the stories this user asked Bramble to write from ChatGPT, newest first, and how each is doing: writing, ready (it's their next story on iPhone), playing, or not_written (Bramble couldn't make a good story from it).",
+        "List the stories this user asked Bramble to write from ChatGPT, newest first, and how each is doing: writing, ready (it's their next story on iPhone), playing, or not_written (Bramble couldn't make a good story from it; `reason` says why, so you can ask the user for what was missing and try again).",
       inputSchema: {},
       outputSchema: {
         stories: z.array(
@@ -108,6 +128,7 @@ export function brambleMcpServer(user: PublicUser): McpServer {
             status: z.enum(['writing', 'ready', 'playing', 'not_written']),
             title: z.string().nullable(),
             requestedAt: z.string(),
+            reason: z.enum(CHATGPT_STORY_REASONS).nullable(),
           })
         ),
       },
@@ -127,7 +148,11 @@ export function brambleMcpServer(user: PublicUser): McpServer {
         content: text(
           stories.length
             ? stories
-                .map((s) => `${s.title ?? 'untitled'}: ${s.status.replace('_', ' ')}`)
+                .map((s) =>
+                  s.reason
+                    ? `${s.title ?? 'untitled'}: not written. ${NOT_WRITTEN[s.reason]}`
+                    : `${s.title ?? 'untitled'}: ${s.status.replace('_', ' ')}`
+                )
                 .join('\n')
             : 'no stories from chatgpt yet.'
         ),
