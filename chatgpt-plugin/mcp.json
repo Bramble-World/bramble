@@ -10,10 +10,10 @@
             "type": "oauth",
             "client": {
               "mode": "provided",
-              "clientId": "wQORnph6n7lMhl8hlVXtjIBdkUhGftpi",
+              "clientId": "MK0w0Qx7tURqmecW",
               "tokenEndpointAuthMethod": "none"
             },
-            "baseScopes": ["profile"]
+            "baseScopes": ["openid"]
           }
         }
       }
