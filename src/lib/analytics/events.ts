@@ -140,7 +140,7 @@ export type AnalyticsEvent =
       name: 'push_sent';
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
-        kind: 'battery_back' | 'story_waiting';
+        kind: 'battery_back' | 'story_waiting' | 'story_ready';
       };
     };
 

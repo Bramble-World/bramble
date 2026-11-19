@@ -105,6 +105,8 @@ describe('every notification', () => {
       'your story’s waiting.',
       'your story’s waiting.',
       'pick up where you left off.',
+      'your story’s ready.',
+      'made from your life. it’s on your desk.',
     ]);
   });
 });

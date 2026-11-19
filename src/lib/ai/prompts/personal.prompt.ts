@@ -12,8 +12,10 @@ import { ENGAGEMENT_RUBRIC } from './timeline';
  * Unlike the pool, this story is played only by the person whose life it is,
  * so the people keep their names (the user's call, 2026-11-18). Because they
  * are real, the story never has them do anything the player didn't say they
- * did that would hurt them if it were read about them. Quality over quantity,
- * as in the pool: the writer may decline, and the check scores what it wrote.
+ * did that would hurt them if it were read about them. Unlike the pool, the
+ * player asked for this story themselves, so the writer fills small gaps rather
+ * than declining (approved 2026-11-19, after the first real request was
+ * declined as too thin); the check still scores it against the same bar.
  *
  * The context goes to the model and nowhere else (invariants.md §1).
  */
@@ -79,12 +81,15 @@ export const personalRewritePrompt: PromptSpec<
       '  The tension comes from what is unsaid and undecided, not from inventing',
       '  worse things about real people.',
       '',
-      'Quality over quantity:',
-      '- Decline whenever it cannot carry a story with real stakes and real',
-      '  choices. Do not pad a thin situation into a generic story.',
-      '- too_thin: there is not enough here.',
-      '- not_a_story: there is no situation, person or choice to build on.',
-      '- unclear: you cannot tell what they meant.',
+      'They asked for this story, so write it whenever you can:',
+      '- A situation and one person are enough. Fill what is missing (the',
+      '  setting, the timeline, what each person wants) with plausible, ordinary',
+      '  detail that fits what was given, never with anything the rule above',
+      '  forbids about a named person.',
+      '- Decline only when there is nothing to build a story on at all:',
+      '- too_thin: no situation, only a topic or a feeling.',
+      '- not_a_story: nothing that could be unresolved between people.',
+      '- unclear: you cannot tell what happened even after a generous reading.',
       '- Never write a story about minors in danger or anything sexual involving',
       '  them, abuse, or self-harm. Decline those as not_a_story.',
       '',
