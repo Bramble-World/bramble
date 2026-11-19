@@ -78,6 +78,13 @@ export type AnalyticsEvent =
         relationship: 'ex' | 'old_friend' | 'crush' | 'boss' | 'sibling';
         /** Whether they chose pronouns or skipped. Not which ones. */
         pronouns_given: 'yes' | 'no';
+        /** Why the texter is texting at 1:47 AM (premises.ts). An enum. */
+        premise:
+          | 'wedding'
+          | 'moving_away'
+          | 'just_broke_up'
+          | 'saw_you_tonight'
+          | 'found_the_photo';
       };
     }
   | {
@@ -169,6 +176,7 @@ export const ALLOWED_PROPERTY_KEYS = [
   'opening_id',
   'relationship',
   'pronouns_given',
+  'premise',
   'n',
   'method',
   'merged',
