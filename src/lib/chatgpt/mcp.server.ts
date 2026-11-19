@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { OPEN_APP_URL } from '@/lib/links';
 import { chatgptContextShape } from '@/lib/chatgpt/context';
 import {
   CHATGPT_STORIES_PER_DAY,
@@ -43,12 +44,16 @@ const WRITE_DESCRIPTION = [
   '',
   `A user can ask for ${CHATGPT_STORIES_PER_DAY} stories a day; one Bramble couldn't write doesn't`,
   'count. The story is private to them.',
+  '',
+  `Always end your reply with the link to open Bramble (${OPEN_APP_URL}), as a markdown link`,
+  'labelled "open bramble", so the user can go straight back to the app.',
 ].join('\n');
 
 const QUEUED = (left: number) =>
   [
     "writing your story. it'll be your next story in bramble.",
     left > 0 ? `you can ask for ${left} more today.` : "that's all for today.",
+    `open bramble: ${OPEN_APP_URL}`,
   ].join(' ');
 
 /** What ChatGPT is told when a story couldn't be written, so it can ask for what was missing. */
@@ -76,6 +81,7 @@ export function brambleMcpServer(user: PublicUser): McpServer {
         outcome: z.enum(['queued', 'limited', 'flagged']),
         storyId: z.string().nullable(),
         left: z.number().int().nullable(),
+        openUrl: z.string().optional().describe('Opens Bramble on the iPhone, on the desk.'),
       },
       annotations: {
         readOnlyHint: false,
@@ -94,7 +100,12 @@ export function brambleMcpServer(user: PublicUser): McpServer {
         case 'queued':
           return {
             content: text(QUEUED(result.left)),
-            structuredContent: { outcome: 'queued', storyId: result.storyId, left: result.left },
+            structuredContent: {
+              outcome: 'queued',
+              storyId: result.storyId,
+              left: result.left,
+              openUrl: OPEN_APP_URL,
+            },
           };
         case 'limited':
           return {
@@ -144,18 +155,20 @@ export function brambleMcpServer(user: PublicUser): McpServer {
         ...s,
         requestedAt: s.requestedAt.toISOString(),
       }));
+      const list = stories.length
+        ? stories
+            .map((s) =>
+              s.reason
+                ? `${s.title ?? 'untitled'}: not written. ${NOT_WRITTEN[s.reason]}`
+                : `${s.title ?? 'untitled'}: ${s.status.replace('_', ' ')}`
+            )
+            .join('\n')
+        : 'no stories from chatgpt yet.';
+      const open = stories.some((s) => s.status !== 'not_written')
+        ? `\nopen bramble: ${OPEN_APP_URL}`
+        : '';
       return {
-        content: text(
-          stories.length
-            ? stories
-                .map((s) =>
-                  s.reason
-                    ? `${s.title ?? 'untitled'}: not written. ${NOT_WRITTEN[s.reason]}`
-                    : `${s.title ?? 'untitled'}: ${s.status.replace('_', ' ')}`
-                )
-                .join('\n')
-            : 'no stories from chatgpt yet.'
-        ),
+        content: text(list + open),
         structuredContent: { stories },
       };
     }
