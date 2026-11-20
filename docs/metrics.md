@@ -78,10 +78,13 @@ share with `how = countdown` is the autoplay rate. The app sends
 ## Bramble in ChatGPT
 
 `chatgpt_connected` (once per account, the first signed-in call to `/api/mcp`)
-and `chatgpt_story_requested` with `outcome` (`queued`, `limited` past three a
-day, `flagged` by moderation and not kept). Never what ChatGPT sent. A story
-from ChatGPT that's started shows as `next_story_started` with
-`origin: chatgpt`.
+and `chatgpt_story_requested`, once per request, with `outcome` (`queued`,
+`limited` past five a day, `flagged` by moderation and not kept, `not_written`
+when a link had nothing to make a story from), `via` (`mcp` for
+`write_my_story`, `link` for a link ChatGPT wrote, sent by the iPhone app) and
+`stories` (how many were queued: at most 1 from `mcp`, up to 5 from a link).
+Never what was sent. A story from ChatGPT that's started shows as
+`next_story_started` with `origin: chatgpt`.
 
 ## Story reports
 

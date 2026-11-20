@@ -75,9 +75,13 @@ product's central claim, not an implementation detail.
   nothing flagged. The pool job writes its story (`personal.rewrite`, which
   keeps the names it was given; `personal.check`, which rejects anything a
   named person does or has revealed that the player didn't say), then deletes
-  the context whatever the outcome, so a finished story is the only copy. Never
-  logged (the route's request log reads no body), never in analytics (outcome
-  codes only), never in an error.
+  the context whatever the outcome, so a finished story is the only copy. A
+  link ChatGPT wrote (`POST /api/v1/stories/from-chatgpt`) is a note of up to
+  five situations: `chatgpt.situations` sorts it, dropping anything sensitive or
+  too thin, and only the situations it keeps are stored, each as a
+  `write_my_story` context; the note itself is never stored. Never logged (the
+  routes' request log reads no body), never in analytics (outcome codes and
+  counts only), never in an error.
 - **A story report is codes, never words.** `story_reports` holds the reason
   code and which beat; there is no free-text column and the route has no such
   field, because what a reader would write is about the story. The alert (a
