@@ -22,9 +22,9 @@ describe('the 1:47 AM opening', () => {
       narrative:
         "You stare at the screen until it dims, then tap it awake again. Three dots appear. Then they're gone.",
       choices: [
-        'Text back: "i\'m up."',
-        'Call Jordan right now',
-        'Leave it on read and try to sleep',
+        { label: 'Text back: "i\'m up."', reply: "i'm up." },
+        { label: 'Call Jordan right now', reply: null },
+        { label: 'Leave it on read and try to sleep', reply: null },
       ],
       surface: {
         clockTime: '1:48',

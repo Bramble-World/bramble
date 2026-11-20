@@ -399,7 +399,12 @@ describe('POST /api/v1/onboarding/story', () => {
     expect(story.person).toEqual({ id: expect.any(String), name: 'Jordan', isSelf: false });
     expect(story.turn.headline).toBe(beat.headline);
     expect(story.turn.narrative).toBe(beat.narrative);
-    expect(story.turn.choices.map((c: { label: string }) => c.label)).toEqual(beat.choices);
+    expect(
+      story.turn.choices.map((c: { label: string; reply: string | null }) => ({
+        label: c.label,
+        reply: c.reply,
+      }))
+    ).toEqual(beat.choices);
     expect(story.turn.surfaces).toEqual([
       {
         type: 'imessage_notifications',

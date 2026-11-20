@@ -172,7 +172,9 @@ Note: `storyTurns.selectedChoiceId` and `turnChoices.turnId` reference each othe
 
 ### `turnChoices`
 
-The options attached to one `storyTurn` — `label`, `description`, `orderIndex`.
+The options attached to one `storyTurn` — `label`, `description`, `reply`, `orderIndex`.
+
+- `reply` — nullable; the exact text the reader sends by picking this choice, when the choice is a text to someone in the scene. Null for an action (a call, putting the phone down) and for every choice written before replies. Generated turns get it from the model; the scripted beat 1s write it by hand (the words inside each `Text back: "…"` label).
 
 ### `turnSurfaces`
 

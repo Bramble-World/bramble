@@ -116,6 +116,13 @@ export type ChoiceView = {
   label: string;
   /** Null when the label says enough — the schema's own words. Optional in Swift. */
   description: string | null;
+  /**
+   * The exact words the reader sends as a text by picking this choice, or null
+   * when the choice is an action rather than a text (a call, putting the phone
+   * down, waiting). Show a choice with a reply as a message ready to send, and
+   * one without as an action. Null on every choice written before replies.
+   */
+  reply: string | null;
 };
 
 export type TurnView = {

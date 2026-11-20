@@ -31,6 +31,22 @@ describe('the premises behind the 1:47 AM opening', () => {
     }
   });
 
+  it.each(PREMISE_IDS)(
+    '%s: a "Text back" choice sends its quoted words; others send nothing',
+    (id) => {
+      const premise = premises.find((p) => p.id === id)!;
+      for (const relationship of ['ex', 'crush'] as const) {
+        for (const choice of premise.beat1(naming(relationship)).choices) {
+          const quoted = /^Text back: "(.+)"$/.exec(choice.label);
+          // The reply is exactly the words in the label, so the bubble the app
+          // sends reads the same as the choice the reader picked.
+          expect(choice.reply).toBe(quoted ? quoted[1] : null);
+          if (choice.label.startsWith('Call ')) expect(choice.reply).toBeNull();
+        }
+      }
+    }
+  );
+
   it.each(PREMISE_IDS)('%s: sets up a story the model can continue', (id) => {
     const premise = premises.find((p) => p.id === id)!;
     for (const relationship of ['ex', 'crush'] as const) {
