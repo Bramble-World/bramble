@@ -66,9 +66,12 @@ export function registerFixtures(fake: FakeGenerator): void {
         .filter(Boolean)
         .join(' '),
       choices: [
-        { label: 'Say the true thing', description: 'It will not be taken well.' },
-        { label: 'Say the easy thing', description: null },
-        { label: 'Say nothing yet', description: 'Let the silence do the work.' },
+        { label: 'Say the true thing', description: 'It will not be taken well.', reply: null },
+        // A text back on a phone beat, so the reply path is played too.
+        onPhone
+          ? { label: 'Text back: "i\'m here"', description: null, reply: "i'm here" }
+          : { label: 'Say the easy thing', description: null, reply: null },
+        { label: 'Say nothing yet', description: 'Let the silence do the work.', reply: null },
       ].slice(0, isEnding ? 0 : 2 + (seed % 2)),
     };
   });

@@ -71,6 +71,7 @@ export async function insertTurn(
         turnId: written.id,
         label: choice.label,
         description: choice.description,
+        reply: choice.reply,
         orderIndex,
       }))
     );

@@ -1,0 +1,1 @@
+ALTER TABLE "turn_choices" ADD COLUMN "reply" text;
