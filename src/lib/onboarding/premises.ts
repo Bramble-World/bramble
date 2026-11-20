@@ -85,9 +85,9 @@ const MOVING_AWAY: Premise = {
       narrative:
         'You read it twice. The flight is in seven hours. You sit up in the dark and the phone lights your hands.',
       choices: [
-        'Text back: "tell me."',
-        `Call ${naming.name} right now`,
-        'Put the phone face down',
+        { label: 'Text back: "tell me."', reply: 'tell me.' },
+        { label: `Call ${naming.name} right now`, reply: null },
+        { label: 'Put the phone face down', reply: null },
       ],
       surface: {
         ...PHONE_TIME,
@@ -139,9 +139,9 @@ const JUST_BROKE_UP: Premise = {
       narrative:
         'You read it with your heart going faster than it should. Three dots appear, and stay, and stay.',
       choices: [
-        'Text back: "are you ok?"',
-        `Call ${naming.name} right now`,
-        'Wait to see what else comes',
+        { label: 'Text back: "are you ok?"', reply: 'are you ok?' },
+        { label: `Call ${naming.name} right now`, reply: null },
+        { label: 'Wait to see what else comes', reply: null },
       ],
       surface: {
         ...PHONE_TIME,
@@ -192,9 +192,9 @@ const SAW_YOU_TONIGHT: Premise = {
       headline: `${naming.name} saw you tonight and didn't come over. Now ${p.theyre} texting.`,
       narrative: `You go back over the night: the party, the crowd by the kitchen. You never saw ${p.them}. ${capitalised(p.they)} saw you.`,
       choices: [
-        'Text back: "why didn\'t you?"',
-        `Call ${naming.name} right now`,
-        'Text back: "i didn\'t see you"',
+        { label: 'Text back: "why didn\'t you?"', reply: "why didn't you?" },
+        { label: `Call ${naming.name} right now`, reply: null },
+        { label: 'Text back: "i didn\'t see you"', reply: "i didn't see you" },
       ],
       surface: {
         ...PHONE_TIME,
@@ -243,9 +243,9 @@ const FOUND_THE_PHOTO: Premise = {
       narrative:
         "You know exactly which photo. You haven't looked at it in a year, and you could still describe it.",
       choices: [
-        'Text back: "i remember."',
-        `Call ${naming.name} right now`,
-        'Text back: "what photo?"',
+        { label: 'Text back: "i remember."', reply: 'i remember.' },
+        { label: `Call ${naming.name} right now`, reply: null },
+        { label: 'Text back: "what photo?"', reply: 'what photo?' },
       ],
       surface: {
         ...PHONE_TIME,

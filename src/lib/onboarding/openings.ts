@@ -46,10 +46,17 @@ export type OpeningPhone = {
   timeLabel: string;
 };
 
+/**
+ * One option on a scripted beat. `reply` is the text the reader sends by picking
+ * it, word for word — the words inside a "Text back" label — and null for an
+ * action (a call, leaving it on read), exactly as a written beat's would be.
+ */
+export type ScriptedChoice = { label: string; reply: string | null };
+
 export type ScriptedBeat = {
   headline: string;
   narrative: string;
-  choices: string[];
+  choices: ScriptedChoice[];
   surface: {
     clockTime: string;
     dateLabel: string;
@@ -164,9 +171,9 @@ export const ARE_YOU_UP: Opening = {
       narrative:
         "You stare at the screen until it dims, then tap it awake again. Three dots appear. Then they're gone.",
       choices: [
-        'Text back: "i\'m up."',
-        `Call ${naming.name} right now`,
-        'Leave it on read and try to sleep',
+        { label: 'Text back: "i\'m up."', reply: "i'm up." },
+        { label: `Call ${naming.name} right now`, reply: null },
+        { label: 'Leave it on read and try to sleep', reply: null },
       ],
       surface: {
         clockTime: '1:48',

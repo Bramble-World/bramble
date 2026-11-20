@@ -17,6 +17,8 @@ export type PublicChoice = {
   turnId: string;
   label: string;
   description: string | null;
+  /** The text the reader sends by picking it. Null for an action. */
+  reply: string | null;
   orderIndex: number;
 };
 
@@ -58,4 +60,6 @@ export type NewTurn = {
 export type NewChoice = {
   label: string;
   description?: string;
+  /** The text the reader sends by picking it. Absent for an action. */
+  reply?: string;
 };

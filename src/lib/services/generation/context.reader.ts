@@ -230,6 +230,7 @@ export async function assembleSessionContext(
         description: choice.description,
       })),
       selectedChoiceLabel: turn.selectedChoice?.label ?? null,
+      selectedChoiceReply: turn.selectedChoice?.reply ?? null,
     })),
   };
 }

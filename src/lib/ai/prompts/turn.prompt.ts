@@ -38,6 +38,12 @@ const choiceSchema = z.object({
     .string()
     .nullable()
     .describe('One clause on what this choice risks. Null if the label says enough.'),
+  reply: z
+    .string()
+    .nullable()
+    .describe(
+      'The exact text you send if you pick this, in your own texting voice. Null unless the choice is sending a text to someone in the scene.'
+    ),
 });
 
 export const turnOutputSchema = z.object({
@@ -150,6 +156,12 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '  information; at least one must risk something — saying the awkward thing,',
         '  committing to something, or letting a moment pass. A turn where every option',
         '  is a question is a turn where nothing can happen.',
+        '- A choice that is you texting someone in the scene carries reply: the exact',
+        '  words you send, one message, the way you would type it — lowercase, casual,',
+        '  in the same register as the texts already in the story. The label still',
+        '  says what the choice is. Any other choice (calling, going over, putting the',
+        '  phone down, waiting, saying something in person) has reply null. Never',
+        '  write a reply for a choice that is not literally sending a text.',
         ...PHASE_RULES[phase],
         '',
         'Shape of a beat:',
@@ -273,6 +285,11 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
                   turn.selectedChoiceLabel
                     ? `  You chose: ${turn.selectedChoiceLabel}`
                     : '  (unanswered)',
+                  // The words themselves, because the reply on screen is what the
+                  // other person read, and the next beat answers it.
+                  ...(turn.selectedChoiceReply
+                    ? [`  You texted: ${turn.selectedChoiceReply}`]
+                    : []),
                 ].join('\n')
               ),
               '',

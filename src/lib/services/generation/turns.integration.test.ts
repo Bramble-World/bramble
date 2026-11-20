@@ -859,8 +859,8 @@ describe('surfaces', () => {
     headline: 'Maya just texted you at 1:47.',
     narrative: 'You read it with the sound off.',
     choices: [
-      { label: 'Reply', description: null },
-      { label: 'Leave it', description: null },
+      { label: 'Text back: "what is it"', description: null, reply: '  what is it ' },
+      { label: 'Leave it', description: null, reply: null },
     ],
     surfaceKind: 'imessage_notifications',
     clockTime: '1:47',
@@ -899,6 +899,8 @@ describe('surfaces', () => {
         ],
       },
     ]);
+    // The text a choice sends is kept, trimmed; an action sends none.
+    expect(turn.choices.map((c) => c.reply)).toStrictEqual(['what is it', null]);
     // A resumed turn reads the same as a fresh one.
     expect(await sessionReader.getOpenTurn(db, session.id)).toStrictEqual(turn);
   });
@@ -1043,8 +1045,8 @@ describe('a provider failure', () => {
         headline: 'Maya has gone quiet.',
         narrative: 'You wait.',
         choices: [
-          { label: 'Text her', description: null },
-          { label: 'Leave it', description: null },
+          { label: 'Text her', description: null, reply: 'you ok?' },
+          { label: 'Leave it', description: null, reply: null },
         ],
         surfaceKind: 'none',
         clockTime: null,

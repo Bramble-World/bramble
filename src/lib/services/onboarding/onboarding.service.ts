@@ -256,7 +256,10 @@ async function writeStory(
   const turnId = await sessionWriter.insertTurn(tx, session.id, 1, {
     headline: beat.headline,
     narrativeContent: beat.narrative,
-    choices: beat.choices.map((label) => ({ label })),
+    choices: beat.choices.map((choice) => ({
+      label: choice.label,
+      reply: choice.reply ?? undefined,
+    })),
     surfaces: surface ? [surface] : [],
   });
   const turn = await sessionReader.getTurn(tx, turnId);

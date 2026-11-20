@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionContext, StorylineContext } from '@/lib/services/generation/generation.types';
-import { turnIsUsable, turnPrompt, TurnVars } from './turn.prompt';
+import { turnIsUsable, turnOutputSchema, turnPrompt, TurnVars } from './turn.prompt';
 
 const storyline = (overrides: Partial<StorylineContext> = {}): StorylineContext => ({
   storyline: {
@@ -293,6 +293,7 @@ describe('surfaces', () => {
             surfaceLines: ['On your phone — Maya: "are you up"'],
             choices: [],
             selectedChoiceLabel: 'Leave it',
+            selectedChoiceReply: null,
           },
         ],
       },
@@ -301,6 +302,66 @@ describe('surfaces', () => {
     expect(prompt).toContain(
       '- Maya just texted you. You put the phone face down.\n  On your phone — Maya: "are you up"\n  You chose: Leave it'
     );
+  });
+});
+
+/**
+ * A choice that is a text carries the words it sends, so the app can show it as
+ * a message ready to send rather than parse them out of the label.
+ */
+describe('replies', () => {
+  it('asks for the words of a text, and null for anything else', () => {
+    const { system } = render();
+
+    expect(system).toContain('carries reply: the exact');
+    expect(system).toContain('has reply null');
+  });
+
+  it('requires a reply on every choice, null allowed', () => {
+    const beat = {
+      isEnding: false,
+      headline: 'Maya just texted you.',
+      narrative: 'You read it twice.',
+      surfaceKind: 'none',
+      clockTime: null,
+      dateLabel: null,
+      notifications: [],
+    };
+    const choice = { label: 'Text back: "tell me."', description: null };
+
+    expect(
+      turnOutputSchema.safeParse({ ...beat, choices: [{ ...choice, reply: 'tell me.' }] }).success
+    ).toBe(true);
+    expect(
+      turnOutputSchema.safeParse({ ...beat, choices: [{ ...choice, reply: null }] }).success
+    ).toBe(true);
+    expect(turnOutputSchema.safeParse({ ...beat, choices: [choice] }).success).toBe(false);
+  });
+
+  it('remembers the words the reader texted, and says nothing for an action', () => {
+    const turn = {
+      turnOrder: 1,
+      headline: 'Maya just texted you.',
+      narrativeContent: 'You read it twice.',
+      surfaceLines: [],
+      choices: [],
+    };
+    const { prompt } = render({
+      session: {
+        ...session,
+        turns: [
+          {
+            ...turn,
+            selectedChoiceLabel: 'Text back: "tell me."',
+            selectedChoiceReply: 'tell me.',
+          },
+          { ...turn, turnOrder: 2, selectedChoiceLabel: 'Call Maya', selectedChoiceReply: null },
+        ],
+      },
+    });
+
+    expect(prompt).toContain('  You chose: Text back: "tell me."\n  You texted: tell me.');
+    expect(prompt.match(/You texted/g)).toHaveLength(1);
   });
 });
 
@@ -337,7 +398,11 @@ describe('turnIsUsable', () => {
   const output = (isEnding: boolean, choices: number) =>
     ({
       isEnding,
-      choices: Array.from({ length: choices }, (_, i) => ({ label: `c${i}`, description: null })),
+      choices: Array.from({ length: choices }, (_, i) => ({
+        label: `c${i}`,
+        description: null,
+        reply: null,
+      })),
     }) as Parameters<typeof turnIsUsable>[0];
 
   it('takes an ordinary beat with two to four choices before the cap', () => {

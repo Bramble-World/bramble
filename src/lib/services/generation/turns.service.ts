@@ -135,6 +135,7 @@ export async function generateTurn(
         // The schema says nullable because structured output has no absent; the
         // column wants undefined.
         description: choice.description ?? undefined,
+        reply: choice.reply?.trim() || undefined,
       })),
       surfaces,
     },

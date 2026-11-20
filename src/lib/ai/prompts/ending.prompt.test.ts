@@ -12,6 +12,7 @@ const session = {
       surfaceLines: ['Maya: are you up'],
       choices: [],
       selectedChoiceLabel: 'Text back',
+      selectedChoiceReply: 'hey',
     },
     {
       turnOrder: 2,
@@ -20,6 +21,7 @@ const session = {
       surfaceLines: [],
       choices: [],
       selectedChoiceLabel: null,
+      selectedChoiceReply: null,
     },
   ],
 };

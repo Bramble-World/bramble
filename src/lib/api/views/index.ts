@@ -56,6 +56,7 @@ export function choiceView(choice: TurnWithChoices['choices'][number]): ChoiceVi
     id: choice.id,
     label: choice.label,
     description: choice.description,
+    reply: choice.reply,
   };
   // orderIndex is absent: the array order IS the order. Shipping both invites a
   // client that sorts by one and renders the other.
