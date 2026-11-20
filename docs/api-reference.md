@@ -421,9 +421,19 @@ Clients must render whatever beat 1 arrives, not a bundled copy of it.
       "headline": "Jordan is getting married tomorrow. And she just texted you.",
       "narrative": "You stare at the screen until it dims, then tap it awake again. Three dots appear. Then they're gone.",
       "choices": [
-        { "id": "uuid", "label": "Text back: \"i'm up.\"", "description": null },
-        { "id": "uuid", "label": "Call Jordan right now", "description": null },
-        { "id": "uuid", "label": "Leave it on read and try to sleep", "description": null }
+        {
+          "id": "uuid",
+          "label": "Text back: \"i'm up.\"",
+          "description": null,
+          "reply": "i'm up."
+        },
+        { "id": "uuid", "label": "Call Jordan right now", "description": null, "reply": null },
+        {
+          "id": "uuid",
+          "label": "Leave it on read and try to sleep",
+          "description": null,
+          "reply": null
+        }
       ],
       "surfaces": [
         {
@@ -738,8 +748,13 @@ reconstructing state locally.
       "narrative": "You read it with the sound off, twice.",
       "isEnding": false,
       "choices": [
-        { "id": "uuid", "label": "Tell her the truth", "description": "It may not land." },
-        { "id": "uuid", "label": "Change the subject", "description": null }
+        {
+          "id": "uuid",
+          "label": "Text back: \"i still think about it\"",
+          "description": "It may not land.",
+          "reply": "i still think about it"
+        },
+        { "id": "uuid", "label": "Change the subject", "description": null, "reply": null }
       ],
       "surfaces": [
         {
@@ -763,7 +778,9 @@ reconstructing state locally.
           "headline": null,
           "narrative": "The message sits there, unsent.",
           "isEnding": false,
-          "choices": [{ "id": "uuid", "label": "Say the true thing", "description": null }],
+          "choices": [
+            { "id": "uuid", "label": "Say the true thing", "description": null, "reply": null }
+          ],
           "surfaces": []
         },
         "chosenChoiceId": "uuid"
@@ -831,6 +848,21 @@ Every turn has three parts, whatever it is shown on:
 | `narrative` | What you do or feel now. On a turn with no headline, the whole beat.                       |
 | `isEnding`  | True on the story's last beat. An ending has **no choices** and is never answered.         |
 | `choices`   | 2–4 options, in display order. `[]` on an ending.                                          |
+
+**A choice** is `{ id, label, description, reply }`:
+
+| Field         | What it is                                                                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `label`       | What the choice is, in a few words: `Text back: "tell me."`, `Call Jordan right now`.                                                                             |
+| `description` | One clause on what it risks. Often null.                                                                                                                          |
+| `reply`       | **The exact words the reader sends as a text by picking it**, lowercase and casual like the story's texts — or **null** when the choice is an action, not a text. |
+
+`reply` is always present. Show a choice with a reply as a message ready to send
+in the thread, and one without as an action button; never parse the words out of
+`label`. It is non-null only when the choice is literally sending a text to someone
+in the scene: a call, putting the phone down, waiting, or saying something in
+person is null. **Choices written before replies existed are all null**, so an
+old turn shows every option as an action.
 
 **Stories end.** Each storyline has a soft length of about 20 beats. From four
 beats before it the model may end the story when it lands; four beats after it,
