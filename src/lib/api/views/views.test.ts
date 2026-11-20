@@ -60,9 +60,17 @@ const turn: TurnWithChoices = {
       turnId: 't1',
       label: 'Tell her the truth',
       description: 'It may not land.',
+      reply: "i'm still in love with you",
       orderIndex: 0,
     },
-    { id: 'c2', turnId: 't1', label: 'Change the subject', description: null, orderIndex: 1 },
+    {
+      id: 'c2',
+      turnId: 't1',
+      label: 'Change the subject',
+      description: null,
+      reply: null,
+      orderIndex: 1,
+    },
   ],
 };
 
@@ -112,8 +120,13 @@ describe('views', () => {
       narrative: 'She answers before you have finished typing.',
       isEnding: false,
       choices: [
-        { id: 'c1', label: 'Tell her the truth', description: 'It may not land.' },
-        { id: 'c2', label: 'Change the subject', description: null },
+        {
+          id: 'c1',
+          label: 'Tell her the truth',
+          description: 'It may not land.',
+          reply: "i'm still in love with you",
+        },
+        { id: 'c2', label: 'Change the subject', description: null, reply: null },
       ],
       surfaces: [],
     });
@@ -411,6 +424,7 @@ describe('endingView', () => {
       turnId: id,
       label: `choice ${i}`,
       description: null,
+      reply: null,
       orderIndex: i,
     })),
   });

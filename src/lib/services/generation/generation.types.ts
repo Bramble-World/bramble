@@ -114,6 +114,8 @@ export type SessionContext = {
     /** What was offered, and which was taken. Null while awaiting an answer. */
     choices: Array<{ id: string; label: string; description: string | null }>;
     selectedChoiceLabel: string | null;
+    /** The text the reader sent by that choice, word for word. Null for an action. */
+    selectedChoiceReply: string | null;
   }>;
 };
 
