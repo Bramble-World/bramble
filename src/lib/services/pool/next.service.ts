@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/index';
 import {
   characterRelationships,
@@ -42,6 +42,18 @@ export type NextStory = {
   /** Written for this reader from what they shared in ChatGPT. */
   fromChatGPT: boolean;
 };
+
+/**
+ * Where an ended session's next story stands, so the app can tell "nothing to
+ * offer" from "not ready yet".
+ *
+ * - `ready`: `next` is the story.
+ * - `preparing`: nothing yet, but a story this reader asked ChatGPT for is
+ *   being written, and becomes `next` when it's done: read the session again.
+ * - `none`: nothing can be offered: the reader has played everything the pool
+ *   has for them, and nothing is being written.
+ */
+export type NextStatus = 'ready' | 'preparing' | 'none';
 
 /** How the reader went on to the next story. */
 export const NEXT_STORY_HOW = ['countdown', 'begin_now', 'later'] as const;
@@ -102,6 +114,28 @@ async function choose(tx: Executor, userId: string, lastAuthor: string | null) {
     .orderBy(sql`("story_templates"."origin" = 'reborn') desc, random()`)
     .limit(1);
   return row?.id ?? null;
+}
+
+/** Whether a story this reader asked ChatGPT for is still being written. */
+async function ownFromChatGPTInProgress(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: storyTemplates.id })
+    .from(storyTemplates)
+    .where(
+      and(
+        eq(storyTemplates.userId, userId),
+        eq(storyTemplates.origin, 'chatgpt'),
+        inArray(storyTemplates.status, ['pending', 'generating'])
+      )
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+/** The status beside `nextStoryFor`'s answer for an ended session. */
+export async function nextStatusFor(userId: string, next: NextStory | null): Promise<NextStatus> {
+  if (next) return 'ready';
+  return (await ownFromChatGPTInProgress(userId)) ? 'preparing' : 'none';
 }
 
 async function templateIfReady(tx: Executor, templateId: string) {

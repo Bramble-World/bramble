@@ -1,6 +1,6 @@
 # Porter deployment for the Bramble API.
 #
-# One image, six ways to start it. The web service, the import worker and the four
+# One image, seven ways to start it. The web service, the import worker and the five
 # sweeps all run the same container with a different command — see the Dockerfile.
 # Building once rather than per-service is what guarantees the worker cannot be
 # running different code from the server that queued its work.
@@ -164,6 +164,21 @@ services:
     allowConcurrent: false
     # A database read per player and one call to Apple per send.
     timeoutSeconds: 300
+
+  - name: ending-sweep
+    type: job
+    run: node dist/sweeps/ending-sweep.js
+    # Every five minutes. Writes the ending pages that were owed and never
+    # written: a write cut short by a deploy, or one that failed for a reader
+    # who hasn't opened the story since. At most 20 a run, each claimed like
+    # any other attempt, so a run never pays for one a web pod is writing.
+    cron: '*/5 * * * *'
+    cpuCores: 0.25
+    ramMegabytes: 512
+    allowConcurrent: false
+    # Up to 20 model calls, four at a time, each with a 50 s deadline and one
+    # retry. Usually none.
+    timeoutSeconds: 600
 
 # Build-time values that are public by definition, so they belong in version
 # control rather than in a dashboard.

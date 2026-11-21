@@ -749,7 +749,9 @@ reconstructing state locally.
     "turnsAnswered": 3,
     "endedAt": null,
     "next": null,
+    "nextStatus": null,
     "ending": null,
+    "endingStatus": null,
     "turn": {
       "id": "uuid",
       "headline": "Maya just texted you at 1:47 AM.",
@@ -828,10 +830,23 @@ Four states, one remedy each:
 
 - Written once, moments after the ending turn, from this playthrough alone.
   **`null` until then**: read the session again shortly. If writing it fails,
-  the next `POST .../turn` on the ended session (free) tries again.
-- **`keyChoices`** — up to three of the reader's own choices, re-worded "you …",
-  in story order. `position` is the choice's place in its beat (0-based), so it
-  takes that beat's choice colour.
+  reading the session tries again (at most once every two minutes, however
+  often you read), and so does a server sweep every five minutes, up to five
+  attempts in all. Nothing else is needed from the app.
+- **`endingStatus`** says which it is, on an ended session (null while the story
+  is going):
+
+  | `endingStatus` | What to do                                                                |
+  | -------------- | ------------------------------------------------------------------------- |
+  | `ready`        | `ending` is there: show the page                                          |
+  | `writing`      | Not yet: keep reading the session ("writing how it ended…")               |
+  | `unavailable`  | Every attempt failed and none will be made: stop waiting, go on to `next` |
+
+- **`keyChoices`** — up to three of the reader's own choices, in story order:
+  re-worded "you …", or, when the writer named none the reader made, the
+  labels as the reader tapped them (first letter lowercased).
+  `position` is the choice's place in its beat (0-based), so it takes that
+  beat's choice colour.
 - **`facts`** — `choices` made, `storyNights` (null when the story's clock
   doesn't say: leave it out of the line), and the people met, by name.
 
@@ -875,7 +890,10 @@ old turn shows every option as an action.
 **Stories end.** Each storyline has a soft length of about 20 beats. From four
 beats before it the model may end the story when it lands; four beats after it,
 it must. So a story is roughly 16–24 beats, and its ending is shaped by the
-choices made. Stories already in progress when endings shipped were given at
+choices made. **The first story** (the one begun from the 1:47 am phone) is
+shorter: **its ending is beat 10** (beat 1 being the scripted one), with beats
+5–9 building to it. A first story already past beat 10 when this shipped ends
+on its next beat. Stories already in progress when endings shipped were given at
 least their longest playthrough + 8 beats, so none ends without building to it.
 **The Mac app never gets an ending** (`X-Bramble-Client: macos/…`): it can't show
 one, so stories played there stay open. The ending is an ordinary generated turn and costs one point of
@@ -957,7 +975,16 @@ An ending cannot be answered: answering it is `409 CONFLICT`.
 Once a session is `ended`, its `SessionView` carries **`next`**: the story the
 reader goes on to, like the next episode. Null while the story is going, and
 null when there is nothing new for this reader (rare: the pool always has the
-team's seed stories).
+team's seed stories, but a reader can play them all).
+
+**`nextStatus`** tells the two nulls apart, on an ended session (null while the
+story is going):
+
+| `nextStatus` | What to do                                                                                                        |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `ready`      | `next` is there: show the card                                                                                    |
+| `preparing`  | Nothing yet, but a story the reader asked ChatGPT for is being written and will be `next`: read the session later |
+| `none`       | Nothing can be offered: the reader has played everything there is for them. Offer making one with ChatGPT         |
 
 ```json
 "next": {
@@ -983,8 +1010,9 @@ team's seed stories).
 - **`fromChatGPT`** — written for this reader from what they shared in ChatGPT.
   Show "made with chatgpt." when true. Never true with `fromPool`.
 
-Pool stories are already written, so `next` is ready as soon as the story ends:
-there is no "still being written" state.
+Pool stories are already written, so `next` is ready as soon as the story ends
+whenever the pool has one for the reader; `preparing` only ever means a story
+from ChatGPT.
 
 It's the same story every time you ask for this session, so the card shown and
 the story started match. Pool stories are written by other players (from their

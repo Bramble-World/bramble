@@ -22,8 +22,10 @@ export type StorylineContext = {
     setting: string | null;
     tone: string | null;
     arcSummary: string | null;
-    /** The soft length budget; see `storyPhase`. */
+    /** The soft length budget; see `endingBounds`. */
     targetBeats: number;
+    /** The scripted opening it was written from: set only on the first story, which ends on beat 10. */
+    openingId: string | null;
   };
   characters: CharacterContext[];
   relationships: RelationshipContext[];

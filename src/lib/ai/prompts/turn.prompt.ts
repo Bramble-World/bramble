@@ -20,6 +20,13 @@ export type TurnVars = {
   beyondScript: boolean;
   /** How far through its length the story is; decides whether it may, or must, end. */
   phase: StoryPhase;
+  /**
+   * On a story whose ending is a fixed beat (the first story's beat 10), how
+   * many beats after this one it comes, over the last few before it; null
+   * otherwise. Told to the model so the story builds to its ending instead of
+   * stopping on it. See `beatsToEnding`.
+   */
+  beatsToEnding: number | null;
 };
 
 /**
@@ -121,7 +128,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
   stage: 'turn',
   schema: turnOutputSchema,
 
-  render: ({ storyline, session, beyondScript, phase }) => {
+  render: ({ storyline, session, beyondScript, phase, beatsToEnding }) => {
     const stage = onStage(storyline);
 
     return {
@@ -163,6 +170,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '  phone down, waiting, saying something in person) has reply null. Never',
         '  write a reply for a choice that is not literally sending a text.',
         ...PHASE_RULES[phase],
+        ...(phase === 'open' && beatsToEnding !== null ? buildUpRules(beatsToEnding) : []),
         '',
         'Shape of a beat:',
         '- headline is the hook, one sentence: what just happened, to "you".',
@@ -336,6 +344,28 @@ const PHASE_RULES: Record<StoryPhase, string[]> = {
   ],
   must_end: ['- This beat is the ending of the story. It must end now.', ...ENDING_SHAPE],
 };
+
+/**
+ * The countdown to a fixed ending, so it lands as an ending rather than the
+ * story running out: the beats before it tighten toward it, and the one just
+ * before it is the decision it turns on. Still no resolution: these beats end
+ * on a choice like any other.
+ */
+function buildUpRules(left: number): string[] {
+  if (left === 1) {
+    return [
+      '- The next beat is the last one: the story ends there. This is its final',
+      '  decision, so make it the one the ending turns on, with everything the story',
+      '  has been about riding on it. Do not resolve anything yet.',
+    ];
+  }
+  return [
+    `- The story ends ${left} beats after this one, on its own last beat. Build toward`,
+    '  it: narrow in on what it has been about, bring back what the reader set in',
+    '  motion, and let each choice weigh more than the last. No new threads that',
+    '  could not be settled by then. Do not resolve it yet.',
+  ];
+}
 
 /**
  * Whose wants are worth spending prompt on.

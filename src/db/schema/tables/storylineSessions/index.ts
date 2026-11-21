@@ -7,6 +7,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import type { StoredEnding } from '@/lib/endings/ending';
 import { storylines } from '../storylines';
 import { timestamps } from '../../../util/timestamps';
@@ -85,9 +86,19 @@ export const storylineSessions = pgTable(
      * Written once, after the ending turn, by a model that is shown only this
      * playthrough — so unlike `storylines.arc_summary` it describes nothing the
      * reader hasn't lived. Null until it's written, which is moments after the
-     * ending; a failed write is retried by the next `POST .../turn`.
+     * ending. A failed write is tried again by the next read of the session and
+     * by the ending sweep, up to `ENDING_MAX_ATTEMPTS` in all.
      */
     ending: jsonb().$type<StoredEnding>(),
+    /**
+     * How many times writing `ending` has been started, and when the last one
+     * was. Together they are the lease that keeps two web pods (or a pod and
+     * the sweep) from paying for the same ending at once: an attempt is claimed
+     * by a conditional UPDATE only when the last one is older than
+     * `ENDING_LEASE_MS`, and never past the cap. See `ending.service.ts`.
+     */
+    endingAttempts: integer('ending_attempts').notNull().default(0),
+    endingAttemptedAt: timestamp('ending_attempted_at', { withTimezone: true }),
 
     /**
      * The pool story offered after this one ended, chosen once so the card the
@@ -109,6 +120,11 @@ export const storylineSessions = pgTable(
     index('idx_storyline_sessions_user').on(table.userId),
     // Supports the idle sweep: WHERE last_active_at < now() - <threshold>.
     index('idx_storyline_sessions_last_active').on(table.lastActiveAt),
+    // The ending sweep: ended sessions whose ending is still owed. Partial, so
+    // it holds only the handful waiting rather than every finished story.
+    index('idx_storyline_sessions_ending_owed')
+      .on(table.endedAt)
+      .where(sql`${table.endedAt} IS NOT NULL AND ${table.ending} IS NULL`),
     // The resume lookup: this reader's sessions for one beat, most recent first.
     // Ordered to match the query so the newest row is the index's first hit
     // rather than something found after a sort.

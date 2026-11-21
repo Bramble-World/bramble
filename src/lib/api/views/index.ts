@@ -22,6 +22,8 @@ import type {
   SurfaceView,
   TurnView,
   NextStoryView,
+  NextStatusView,
+  EndingStatusView,
   EndingView,
 } from './views.types';
 import type { StoredEnding } from '@/lib/endings/ending';
@@ -254,7 +256,9 @@ export function sessionView(input: {
   history: TurnWithChoices[];
   endedAt: Date | null;
   next?: NextStoryView | null;
+  nextStatus?: NextStatusView | null;
   ending?: StoredEnding | null;
+  endingStatus?: EndingStatusView | null;
 }): SessionView {
   return {
     id: input.id,
@@ -264,6 +268,7 @@ export function sessionView(input: {
     turn: input.turn ? turnView(input.turn) : null,
     endedAt: iso(input.endedAt),
     ending: input.ending ? endingView(input.ending, input.history) : null,
+    endingStatus: input.endingStatus ?? null,
     next: input.next
       ? {
           title: input.next.title,
@@ -273,6 +278,7 @@ export function sessionView(input: {
           fromChatGPT: input.next.fromChatGPT,
         }
       : null,
+    nextStatus: input.nextStatus ?? null,
     history: input.history.map(answeredTurnView),
   };
   // playheadOrder is absent: it is an internal key over events.narrativeOrder,
