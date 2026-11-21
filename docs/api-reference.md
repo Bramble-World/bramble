@@ -104,28 +104,28 @@ One envelope, every failure:
 `retryAfter` (seconds) appears on `RATE_LIMITED`, `UPSTREAM_BUSY` and
 `GENERATION_TIMEOUT`.
 
-| Status | Code                        | Meaning                                                                              |
-| ------ | --------------------------- | ------------------------------------------------------------------------------------ |
-| 400    | `VALIDATION_ERROR`          | Malformed body or a path id that is not a uuid                                       |
-| 401    | `UNAUTHORIZED`              | Missing, malformed or rejected bearer token                                          |
-| 403    | `FORBIDDEN`                 | Account deleted; device not verified (guest creation); onboarding as an account      |
-| 403    | `SIGNUP_REQUIRED`           | A guest asked for an account-only thing: a fourth beat, an import, account deletion  |
-| 403    | `REVERIFICATION_REQUIRED`   | Deleting an account needs a sign-in from the last 10 minutes. Re-verify, then resend |
-| 404    | `NOT_FOUND`                 | Unknown id — **or someone else's**. Never 403                                        |
-| 409    | `CONFLICT`                  | A turn already answered with a _different_ choice; an attested key with a live guest |
-| 409    | `STORYLINE_NOT_READY`       | Storyline is not `ready` to play                                                     |
-| 409    | `IMPORT_LIMIT_REACHED`      | All three conversation slots are spent                                               |
-| 409    | `GENERATION_IN_PROGRESS`    | Another generation holds this session                                                |
-| 410    | `TRANSCRIPT_EXPIRED`        | Transcript gone before the worker read it. Re-send                                   |
-| 413    | `TRANSCRIPT_TOO_LARGE`      | Over 400,000 characters                                                              |
-| 429    | `RATE_LIMITED`              | Out of energy — or, on the guest routes, too many from one address. `Retry-After`    |
-| 429    | `UPSTREAM_BUSY`             | The model provider throttled us. Clears on its own                                   |
-| 500    | `GENERATION_UNUSABLE`       | Model output did not match the schema. Retrying burns money for the same failure     |
-| 500    | `INTERNAL_SERVER_ERROR`     | Unexpected                                                                           |
-| 502    | `APPLE_REVOCATION_FAILED`   | Account deletion: Apple refused the code. Nothing was deleted                        |
-| 502    | `ANALYTICS_DELETION_FAILED` | Account deletion: PostHog refused. The account is not deleted                        |
-| 503    | `GENERATION_FAILED`         | Provider failure. Retryable                                                          |
-| 504    | `GENERATION_TIMEOUT`        | Our own 60s deadline. Safe to retry                                                  |
+| Status | Code                        | Meaning                                                                                                                  |
+| ------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 400    | `VALIDATION_ERROR`          | Malformed body or a path id that is not a uuid                                                                           |
+| 401    | `UNAUTHORIZED`              | Missing, malformed or rejected bearer token                                                                              |
+| 403    | `FORBIDDEN`                 | Account deleted; device not verified (guest creation); onboarding as an account                                          |
+| 403    | `SIGNUP_REQUIRED`           | A guest asked for an account-only thing: a fourth beat, an import, account deletion, stories from ChatGPT                |
+| 403    | `REVERIFICATION_REQUIRED`   | Deleting an account needs a sign-in from the last 10 minutes. Re-verify, then resend                                     |
+| 404    | `NOT_FOUND`                 | Unknown id — **or someone else's**. Never 403                                                                            |
+| 409    | `CONFLICT`                  | A turn already answered with a _different_ choice; an attested key with a live guest                                     |
+| 409    | `STORYLINE_NOT_READY`       | Storyline is not `ready` to play                                                                                         |
+| 409    | `IMPORT_LIMIT_REACHED`      | All three conversation slots are spent                                                                                   |
+| 409    | `GENERATION_IN_PROGRESS`    | Another generation holds this session                                                                                    |
+| 410    | `TRANSCRIPT_EXPIRED`        | Transcript gone before the worker read it. Re-send                                                                       |
+| 413    | `TRANSCRIPT_TOO_LARGE`      | Over 400,000 characters                                                                                                  |
+| 429    | `RATE_LIMITED`              | Out of energy — or, on the guest routes, too many from one address; or no stories from ChatGPT left today. `Retry-After` |
+| 429    | `UPSTREAM_BUSY`             | The model provider throttled us. Clears on its own                                                                       |
+| 500    | `GENERATION_UNUSABLE`       | Model output did not match the schema. Retrying burns money for the same failure                                         |
+| 500    | `INTERNAL_SERVER_ERROR`     | Unexpected                                                                                                               |
+| 502    | `APPLE_REVOCATION_FAILED`   | Account deletion: Apple refused the code. Nothing was deleted                                                            |
+| 502    | `ANALYTICS_DELETION_FAILED` | Account deletion: PostHog refused. The account is not deleted                                                            |
+| 503    | `GENERATION_FAILED`         | Provider failure. Retryable                                                                                              |
+| 504    | `GENERATION_TIMEOUT`        | Our own 60s deadline. Safe to retry                                                                                      |
 
 **404 and not 403 for another account's ids, everywhere.** "Not yours" and "no
 such thing" are the same answer, or the error itself confirms the id exists.
@@ -1142,7 +1142,7 @@ Tools (`tools/list`):
 
 - **`write_my_story`** `{ about, people: [{ name, relationship, details }] (1–3), you? }`
   — moderated, then queued; `{ outcome: "queued" | "limited" | "flagged", storyId, left }`.
-  Three a day; one that couldn't be written doesn't count. What was sent is
+  Five a day, shared with `POST /api/v1/stories/from-chatgpt`; one that couldn't be written doesn't count. What was sent is
   deleted once the story is written or refused. ChatGPT is told to call it as
   soon as the user asks, without showing them first (the iPhone's "make a story
   with chatgpt" link sends that request).
@@ -1156,10 +1156,59 @@ Tools (`tools/list`):
 
 `GET` and `DELETE` are `405`: there is no stream or session.
 
+### `POST /api/v1/stories/from-chatgpt`
+
+Stories from a link ChatGPT wrote, for players without the plugin: the app
+opens ChatGPT with a prompt, ChatGPT replies with
+`https://www.brambleworld.com/open/story#<url-encoded note>`, where the note
+is up to five situations from the player's life, and tapping it opens the app,
+which sends the note here. No editing step and no confirmation: the tap is the
+player's ok. Clerk bearer, **accounts only** (a guest is `403 SIGNUP_REQUIRED`).
+
+```json
+{ "context": "my ex Jordan texted me happy birthday…\n\nmy sister Maya…" }
+```
+
+- `context` (required): the fragment, decoded. Trimmed; 1–6000 characters, or
+  `400 VALIDATION_ERROR` (`fields.context`).
+
+A model (`chatgpt.situations`) sorts the note into at most five situations and
+drops, whatever the note says, anything about health (including sexual health),
+mental-health crises or self-harm, money, legal trouble, identifying details,
+work or school logistics, anything sexual, and anything too thin to play. Each
+situation kept is then exactly a `write_my_story` request: moderated (a flagged
+one is dropped), kept in `chatgpt_contexts` until its story is written, written
+by the pool job, and the player's next story. Only the situations are stored,
+never the note. Stories from one link share a batch, so `story_ready` is sent
+once, when the first is written.
+
+The day's allowance (five, over a sliding 24 hours, shared with
+`write_my_story`) is checked before the model is paid for. A link with more
+situations than are left writes as many as are left, in the order the model
+ranked them.
+
+| Status | Body                                                                              | When                                                                                        |
+| ------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 202    | `{ "outcome": "queued", "stories": 3, "left": 2, "overLimit": 0 }`                | `stories` (1–5) queued; `left` today after them; `overLimit` situations skipped for the day |
+| 200    | `{ "outcome": "not_written", "reason": "not_a_story" }`                           | Nothing in the note to make a story from (or nothing left once dropped). Nothing is kept    |
+| 200    | `{ "outcome": "not_written", "reason": "unsafe" }`                                | Moderation flagged every situation. Nothing is kept                                         |
+| 429    | `RATE_LIMITED`, `Retry-After` (seconds)                                           | None left today; the header says when one comes back. The model isn't called                |
+| 400    | `VALIDATION_ERROR`                                                                | No `context`, blank, or over 6000 characters                                                |
+| 401    | `UNAUTHORIZED`                                                                    | No valid token                                                                              |
+| 403    | `SIGNUP_REQUIRED`                                                                 | A guest                                                                                     |
+| 5xx    | `GENERATION_FAILED`, `GENERATION_TIMEOUT`, `UPSTREAM_BUSY`, `GENERATION_UNUSABLE` | Sorting the note failed; nothing was kept or counted. Retry as the table above says         |
+
+The stories then show in `GET /api/me`'s `chatgpt.writing` and, once written,
+as the next story with `fromChatGPT: true`. Not idempotent: sending the same
+note twice makes its stories twice (and uses the allowance twice), so the app
+sends a link once.
+
 ### Opening the app from a link
 
 `https://www.brambleworld.com/open/…` is a universal link: with the iPhone app
-installed it opens on the desk; without it, a page points to the app.
+installed it opens on the desk (`/open/story#…` sends its note to
+`POST /api/v1/stories/from-chatgpt` first); without it, a page points to the
+app. The fragment never reaches the website.
 `/.well-known/apple-app-site-association` claims `/open` and `/open/*` for
 `K555FJZF47.com.brambleworld.BrambleMobile`, and nothing else.
 

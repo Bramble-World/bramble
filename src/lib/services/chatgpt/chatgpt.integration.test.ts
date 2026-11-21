@@ -18,6 +18,8 @@ import {
   listStories,
   markConnected,
   requestStory,
+  requestStoriesFromLink,
+  storyReadyRecipient,
   storyReason,
 } from './chatgpt.service';
 
@@ -177,9 +179,17 @@ describe('writing a story from what ChatGPT sent', () => {
     for (let i = 0; i < CHATGPT_STORIES_PER_DAY; i++) {
       expect((await requestStory(player, CONTEXT, { safety: pass })).outcome).toBe('queued');
     }
+    const [first] = await db
+      .select({ createdAt: storyTemplates.createdAt })
+      .from(storyTemplates)
+      .where(eq(storyTemplates.userId, player))
+      .orderBy(storyTemplates.createdAt)
+      .limit(1);
     expect(await requestStory(player, CONTEXT, { safety: pass })).toEqual({
       outcome: 'limited',
       left: 0,
+      // When the first of the day's stops counting.
+      retryAt: new Date(first.createdAt.getTime() + 24 * 60 * 60 * 1000),
     });
   });
 
@@ -192,6 +202,103 @@ describe('writing a story from what ChatGPT sent', () => {
     expect(first.chatgptConnectedAt).not.toBeNull();
     expect(again.chatgptConnectedAt).toEqual(first.chatgptConnectedAt);
     expect((await chatgptStatus(player)).connected).toBe(true);
+  });
+});
+
+describe('stories from a link', () => {
+  const NOTE = [
+    'my ex Jordan texted me happy birthday after six months of nothing and I never answered.',
+    "my sister Maya borrowed my jacket for her date and gave it back with a stranger's number in the pocket.",
+    'ok',
+    'my best friend Priya got into the summer program and I did not, and we have not talked about it.',
+  ].join('\n\n');
+
+  it('keeps only the situations it sorted out of the note, and queues one story each', async () => {
+    const player = await newUser('player');
+    const result = await requestStoriesFromLink(player, NOTE, { generator: fake, safety: pass });
+
+    expect(result).toEqual({
+      outcome: 'queued',
+      stories: 3,
+      left: CHATGPT_STORIES_PER_DAY - 3,
+      overLimit: 0,
+    });
+    expect(fake.calls.map((c) => c.promptName)).toEqual(['chatgpt.situations']);
+
+    const kept = await contextsOf(player);
+    expect(kept).toHaveLength(3);
+    // The situations, never the note itself.
+    expect(kept.map((c) => c.content.about)).not.toContain(NOTE);
+    expect(kept.map((c) => c.content.people[0].name).sort()).toEqual(['Jordan', 'Maya', 'Priya']);
+
+    const templates = await db
+      .select()
+      .from(storyTemplates)
+      .where(eq(storyTemplates.userId, player));
+    expect(new Set(templates.map((t) => t.batchId)).size).toBe(1);
+    expect(templates[0].batchId).not.toBeNull();
+    expect(templates.every((t) => t.origin === 'chatgpt')).toBe(true);
+  });
+
+  it("writes as many as today has left, and says how many it couldn't", async () => {
+    const player = await newUser('player');
+    for (let i = 0; i < CHATGPT_STORIES_PER_DAY - 1; i++) {
+      await requestStory(player, CONTEXT, { safety: pass });
+    }
+    const result = await requestStoriesFromLink(player, NOTE, { generator: fake, safety: pass });
+    expect(result).toEqual({ outcome: 'queued', stories: 1, left: 0, overLimit: 2 });
+  });
+
+  it('is limited before paying for the model when nothing is left today', async () => {
+    const player = await newUser('player');
+    for (let i = 0; i < CHATGPT_STORIES_PER_DAY; i++) {
+      await requestStory(player, CONTEXT, { safety: pass });
+    }
+    const result = await requestStoriesFromLink(player, NOTE, { generator: fake, safety: pass });
+    expect(result).toMatchObject({ outcome: 'limited', left: 0 });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('writes nothing from a note with no situation in it', async () => {
+    const player = await newUser('player');
+    expect(
+      await requestStoriesFromLink(player, 'idk\n\nnothing', { generator: fake, safety: pass })
+    ).toEqual({ outcome: 'not_written', reason: 'not_a_story' });
+    expect(await contextsOf(player)).toHaveLength(0);
+  });
+
+  it('keeps nothing when moderation flags every situation', async () => {
+    const player = await newUser('player');
+    expect(await requestStoriesFromLink(player, NOTE, { generator: fake, safety: flag })).toEqual({
+      outcome: 'not_written',
+      reason: 'unsafe',
+    });
+    expect(await contextsOf(player)).toHaveLength(0);
+  });
+
+  it('tells the player once for the batch: when the first is ready', async () => {
+    const player = await newUser('player');
+    await requestStoriesFromLink(player, NOTE, { generator: fake, safety: pass });
+
+    expect(await writeNext()).toBe('ready');
+    expect(await writeNext()).toBe('ready');
+    const ready = await db
+      .select({ id: storyTemplates.id })
+      .from(storyTemplates)
+      .where(and(eq(storyTemplates.userId, player), eq(storyTemplates.status, 'ready')))
+      .orderBy(storyTemplates.updatedAt, storyTemplates.id);
+    expect(ready).toHaveLength(2);
+    expect(await storyReadyRecipient(ready[0].id)).toBe(player);
+    expect(await storyReadyRecipient(ready[1].id)).toBeNull();
+  });
+
+  it('tells the player about a story asked for on its own', async () => {
+    const player = await newUser('player');
+    await requestStory(player, CONTEXT, { safety: pass });
+    expect(await writeNext()).toBe('ready');
+    const [story] = await db.select().from(storyTemplates).where(eq(storyTemplates.userId, player));
+    expect(story.batchId).toBeNull();
+    expect(await storyReadyRecipient(story.id)).toBe(player);
   });
 });
 

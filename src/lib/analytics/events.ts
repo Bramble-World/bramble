@@ -127,11 +127,18 @@ export type AnalyticsEvent =
       properties: Record<string, never>;
     }
   | {
-      /** ChatGPT asked for a story. Never what it sent. */
+      /** A story was asked for from ChatGPT. Never what was sent. */
       name: 'chatgpt_story_requested';
       properties: {
-        /** Queued to be written, over the day's limit, or flagged by moderation and not kept. */
-        outcome: 'queued' | 'limited' | 'flagged';
+        /**
+         * Queued to be written, over the day's limit, flagged by moderation and
+         * not kept, or (a link) nothing in it to write a story from.
+         */
+        outcome: 'queued' | 'limited' | 'flagged' | 'not_written';
+        /** `write_my_story` in ChatGPT, or a link ChatGPT wrote, opened in the iPhone app. */
+        via: 'mcp' | 'link';
+        /** How many stories were queued: one at most from `write_my_story`, up to five from a link. */
+        stories: number;
       };
     }
   | {
