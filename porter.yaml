@@ -31,10 +31,21 @@ services:
     type: web
     run: node server.js
     port: 3000
-    # Two, so a rolling deploy and a single node failure both leave the API
-    # answering. The app holds no state between requests, so replicas need no
-    # coordination.
+    # At least two, so a rolling deploy and a single node failure both leave the
+    # API answering. The app holds no state between requests, so replicas need
+    # no coordination, and it scales out on CPU or memory as players arrive.
+    #
+    # Twenty at 0.5 cores is 10 cores, inside the cost-optimized node group's
+    # max cores (raise that in Porter before raising maxInstances). Each replica
+    # opens its own Postgres pool, so check the RDS connection limit before
+    # raising it too.
     instances: 2
+    autoscaling:
+      enabled: true
+      minInstances: 2
+      maxInstances: 20
+      cpuThresholdPercent: 70
+      memoryThresholdPercent: 80
     cpuCores: 0.5
     ramMegabytes: 1024
     # Both the API and the marketing site. One app serves them, and nothing in
