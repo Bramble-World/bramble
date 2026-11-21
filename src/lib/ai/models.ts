@@ -27,7 +27,7 @@ export const DEFAULT_MODEL = 'gpt-6-astra';
  */
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
-export type StageName = 'turn' | 'consequence' | 'extraction' | 'arc' | 'pool';
+export type StageName = 'turn' | 'consequence' | 'extraction' | 'arc' | 'pool' | 'situations';
 
 export type StageModel = {
   model: string;
@@ -52,4 +52,7 @@ export const STAGE_MODELS: Record<StageName, StageModel> = {
   // Writing and checking pool stories. Off the request path, so there is no
   // header timeout to fit inside, and these decide what every other player gets.
   pool: { model: DEFAULT_MODEL, reasoningEffort: 'high' },
+  // Sorting a link from ChatGPT into situations to write. On the request path,
+  // and it decides what is too sensitive to keep, so not the lowest.
+  situations: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
 };

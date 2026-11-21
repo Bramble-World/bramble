@@ -114,6 +114,14 @@ export const storyTemplates = pgTable(
       onDelete: 'set null',
     }),
 
+    /**
+     * The `chatgpt` stories asked for together, from one link with several
+     * situations in it (`POST /api/v1/stories/from-chatgpt`), share this, so
+     * the player is told once that their stories are ready rather than once
+     * for each. Null for a story asked for on its own.
+     */
+    batchId: uuid('batch_id'),
+
     /** A seed's stable name, so the seed script can upsert it. Null otherwise. */
     slug: text().unique(),
 

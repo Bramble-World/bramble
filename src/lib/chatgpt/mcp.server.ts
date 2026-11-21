@@ -95,7 +95,7 @@ export function brambleMcpServer(user: PublicUser): McpServer {
       },
     },
     async (context) => {
-      const result = await requestStory(user.id, context);
+      const result = await requestStory(user.id, context, { via: 'mcp' });
       switch (result.outcome) {
         case 'queued':
           return {

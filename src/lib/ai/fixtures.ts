@@ -6,6 +6,7 @@ import { arcPrompt } from './prompts/arc.prompt';
 import { checkPrompt, rewritePrompt } from './prompts/pool.prompt';
 import { personalCheckPrompt, personalRewritePrompt } from './prompts/personal.prompt';
 import { endingPrompt } from './prompts/ending.prompt';
+import { MAX_LINK_SITUATIONS, situationsPrompt } from './prompts/situations.prompt';
 import { SEED_STORIES } from '@/lib/pool/seeds';
 
 /**
@@ -276,6 +277,32 @@ export function registerFixtures(fake: FakeGenerator): void {
       story: { ...base, title: `${base.title} (yours)`, cast },
     };
   });
+
+  // One situation per paragraph of 20 characters or more, about the first
+  // capitalised word after its first, so a test can send a note and see which
+  // paragraphs became stories and that the name was kept.
+  fake.register(situationsPrompt, ({ vars }) => ({
+    situations: vars.text
+      .split(/\n\s*\n/)
+      .map((paragraph) => paragraph.trim())
+      .filter((paragraph) => paragraph.length >= 20)
+      .slice(0, MAX_LINK_SITUATIONS)
+      .map((about) => ({
+        about,
+        people: [
+          {
+            name:
+              about
+                .split(/\s+/)
+                .slice(1)
+                .find((word) => /^[A-Z][a-z]+$/.test(word)) ?? 'Sam',
+            relationship: 'friend',
+            details: '',
+          },
+        ],
+        you: null,
+      })),
+  }));
 
   fake.register(personalCheckPrompt, () => ({
     verdict: 'pass' as const,
