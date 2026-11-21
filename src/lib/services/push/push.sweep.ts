@@ -11,7 +11,10 @@ import { sendToUser } from './push.service';
 import type { PushKind } from './push.types';
 
 /** The facts `decidePush` needs for one player, or null with no story. */
-async function factsFor(userId: string): Promise<{ facts: PushFacts; lastTurnId: string } | null> {
+async function factsFor(
+  userId: string,
+  unlimitedEnergy: boolean
+): Promise<{ facts: PushFacts; lastTurnId: string } | null> {
   const [last] = await db
     .select({ id: storyTurns.id, createdAt: storyTurns.createdAt })
     .from(storyTurns)
@@ -64,6 +67,7 @@ async function factsFor(userId: string): Promise<{ facts: PushFacts; lastTurnId:
         .filter((send) => send.anchor === last.id)
         .map((send) => ({ kind: send.kind as PushKind, sentAt: send.sentAt })),
       lastSentAt: sends[0]?.sentAt ?? null,
+      unlimitedEnergy,
     },
   };
 }
@@ -74,13 +78,13 @@ export async function sweepPush(now = new Date()): Promise<Record<string, number
   if (env.PUSH_ENABLED !== 'true' || !apnsConfigured()) return result;
 
   const players = await db
-    .selectDistinct({ id: users.id })
+    .selectDistinct({ id: users.id, role: users.role })
     .from(users)
     .innerJoin(pushDevices, eq(pushDevices.userId, users.id))
     .where(eq(users.pushEnabled, true));
 
-  for (const { id } of players) {
-    const found = await factsFor(id);
+  for (const { id, role } of players) {
+    const found = await factsFor(id, role === 'admin');
     const decision = found && decidePush(found.facts, now);
     if (!found || !decision) continue;
     result.due += 1;

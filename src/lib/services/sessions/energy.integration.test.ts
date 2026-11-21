@@ -184,6 +184,37 @@ describe('the balance', () => {
   });
 });
 
+describe('an admin', () => {
+  const makeAdmin = (role: 'admin' | 'player' = 'admin') =>
+    db.update(users).set({ role }).where(eq(users.id, userId));
+
+  it('is always full, and plays past the allowance', async () => {
+    await makeAdmin();
+    const session = await sessions.startSession(userId, storylineId);
+    for (let i = 0; i < TURN_ENERGY_PER_DAY + 2; i++) await playOneTurn(session.id);
+
+    const full = {
+      remaining: TURN_ENERGY_PER_DAY,
+      limit: TURN_ENERGY_PER_DAY,
+      resetsAt: null,
+      fullAt: null,
+    };
+    expect(await energyFor(userId)).toStrictEqual(full);
+    expect(await energyFor(userId, 'admin')).toStrictEqual(full);
+  });
+
+  it('counts as anyone again once the role is removed', async () => {
+    await makeAdmin();
+    const session = await sessions.startSession(userId, storylineId);
+    for (let i = 0; i < TURN_ENERGY_PER_DAY; i++) await playOneTurn(session.id);
+    await makeAdmin('player');
+
+    expect((await energyFor(userId)).remaining).toBe(0);
+    const error = await advanceSession(userId, session.id, { generator: fake }).catch((e) => e);
+    expect(error).toBeInstanceOf(RateLimitError);
+  });
+});
+
 describe('running out', () => {
   /** Burns the whole allowance by backdating nothing — each turn is a real row. */
   async function spendEverything() {

@@ -11,6 +11,7 @@ export async function getUserByClerkId(clerkId: string): Promise<PublicUser | nu
       email: users.email,
       shareUsage: users.shareUsage,
       isGuest: users.isGuest,
+      role: users.role,
     })
     .from(users)
     .where(and(eq(users.clerkId, clerkId), isNull(users.deletedAt)))
@@ -33,6 +34,7 @@ export async function getUserByClerkIdIncludingDeleted(
       email: users.email,
       shareUsage: users.shareUsage,
       isGuest: users.isGuest,
+      role: users.role,
       deletedAt: users.deletedAt,
     })
     .from(users)
@@ -57,6 +59,7 @@ export async function getUserById(id: string): Promise<PublicUser | null> {
       email: users.email,
       shareUsage: users.shareUsage,
       isGuest: users.isGuest,
+      role: users.role,
     })
     .from(users)
     .where(and(eq(users.id, id), isNull(users.deletedAt)))
@@ -83,6 +86,7 @@ export async function getLiveGuest(id: string): Promise<PublicUser | null> {
       email: users.email,
       shareUsage: users.shareUsage,
       isGuest: users.isGuest,
+      role: users.role,
     })
     .from(users)
     .where(
@@ -98,7 +102,12 @@ export async function getLiveGuest(id: string): Promise<PublicUser | null> {
 }
 
 /**
- * Whether this reader has opted into usage events.
+ * Whether the server may send usage events about this reader: the one rule
+ * every capture asks (`track`, `trackAlias`).
+ *
+ * Two reasons to say no, decided together so no caller can check one and miss
+ * the other: the reader turned usage data off, or they are an admin — the team
+ * playing their own game, whose events would only blur the numbers.
  *
  * Its own query rather than a field off a fuller read, because it runs before
  * every capture and has no use for the rest of the row.
@@ -107,11 +116,24 @@ export async function getLiveGuest(id: string): Promise<PublicUser | null> {
  * someone who agreed to anything — and an analytics path is the last place that
  * should treat "I could not find out" as consent.
  */
-export async function sharesUsage(id: string): Promise<boolean> {
+export async function sendsUsageEvents(id: string): Promise<boolean> {
   const [row] = await db
-    .select({ shareUsage: users.shareUsage })
+    .select({ shareUsage: users.shareUsage, role: users.role })
     .from(users)
     .where(and(eq(users.id, id), isNull(users.deletedAt)))
     .limit(1);
-  return row?.shareUsage ?? false;
+  return !!row && row.shareUsage && row.role !== 'admin';
+}
+
+/**
+ * Whether this reader is an admin, for the paths that hold only a user id.
+ * Absent means no: a missing row gets no exemption from anything.
+ */
+export async function isAdmin(id: string): Promise<boolean> {
+  const [row] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(and(eq(users.id, id), isNull(users.deletedAt)))
+    .limit(1);
+  return row?.role === 'admin';
 }

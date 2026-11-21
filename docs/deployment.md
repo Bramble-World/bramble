@@ -276,6 +276,29 @@ verifies every delivery and rejects unsigned requests, so an absent secret means
 nothing gets through — closed by default, and silent. If user records stop
 appearing, check this first.
 
+Subscribe the endpoint to **`user.created`, `user.updated` and `user.deleted`**
+(Webhooks › the endpoint › Subscribed events). `user.updated` is what carries an
+admin role in or out, and a changed email address.
+
+## Making someone an admin
+
+An admin (someone on the team) has unlimited energy and sends no analytics;
+everything else, including ChatGPT's stories a day, is as for any player.
+
+1. In the Clerk **production** dashboard: Users › the user › Metadata ›
+   **Public** › set `{ "role": "admin" }` and save.
+2. Clerk sends `user.updated`, and the webhook sets `users.role = 'admin'`. The
+   app sees it on its next `GET /api/me` (`isAdmin: true`).
+
+To make them a player again, remove `role` from the public metadata (any other
+value counts as player too). Public metadata, because only the dashboard and the
+backend can write it: a player can't make themself an admin.
+
+If it doesn't take, check the webhook is subscribed to `user.updated` and that
+the delivery succeeded (Webhooks › the endpoint › Message attempts); saving the
+metadata again re-sends it. Someone who first signs in after being marked gets
+the role when their account is made, from the same metadata.
+
 ## Reviewing reported stories
 
 Players can report a story from the app (App Store guideline 1.2). A report

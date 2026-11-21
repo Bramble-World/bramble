@@ -14,6 +14,7 @@ One row per Bramble account — or per **guest**, someone playing on the iPhone 
 - `isGuest` — true until the guest signs up. A guest is a real user, so the whole play loop works for them without a branch; signing up either sets `clerkId`/`email` on this row and clears the flag, or moves everything the guest owns to an existing account and deletes this row.
 - `guestExpiresAt` — when an unsaved guest is deleted (seven days after creation), by the hourly guest sweep. Also the guest token's expiry. Null for an account.
 - `appAttestKeyId` — the App Attest key a guest was created with, so one attested key holds at most one live guest (a partial unique index). Cleared on sign-up.
+- `role` — `player` (the default) or `admin` (`user_role` enum). Copied from the Clerk user's public metadata `{ "role": "admin" }` by the Clerk webhook (`user.created`, `user.updated`) and on first provisioning; Clerk is the source of truth. An admin has unlimited energy and sends no analytics; nothing else differs. Returned only to the reader themself, as `GET /api/me`'s `isAdmin`.
 
 ### `pushDevices`
 

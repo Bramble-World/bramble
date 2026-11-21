@@ -21,11 +21,16 @@ async function handleGET(request: Request) {
     // `chatgpt` is whether the account uses Bramble in ChatGPT and a story is
     // being written there now, for the iPhone's ChatGPT chip. A guest can't
     // connect, so it's always off for them.
+    //
+    // `isAdmin` is whether this reader is on the team (Clerk public metadata
+    // `{ "role": "admin" }`), so the iPhone stops its own analytics for them as
+    // the server does. Always present; only ever the reader's own.
     return NextResponse.json({
       id: user.id,
       email: user.email,
       shareUsage: user.shareUsage,
       isGuest: user.isGuest,
+      isAdmin: user.role === 'admin',
       chatgpt: user.isGuest ? { connected: false, writing: false } : await chatgptStatus(user.id),
     });
   } catch (error) {
