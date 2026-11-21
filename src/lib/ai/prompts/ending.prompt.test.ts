@@ -37,7 +37,10 @@ describe('ending.summarise', () => {
   it('shows the playthrough beat by beat, with what was chosen and where it ended', () => {
     expect(prompt).toContain('### Beat 1');
     expect(prompt).toContain('You chose: Text back');
-    expect(prompt).toContain('(the last beat: the story ended here)');
+    expect(prompt).toContain('### The last beat\nThe train pulls out');
+    expect(prompt).toContain('(no choice: the story ended here)');
+    // The ending is never a choice, so it has no number to name.
+    expect(prompt).not.toContain('### Beat 2');
     expect(prompt).toContain('People: Maya');
   });
 

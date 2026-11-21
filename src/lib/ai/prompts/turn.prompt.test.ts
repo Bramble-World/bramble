@@ -10,6 +10,7 @@ const storyline = (overrides: Partial<StorylineContext> = {}): StorylineContext 
     tone: null,
     arcSummary: 'It began badly and ends reconciled.',
     targetBeats: 20,
+    openingId: null,
   },
   characters: [],
   relationships: [],
@@ -38,6 +39,7 @@ const render = (vars: Partial<TurnVars> = {}) =>
     session,
     beyondScript: false,
     phase: 'open',
+    beatsToEnding: null,
     ...vars,
   });
 
@@ -155,6 +157,7 @@ describe('per-character background', () => {
       session,
       beyondScript: false,
       phase: 'open',
+      beatsToEnding: null,
     });
 
   it('names the person a piece of background is about', () => {
@@ -212,6 +215,7 @@ describe('wants', () => {
       session,
       beyondScript: false,
       phase: 'open',
+      beatsToEnding: null,
     });
 
   it('tells the model what an on-stage character is after', () => {
@@ -383,6 +387,28 @@ describe('endings', () => {
     expect(system).toContain('When the beat you');
     expect(system).toContain('Do not end it just because you may.');
     expect(system).toContain('isEnding true and no choices');
+  });
+
+  it('counts down to a fixed ending, without resolving anything early', () => {
+    const { system } = render({ phase: 'open', beatsToEnding: 5 });
+
+    expect(system).toContain('The story ends 5 beats after this one');
+    expect(system).toContain('Do not resolve the story yet');
+    expect(system).not.toContain('isEnding true');
+  });
+
+  it('makes the beat before a fixed ending its final decision', () => {
+    const { system } = render({ phase: 'open', beatsToEnding: 1 });
+
+    expect(system).toContain('The next beat is the last one');
+    expect(system).toContain('the one the ending turns on');
+  });
+
+  it('says nothing about a countdown when there is none', () => {
+    const { system } = render({ phase: 'open' });
+
+    expect(system).not.toContain('beats after this one');
+    expect(system).not.toContain('The next beat is the last one');
   });
 
   it('asks for the ending past the cap, shaped by what the reader chose', () => {

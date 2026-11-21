@@ -1076,3 +1076,57 @@ describe('a provider failure', () => {
     expect(calls).toBe(1);
   });
 });
+
+/**
+ * The first story (the one written from the 1:47 am opening) ends on beat 10,
+ * whatever its target, and counts down to it from beat 5. The fake ends as
+ * soon as it may, so any beat before 10 that could end would.
+ */
+describe('the first story', () => {
+  beforeEach(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ openingId: 'are_you_up', targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+  afterAll(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ openingId: null, targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+
+  it('ends on beat 10, building to it from beat 5', async () => {
+    const session = await freshSession();
+    const beats = [];
+    for (let beat = 1; beat <= 10; beat++) {
+      const turn = await advanceSession(userId, session.id, { generator: fake });
+      beats.push(turn);
+      if (turn.isEnding) break;
+      await commitChoice(userId, turn.id, turn.choices[0].id);
+    }
+
+    expect(beats.map((turn) => turn.isEnding)).toStrictEqual([
+      ...Array<boolean>(9).fill(false),
+      true,
+    ]);
+    const systems = fake.calls.filter((c) => c.promptName === 'turn.generate').map((c) => c.system);
+    expect(systems[3]).not.toContain('beats after this one');
+    expect(systems[4]).toContain('The story ends 5 beats after this one');
+    expect(systems[8]).toContain('The next beat is the last one');
+    expect(systems[9]).toContain('It must end now.');
+  });
+
+  it('leaves every other story to its own window', async () => {
+    await db
+      .update(storylinesTable)
+      .set({ openingId: null })
+      .where(eq(storylinesTable.id, storylineId));
+    const session = await freshSession();
+    for (let beat = 1; beat <= 10; beat++) {
+      const turn = await advanceSession(userId, session.id, { generator: fake });
+      expect(turn.isEnding).toBe(false);
+      await commitChoice(userId, turn.id, turn.choices[0].id);
+    }
+  });
+});

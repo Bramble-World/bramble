@@ -132,6 +132,7 @@ export async function assembleStorylineContext(
       tone: storyline.tone,
       arcSummary: storyline.arcSummary,
       targetBeats: storyline.targetBeats,
+      openingId: storyline.openingId,
     },
     characters,
     relationships,
