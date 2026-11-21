@@ -7,7 +7,7 @@ import type { PushKind, PushMessage } from './push.types';
  * Two kinds, and the rules are the ones the iPhone's battery reminder kept:
  *
  * - **battery_back:** the player ran out, the first point has returned, and they
- *   haven't played since. Once.
+ *   haven't played since. Once. Never for an admin, who can't run out.
  * - **story_waiting:** a story in progress and a day away, then three days away.
  *   Two at most, and never while they're charging, when they couldn't play.
  *
@@ -46,6 +46,8 @@ export type PushFacts = {
   sends: { kind: PushKind; sentAt: Date }[];
   /** The last one sent, whenever that was. */
   lastSentAt: Date | null;
+  /** An admin, whose battery never runs out, so it never comes back either. */
+  unlimitedEnergy: boolean;
 };
 
 export type PushDecision = { kind: PushKind; ordinal: number };
@@ -69,7 +71,7 @@ export function decidePush(facts: PushFacts, now: Date): PushDecision | null {
   const hour = hourIn(facts.timeZone, now);
   if (hour < QUIET_UNTIL || hour >= QUIET_FROM) return null;
 
-  if (facts.turnsInWindow >= TURN_ENERGY_PER_DAY) {
+  if (!facts.unlimitedEnergy && facts.turnsInWindow >= TURN_ENERGY_PER_DAY) {
     const back = facts.oldestInWindow.getTime() + ENERGY_WINDOW_MS;
     if (at < back) return null;
     if (!facts.sends.some((send) => send.kind === 'battery_back')) {

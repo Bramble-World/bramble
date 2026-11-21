@@ -168,6 +168,7 @@ async function becomeAccount(
         // index on it is case-sensitive.
         email: identity.email.toLowerCase(),
         emailVerifiedAt: identity.verified ? new Date() : null,
+        role: identity.role,
         isGuest: false,
         guestExpiresAt: null,
         // Only ever needed to limit live guests. An account has no use for it.

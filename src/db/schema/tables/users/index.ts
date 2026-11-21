@@ -7,9 +7,20 @@ import {
   uuid,
   text,
   index,
+  pgEnum,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm/sql/sql';
+
+/**
+ * What an account may do beyond playing. Everyone is a `player`; an `admin` is
+ * someone on the team, marked in the Clerk dashboard with the public metadata
+ * `{ "role": "admin" }` and copied here by the Clerk webhook
+ * (`src/lib/services/users/users.sync.ts`). An admin has unlimited energy and
+ * sends no analytics. An enum rather than a flag so a later role is one more
+ * value, not another column.
+ */
+export const userRoleEnum = pgEnum('user_role', ['player', 'admin']);
 
 export const users = pgTable(
   'users',
@@ -70,6 +81,14 @@ export const users = pgTable(
      * when someone disconnects, so it isn't cleared then.
      */
     chatgptConnectedAt: timestamp('chatgpt_connected_at', { withTimezone: true }),
+
+    /**
+     * `admin` for the team, `player` for everyone else. Clerk's public metadata
+     * is the source of truth; this is its copy, so a request never asks Clerk.
+     * Never returned for anyone but the reader themself (`GET /api/me`'s
+     * `isAdmin`).
+     */
+    role: userRoleEnum().notNull().default('player'),
 
     ...timestamps,
     ...softDelete,

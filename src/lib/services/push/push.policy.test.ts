@@ -15,6 +15,7 @@ function facts(change: Partial<PushFacts> = {}): PushFacts {
     timeZone: 'America/New_York',
     sends: [],
     lastSentAt: null,
+    unlimitedEnergy: false,
     ...change,
   };
 }
@@ -24,6 +25,13 @@ const ranOut = { turnsInWindow: 20, oldestInWindow: ago(26) };
 describe('battery_back', () => {
   it('goes once the first point is back', () => {
     expect(decidePush(facts(ranOut), NOW)).toEqual({ kind: 'battery_back', ordinal: 0 });
+  });
+
+  it('never goes to an admin, whose battery never ran out', () => {
+    expect(decidePush(facts({ ...ranOut, unlimitedEnergy: true }), NOW)).toEqual({
+      kind: 'story_waiting',
+      ordinal: 0,
+    });
   });
 
   it('waits while the phone is still charging, and sends nothing else', () => {

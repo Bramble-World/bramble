@@ -54,6 +54,7 @@ export async function getOrCreateFromClerk(
     clerkId,
     email: identity.email,
     verified: identity.verified,
+    role: identity.role,
   });
   if (inserted) return inserted;
 
