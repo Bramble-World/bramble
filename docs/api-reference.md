@@ -414,8 +414,12 @@ Guest token only.
 guest: for an `ex` or a `crush` the server picks one of five premises behind the
 same "hey. are you up?" (the wedding below, moving away, just broke up, saw you
 tonight, found the photo; `src/lib/onboarding/premises.ts`), deterministically
-per guest. Other relationships, which only older builds offer, get the wedding.
-Clients must render whatever beat 1 arrives, not a bundled copy of it.
+per guest. Each premise is written separately for an ex (you were together, it
+ended) and a crush (never together, feelings unspoken, what they want left
+open), so beat 1 can differ by relationship as well as premise: found the photo
+is a group photo for a crush, not a night on a roof. Other relationships, which
+only older builds offer, get the wedding. Clients must render whatever beat 1
+arrives, not a bundled copy of it.
 
 ```json
 {

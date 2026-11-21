@@ -3,6 +3,7 @@ import { PromptSpec } from '../prompt';
 import { StorylineContext } from '@/lib/services/generation/generation.types';
 import { ENGAGEMENT_RUBRIC, renderTimeline } from './timeline';
 import { PRONOUN_LABELS } from './turn.prompt';
+import { relationshipToReader } from './relationship';
 
 export type ConsequenceVars = {
   storyline: StorylineContext;
@@ -150,10 +151,15 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       ),
       '',
       '## Relationships',
-      ...storyline.relationships.map(
-        (r) =>
-          `- ${r.id} — ${nameOf(storyline, r.characterAId)} and ${nameOf(storyline, r.characterBId)}`
-      ),
+      // What the reader's relationships mean, so a state recorded for a crush
+      // never reads as an ex's ("still wants you back").
+      ...storyline.relationships.map((r) => {
+        const meaning = relationshipToReader(storyline, r);
+        return [
+          `- ${r.id} — ${nameOf(storyline, r.characterAId)} and ${nameOf(storyline, r.characterBId)}${r.relationshipType ? ` (${r.relationshipType})` : ''}`,
+          ...(meaning ? [`  ${meaning}`] : []),
+        ].join('\n');
+      }),
       '',
       '## Timeline',
       ...renderTimeline(storyline.timeline),

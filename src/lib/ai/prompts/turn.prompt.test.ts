@@ -449,3 +449,66 @@ describe('turnIsUsable', () => {
     expect(turnIsUsable(output(true, 0), 'must_end')).toBe(true);
   });
 });
+
+/**
+ * "You and Mae (crush)" with nothing else drifted into the ex who still wants
+ * you back (player feedback, 2026-11-21), so the reader's own relationships say
+ * what they mean in every beat.
+ */
+describe('turn prompt: what a relationship means', () => {
+  const person = (id: string, name: string, isSelf: boolean) => ({
+    id,
+    personId: `p-${id}`,
+    name,
+    role: isSelf ? ('protagonist' as const) : ('supporting' as const),
+    description: null,
+    voice: null,
+    want: null,
+    avoids: null,
+    isSelf,
+  });
+  const you = person('c0', 'You', true);
+  const mae = person('c1', 'Mae', false);
+  const sam = person('c2', 'Sam', false);
+  const between = (a: string, b: string, relationshipType: string | null) => ({
+    id: `r-${a}-${b}`,
+    characterAId: a,
+    characterBId: b,
+    relationshipType,
+    baselineDynamic: { closeness: 'friends, never more', tension: 'unsaid', powerBalance: null },
+    currentDynamic: null,
+    states: [],
+  });
+  const promptWith = (relationships: ReturnType<typeof between>[]) =>
+    render({ storyline: storyline({ characters: [you, mae, sam], relationships }) }).prompt;
+
+  it('says a crush is not an ex, every beat', () => {
+    const prompt = promptWith([between('c0', 'c1', 'crush')]);
+
+    expect(prompt).toContain('- You and Mae (crush): friends, never more; unsaid');
+    expect(prompt).toContain(
+      '  Mae is your crush: you have never been together, and your feelings are unspoken and unconfirmed; you do not know if they feel the same, and finding out is the story. Never write them as an ex, as wanting you back, or as if you had a past relationship or a breakup.'
+    );
+  });
+
+  it('says an ex is someone you dated', () => {
+    expect(promptWith([between('c1', 'c0', 'ex')])).toContain(
+      '  Mae is your ex: you dated, and it ended.'
+    );
+  });
+
+  it('reads a pool story\'s "your crush" the same way', () => {
+    expect(promptWith([between('c0', 'c1', 'your crush')])).toContain(
+      'Mae is your crush: you have never been together'
+    );
+  });
+
+  it('keeps the label alone for any other relationship, or one without the reader', () => {
+    const prompt = promptWith([between('c0', 'c2', 'coworkers'), between('c1', 'c2', 'crush')]);
+
+    expect(prompt).toContain('- You and Sam (coworkers): friends, never more; unsaid');
+    expect(prompt).toContain('- Mae and Sam (crush): friends, never more; unsaid');
+    expect(prompt).not.toContain('is your crush');
+    expect(prompt).not.toContain('Sam is');
+  });
+});

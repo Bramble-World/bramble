@@ -136,7 +136,7 @@ function whatIsUnsaid(naming: Naming): string {
     case 'old_friend':
       return `You and ${naming.name} were inseparable once, then drifted, and you only heard about the wedding secondhand.`;
     case 'crush':
-      return `You have wanted ${naming.name} for longer than you have admitted to anyone, and tomorrow ${p.theyre} marrying someone else.`;
+      return `You have never been together. You have wanted ${naming.name} for longer than you have admitted to anyone, you have no idea if ${p.they} ever felt the same, and tomorrow ${p.theyre} marrying someone else.`;
     case 'boss':
       return `${naming.name} is your boss, the line between you has never been as clear as it should be, and ${p.theyre} getting married tomorrow.`;
     case 'sibling':
@@ -186,54 +186,112 @@ export const ARE_YOU_UP: Opening = {
     };
   },
 
-  setup: (naming) => {
-    const p = FORMS[naming.pronouns];
-    const who = whoTheyAre(naming);
-    return {
-      storyline: {
-        title: 'the night before',
-        setting: 'Your apartment, the small hours of the night before a wedding.',
-        tone: 'tense, intimate, a little reckless',
-      },
-      self: {
-        description: `Awake at 1:47 AM the night before ${naming.name}'s wedding, holding a phone that just lit up.`,
-        want: `to know what ${naming.name} needs to say before it is too late to matter`,
-        avoids: 'saying out loud what they still feel',
-      },
-      named: {
-        description: `${capitalised(who)}. Getting married tomorrow, and texting you at 1:47 AM instead of sleeping.`,
-        want: `to say something to you before the wedding that ${p.they} cannot take back`,
-        avoids: `admitting what ${p.they} actually want${naming.pronouns === 'they' ? '' : 's'}`,
-      },
-      baseline: {
-        closeness: 'once close, now careful with each other',
-        tension: 'something important was never said',
-      },
-      events: [
-        {
-          title: 'What you were to each other',
-          description: `${naming.name} is ${who}. ${whatIsUnsaid(naming)}`,
-          engagementScore: 6,
-        },
-        {
-          title: 'The wedding',
-          description: `${naming.name} is getting married tomorrow. You have the invitation, and you have still not decided whether you are going.`,
-          engagementScore: 7,
-        },
-        {
-          title: 'Two texts at 1:47 AM',
-          description: `${naming.name} texted you in the middle of the night before the wedding: hey, are you up — and then that ${p.they} needed to say something before ${p.they} got married.`,
-          engagementScore: 9,
-        },
-      ],
-      // Pronouns are not repeated here: they live on the person, and the turn
-      // prompt renders them for every story that person is in.
-      context: [
-        `It is the night before ${naming.name}'s wedding. Nobody else knows ${p.they} texted you.`,
-      ],
-    };
-  },
+  setup: (naming) => (naming.relationship === 'crush' ? weddingForCrush(naming) : wedding(naming)),
 };
+
+/**
+ * The wedding eve for everyone but a crush: someone the reader was close to and
+ * isn't now. For an ex that's a past together; for an old friend, a boss or a
+ * sibling (only older builds offer those) `whatIsUnsaid` says what it was.
+ */
+function wedding(naming: Naming): StorySetup {
+  const p = FORMS[naming.pronouns];
+  const who = whoTheyAre(naming);
+  return {
+    storyline: {
+      title: 'the night before',
+      setting: 'Your apartment, the small hours of the night before a wedding.',
+      tone: 'tense, intimate, a little reckless',
+    },
+    self: {
+      description: `Awake at 1:47 AM the night before ${naming.name}'s wedding, holding a phone that just lit up.`,
+      want: `to know what ${naming.name} needs to say before it is too late to matter`,
+      avoids: 'saying out loud what they still feel',
+    },
+    named: {
+      description: `${capitalised(who)}. Getting married tomorrow, and texting you at 1:47 AM instead of sleeping.`,
+      want: `to say something to you before the wedding that ${p.they} cannot take back`,
+      avoids: `admitting what ${p.they} actually want${naming.pronouns === 'they' ? '' : 's'}`,
+    },
+    baseline: {
+      closeness: 'once close, now careful with each other',
+      tension: 'something important was never said',
+    },
+    events: [
+      {
+        title: 'What you were to each other',
+        description: `${naming.name} is ${who}. ${whatIsUnsaid(naming)}`,
+        engagementScore: 6,
+      },
+      {
+        title: 'The wedding',
+        description: `${naming.name} is getting married tomorrow. You have the invitation, and you have still not decided whether you are going.`,
+        engagementScore: 7,
+      },
+      {
+        title: 'Two texts at 1:47 AM',
+        description: `${naming.name} texted you in the middle of the night before the wedding: hey, are you up — and then that ${p.they} needed to say something before ${p.they} got married.`,
+        engagementScore: 9,
+      },
+    ],
+    // Pronouns are not repeated here: they live on the person, and the turn
+    // prompt renders them for every story that person is in.
+    context: [
+      `It is the night before ${naming.name}'s wedding. Nobody else knows ${p.they} texted you.`,
+    ],
+  };
+}
+
+/**
+ * The wedding eve for a crush. Never together, nothing confessed, and no way to
+ * know how they feel: that uncertainty is what makes them a crush, so the setup
+ * never says they want the reader. What they need to say at 1:47 AM stays open
+ * (a confession, cold feet, or a friend to talk to) for the story to decide.
+ */
+function weddingForCrush(naming: Naming): StorySetup {
+  const p = FORMS[naming.pronouns];
+  return {
+    storyline: {
+      title: 'the night before',
+      setting: 'Your apartment, the small hours of the night before a wedding.',
+      tone: 'tense, intimate, a little reckless',
+    },
+    self: {
+      description: `Awake at 1:47 AM the night before ${naming.name}'s wedding, holding a phone that just lit up.`,
+      want: `to know what ${naming.name} needs to say, and whether it has anything to do with you`,
+      avoids: `telling ${naming.name} how long you have felt this way`,
+    },
+    named: {
+      description: `Your crush. Getting married tomorrow, and texting you at 1:47 AM instead of sleeping.`,
+      want: `to talk to you before the wedding: it might be a confession, cold feet, or needing a friend tonight, and ${p.they} ${naming.pronouns === 'they' ? 'have' : 'has'} not said which`,
+      avoids: `saying why it had to be you ${p.they} texted`,
+    },
+    baseline: {
+      closeness: 'friends, close enough to text at any hour, never more',
+      tension: 'feelings you have never said, and no idea if they are returned',
+    },
+    events: [
+      {
+        title: 'What you are to each other',
+        description: `${naming.name} is your crush. ${whatIsUnsaid(naming)}`,
+        engagementScore: 6,
+      },
+      {
+        title: 'The wedding',
+        description: `${naming.name} is getting married tomorrow. You have the invitation, and you have not decided whether you are going.`,
+        engagementScore: 7,
+      },
+      {
+        title: 'Two texts at 1:47 AM',
+        description: `${naming.name} texted you in the middle of the night before the wedding: hey, are you up — and then that ${p.they} needed to say something before ${p.they} got married. You don't know what.`,
+        engagementScore: 9,
+      },
+    ],
+    context: [
+      `It is the night before ${naming.name}'s wedding. Nobody else knows ${p.they} texted you, and nobody knows how you feel about ${p.them}.`,
+    ],
+  };
+}
 
 /** Every opening that can be served. The first is the default. */
 export const OPENINGS: readonly Opening[] = [ARE_YOU_UP];

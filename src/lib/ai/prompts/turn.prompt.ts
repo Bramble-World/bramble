@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { SessionContext, StorylineContext } from '@/lib/services/generation/generation.types';
 import { renderTimeline } from './timeline';
+import { relationshipToReader } from './relationship';
 import { SURFACE_KINDS } from '@/lib/surfaces';
 import { MAX_NOTIFICATION_CHARS, MAX_NOTIFICATIONS } from '@/lib/surfaces/imessage.surface';
 import type { StoryPhase } from '@/lib/services/generation/story-phase';
@@ -248,7 +249,13 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
           const described = [dynamic?.closeness, dynamic?.tension, dynamic?.powerBalance]
             .filter(Boolean)
             .join('; ');
-          return `- ${a} and ${b}${relationship.relationshipType ? ` (${relationship.relationshipType})` : ''}${described ? `: ${described}` : ''}`;
+          // The label alone ("(crush)") was read as a costume over the ex story:
+          // the reader's own relationships say what they mean, every beat.
+          const meaning = relationshipToReader(storyline, relationship);
+          return [
+            `- ${a} and ${b}${relationship.relationshipType ? ` (${relationship.relationshipType})` : ''}${described ? `: ${described}` : ''}`,
+            ...(meaning ? [`  ${meaning}`] : []),
+          ].join('\n');
         }),
         '',
         ...(storyline.timeline.length

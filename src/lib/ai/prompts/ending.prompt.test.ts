@@ -31,6 +31,7 @@ describe('ending.summarise', () => {
     title: 'the night before',
     tone: 'tender',
     people: ['Maya'],
+    toYou: ['Maya is your crush: you have never been together.'],
     session,
   });
 
@@ -42,6 +43,10 @@ describe('ending.summarise', () => {
     // The ending is never a choice, so it has no number to name.
     expect(prompt).not.toContain('### Beat 2');
     expect(prompt).toContain('People: Maya');
+  });
+
+  it('says what the people the reader picked are to them, so a crush is not written as an ex', () => {
+    expect(prompt).toContain('People: Maya\nMaya is your crush: you have never been together.');
   });
 
   it('describes only what happened, with choices re-worded as "you …"', () => {
