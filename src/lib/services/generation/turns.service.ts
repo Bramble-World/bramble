@@ -2,7 +2,7 @@ import { db } from '@/index';
 import { NotFoundError, ValidationError } from '@/lib/utils/errors';
 import { Generator, getGenerator } from '@/lib/ai';
 import { turnIsUsable, turnPrompt } from '@/lib/ai/prompts/turn.prompt';
-import { storyPhase } from './story-phase';
+import { beatsToEnding, endingBounds, storyPhase } from './story-phase';
 import { consequencePrompt } from '@/lib/ai/prompts/consequence.prompt';
 import * as sessions from '../sessions/sessions.service';
 import * as sessionReader from '../sessions/sessions.reader';
@@ -98,11 +98,18 @@ export async function generateTurn(
   // the anti-leak test asserting against a context the model never saw.
   const visible = contextAsOf(storyline, session.playheadOrder);
   const beyondScript = scriptExhausted(storyline, session.playheadOrder);
-  const phase =
-    deps.endings === false
-      ? 'open'
-      : storyPhase(sessionContext.turns.length + 1, storyline.storyline.targetBeats);
-  const vars = { storyline: visible, session: sessionContext, beyondScript, phase };
+  // The beat about to be written, counting a scripted first beat. The first
+  // story ends on beat 10 and every other between 16 and 24 (`endingBounds`).
+  const beat = sessionContext.turns.length + 1;
+  const bounds = endingBounds(storyline.storyline);
+  const phase = deps.endings === false ? 'open' : storyPhase(beat, bounds);
+  const vars = {
+    storyline: visible,
+    session: sessionContext,
+    beyondScript,
+    phase,
+    beatsToEnding: deps.endings === false ? null : beatsToEnding(beat, bounds),
+  };
 
   // One more try when the model breaks a rule the schema cannot express (an
   // ending too early, choices on an ending, no ending past the cap). A failed

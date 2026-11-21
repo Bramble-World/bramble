@@ -70,8 +70,9 @@ export const endingPrompt: PromptSpec<EndingVars, EndingOutput> = {
       '- The title names this ending, not the story: what it came to.',
       '- Two sentences for the summary: how it ended, then what it cost or gave.',
       "- Key choices: the three of the reader's own choices that most decided the",
-      '  ending, by beat number, each re-worded as "you …" — "you texted back at',
-      '  1:48 am", not "Text back". Only beats where a choice was made.',
+      '  ending, by the number in its "### Beat N" heading, each re-worded as "you …"',
+      '  — "you texted back at 1:48 am", not "Text back". Only numbered beats have a',
+      '  choice; the last beat has none, and no number.',
       '- Count story nights from the clock times and dates on the beats. Null if',
       '  you cannot tell.',
     ].join('\n'),
@@ -81,14 +82,19 @@ export const endingPrompt: PromptSpec<EndingVars, EndingOutput> = {
       people.length ? `People: ${people.join(', ')}` : null,
       '',
       '## The playthrough',
+      // Numbered by position in the playthrough, which is what the server maps
+      // a key choice back through. The last beat (the ending, never answered)
+      // has no number, so it can't be named as a choice. Numbered like the
+      // others, it invited exactly that: it is the beat that decided the most,
+      // and naming it alone threw the whole ending away.
       ...session.turns.map((turn, i) =>
         [
-          `### Beat ${i + 1}`,
+          turn.selectedChoiceLabel ? `### Beat ${i + 1}` : '### The last beat',
           `${turn.headline ? `${turn.headline} ` : ''}${turn.narrativeContent}`,
           ...turn.surfaceLines,
           turn.selectedChoiceLabel
             ? `You chose: ${turn.selectedChoiceLabel}`
-            : '(the last beat: the story ended here)',
+            : '(no choice: the story ended here)',
         ].join('\n')
       ),
     ]

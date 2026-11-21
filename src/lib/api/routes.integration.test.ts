@@ -54,6 +54,7 @@ const turnRoute = await import('@/app/api/v1/sessions/[sessionId]/turn/route');
 const nextRoute = await import('@/app/api/v1/sessions/[sessionId]/next/route');
 const { storyTemplates } = await import('@/db/schema/tables');
 const { SEED_STORIES } = await import('@/lib/pool/seeds');
+const { nextStatusFor } = await import('@/lib/services/pool/next.service');
 
 /** The ending, in one sentence. Never leaves the server. */
 const ARC_SUMMARY = 'It begins badly and ends with them reconciled on a rooftop.';
@@ -1278,6 +1279,111 @@ describe('endings and the next story', () => {
       keyChoices: [{ label: `you chose to ${first.choices[0].label.toLowerCase()}`, position: 0 }],
       facts: { choices: 1, storyNights: 1, peopleMet: expect.any(Array) },
     });
+  });
+
+  it('says where the ending and the next story stand', async () => {
+    const { sessionId } = await playToTheEnd();
+    await Promise.all(afterWork);
+
+    const body = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+    ).json();
+
+    expect(body.session.endingStatus).toBe('ready');
+    expect(body.session.nextStatus).toBe('ready');
+  });
+
+  it('leaves both statuses null while a story is going', async () => {
+    asOwner();
+    const started = await (
+      await startRoute.POST(
+        post(`/api/v1/storylines/${storylineId}/sessions`),
+        ctx({ storylineId })
+      )
+    ).json();
+
+    expect(started.session.endingStatus).toBeNull();
+    expect(started.session.nextStatus).toBeNull();
+  });
+
+  /**
+   * The bug this exists for: the write after the last beat failed, and the app
+   * only ever reads the session after that. A read tries again.
+   */
+  it('writes a missing ending from a read of the session, once per lease', async () => {
+    const { sessionId } = await playToTheEnd();
+    await Promise.all(afterWork);
+    // As if the write after the last beat had failed two minutes ago.
+    await db
+      .update(storylineSessions)
+      .set({
+        ending: null,
+        endingAttempts: 1,
+        endingAttemptedAt: new Date(Date.now() - 3 * 60_000),
+      })
+      .where(eq(storylineSessions.id, sessionId));
+    const read = async () =>
+      (
+        await (
+          await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+        ).json()
+      ).session;
+
+    const waiting = await read();
+    expect(waiting.ending).toBeNull();
+    expect(waiting.endingStatus).toBe('writing');
+    // The app's next read, 2 s later, while that attempt runs.
+    await read();
+    await Promise.all(afterWork);
+
+    const written = await read();
+    expect(written.ending?.title).toBe('the long way home');
+    expect(written.endingStatus).toBe('ready');
+    const [row] = await db
+      .select({ attempts: storylineSessions.endingAttempts })
+      .from(storylineSessions)
+      .where(eq(storylineSessions.id, sessionId));
+    expect(row.attempts).toBe(2);
+  });
+
+  it('says the ending is unavailable once every attempt has failed, and stops trying', async () => {
+    const { sessionId } = await playToTheEnd();
+    await Promise.all(afterWork);
+    await db
+      .update(storylineSessions)
+      .set({
+        ending: null,
+        endingAttempts: 5,
+        endingAttemptedAt: new Date(Date.now() - 3 * 60_000),
+      })
+      .where(eq(storylineSessions.id, sessionId));
+
+    const body = await (
+      await sessionRoute.GET(get(`/api/v1/sessions/${sessionId}`), ctx({ sessionId }))
+    ).json();
+    await Promise.all(afterWork);
+
+    expect(body.session.ending).toBeNull();
+    expect(body.session.endingStatus).toBe('unavailable');
+    const [row] = await db
+      .select({ ending: storylineSessions.ending, attempts: storylineSessions.endingAttempts })
+      .from(storylineSessions)
+      .where(eq(storylineSessions.id, sessionId));
+    expect(row).toEqual({ ending: null, attempts: 5 });
+  });
+
+  it('tells "nothing to offer" from "a chatgpt story is being written"', async () => {
+    expect(await nextStatusFor(ownerId, null)).toBe('none');
+
+    const [pending] = await db
+      .insert(storyTemplates)
+      .values({ origin: 'chatgpt', userId: ownerId, status: 'pending' })
+      .returning({ id: storyTemplates.id });
+    try {
+      expect(await nextStatusFor(ownerId, null)).toBe('preparing');
+    } finally {
+      await db.delete(storyTemplates).where(eq(storyTemplates.id, pending.id));
+    }
   });
 
   it('returns the ending again for free, and refuses an answer to it', async () => {

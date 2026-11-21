@@ -1,7 +1,7 @@
 # Deploying the Bramble API
 
 The backend runs on Porter (AWS EKS) as **one image started several ways**: the web
-server, the import worker, and four scheduled sweeps. `porter.yaml` is the whole
+server, the import worker, and five scheduled sweeps. `porter.yaml` is the whole
 deployment; this document is the part that cannot live in it, namely where each
 secret comes from and which ones are needed before the image is even built.
 
@@ -19,12 +19,12 @@ secret comes from and which ones are needed before the image is even built.
 
 ## The four processes
 
-| Process    | Command                                             | Notes                                                       |
-| ---------- | --------------------------------------------------- | ----------------------------------------------------------- |
-| Web        | `node server.js`                                    | 2 replicas. Liveness `/api/health`, readiness `/api/ready`. |
-| Worker     | `node dist/worker/import-worker.js`                 | 1 replica. No port — it polls the `imports` table.          |
-| Migrations | `node dist/db/migrate.js`                           | Porter `predeploy`. Non-zero exit blocks the release.       |
-| Sweeps     | `node dist/sweeps/{arc,import,guest,push}-sweep.js` | Cron jobs: arc and guest hourly, import every ten minutes.  |
+| Process    | Command                                                    | Notes                                                                                  |
+| ---------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Web        | `node server.js`                                           | 2 replicas. Liveness `/api/health`, readiness `/api/ready`.                            |
+| Worker     | `node dist/worker/import-worker.js`                        | 1 replica. No port — it polls the `imports` table.                                     |
+| Migrations | `node dist/db/migrate.js`                                  | Porter `predeploy`. Non-zero exit blocks the release.                                  |
+| Sweeps     | `node dist/sweeps/{arc,import,guest,push,ending}-sweep.js` | Cron jobs: arc and guest hourly, import and push every ten minutes, ending every five. |
 
 One image rather than four, so the worker cannot be running different code from
 the server that queued its work. The worker and the sweeps are bundled with
@@ -105,17 +105,17 @@ confidence rather than left in place forever because nobody is sure.
 
 ### Required
 
-| Variable                       | Read by                | Source                   | Purpose                                                                                                                                                                                                                            |
-| ------------------------------ | ---------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                 | all                    | AWS RDS                  | Postgres. **Must end `?sslmode=require`** — see TLS below.                                                                                                                                                                         |
-| `REDIS_URL`                    | web, worker, sweeps    | AWS ElastiCache          | `rediss://…` Where encrypted transcripts wait between the import request and the worker.                                                                                                                                           |
-| `IMPORT_MASTER_KEY`            | web, worker            | generated, Doppler `prd` | Base64, 32 bytes. Wraps every per-import data key. Deliberately a different secret from `REDIS_URL`: envelope encryption is pointless if the key sits beside the credentials that reach the ciphertext. `openssl rand -base64 32`. |
-| `CONTACT_HASH_SECRET`          | web, worker            | generated, Doppler `prd` | ≥32 chars. HMAC key for `persons.source_contact_ref`. Hashing throws without it rather than falling back to an unkeyed digest. **Rotating it orphans every existing person row.**                                                  |
-| `GUEST_TOKEN_SECRET`           | web                    | generated, Doppler `prd` | ≥32 chars. Signs guest tokens (HS256). Without it guest creation fails closed and every guest token is a 401. Rotating it signs every guest out — they lose only their unsaved 7-day story. `openssl rand -base64 32`.             |
-| `CLERK_SECRET_KEY`             | web                    | Clerk prod               | `sk_live_…`. Verifies bearer tokens. Without it every request is a 401.                                                                                                                                                            |
-| `CLERK_WEBHOOK_SIGNING_SECRET` | web                    | Clerk prod → Webhooks    | `whsec_…`. Verifies the Clerk webhook. Without it the route rejects everything, which is the correct closed default. See _Clerk webhook_ below.                                                                                    |
-| `OPENAI_API_KEY`               | web, worker, arc-sweep | OpenAI                   | `sk-…`. The model. Without it the generator falls back to a deterministic fake — which is worse than failing, because it is invisible.                                                                                             |
-| `BRAMBLE_AI_MODE`              | web, worker, arc-sweep | set to `live`            | **Set this explicitly.** It forces the fake when set to `fake`; `live` in production states the intent rather than relying on a key being present.                                                                                 |
+| Variable                       | Read by                              | Source                   | Purpose                                                                                                                                                                                                                            |
+| ------------------------------ | ------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | all                                  | AWS RDS                  | Postgres. **Must end `?sslmode=require`** — see TLS below.                                                                                                                                                                         |
+| `REDIS_URL`                    | web, worker, sweeps                  | AWS ElastiCache          | `rediss://…` Where encrypted transcripts wait between the import request and the worker.                                                                                                                                           |
+| `IMPORT_MASTER_KEY`            | web, worker                          | generated, Doppler `prd` | Base64, 32 bytes. Wraps every per-import data key. Deliberately a different secret from `REDIS_URL`: envelope encryption is pointless if the key sits beside the credentials that reach the ciphertext. `openssl rand -base64 32`. |
+| `CONTACT_HASH_SECRET`          | web, worker                          | generated, Doppler `prd` | ≥32 chars. HMAC key for `persons.source_contact_ref`. Hashing throws without it rather than falling back to an unkeyed digest. **Rotating it orphans every existing person row.**                                                  |
+| `GUEST_TOKEN_SECRET`           | web                                  | generated, Doppler `prd` | ≥32 chars. Signs guest tokens (HS256). Without it guest creation fails closed and every guest token is a 401. Rotating it signs every guest out — they lose only their unsaved 7-day story. `openssl rand -base64 32`.             |
+| `CLERK_SECRET_KEY`             | web                                  | Clerk prod               | `sk_live_…`. Verifies bearer tokens. Without it every request is a 401.                                                                                                                                                            |
+| `CLERK_WEBHOOK_SIGNING_SECRET` | web                                  | Clerk prod → Webhooks    | `whsec_…`. Verifies the Clerk webhook. Without it the route rejects everything, which is the correct closed default. See _Clerk webhook_ below.                                                                                    |
+| `OPENAI_API_KEY`               | web, worker, arc-sweep, ending-sweep | OpenAI                   | `sk-…`. The model. Without it the generator falls back to a deterministic fake — which is worse than failing, because it is invisible.                                                                                             |
+| `BRAMBLE_AI_MODE`              | web, worker, arc-sweep, ending-sweep | set to `live`            | **Set this explicitly.** It forces the fake when set to `fake`; `live` in production states the intent rather than relying on a key being present.                                                                                 |
 
 ### Expected, with defaults worth setting explicitly
 
@@ -349,6 +349,34 @@ It deletes the user rows (everything they own cascades;
 `purge.integration.test.ts` checks every table) and then the Clerk accounts
 with that email. Then, by hand, delete the PostHog persons whose ids it prints
 (People → the id → Delete person and data), and reply to confirm.
+
+## The ending sweep
+
+`ending-sweep` (`node dist/sweeps/ending-sweep.js`, cron `*/5 * * * *`) writes
+the ending pages nothing else got to. Normally the turn route writes one right
+after the last beat's response, and any read of the ended session tries again
+while it's missing; the sweep is for a write a deploy cut short (an `after()`
+killed mid-flight leaves no trace) and for a reader who never reopens the story.
+
+It takes at most 20 ended sessions a run, oldest first, that ended over five
+minutes ago, have no ending, are under 5 attempts and have had none in the last
+two minutes, and writes them four at a time. Every write claims its attempt on
+the row first (`storyline_sessions.ending_attempts` and `ending_attempted_at`),
+so the sweep and the web pods never pay for the same ending twice, and a session
+that has failed 5 times is left alone (the app is told `endingStatus:
+'unavailable'`). It logs one `ending-sweep` line of counts per run (`owed`,
+`written`, `failed`, `skipped`), and each failure as `ending_write_failed` with
+the session id, attempt, `trigger: "sweep"` and the error code.
+
+It needs `OPENAI_API_KEY` and `BRAMBLE_AI_MODE`, which it gets from the
+`bramble-prd` group like every service. It's in `porter.yaml`, so the deploy
+workflow's `porter apply -f porter.yaml` creates it; after the first deploy
+with it, check that `ending-sweep` is listed as a job with its schedule in
+Porter. To run it by hand:
+
+```bash
+porter app run bramble -- node dist/sweeps/ending-sweep.js
+```
 
 ## Health checks
 
