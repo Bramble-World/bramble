@@ -44,6 +44,16 @@ export const storylines = pgTable(
     targetBeats: integer('target_beats').notNull().default(20),
 
     /**
+     * The scripted opening this story was written from: set on the first story,
+     * the one a guest starts from the 1:47 am phone (`createGuestStory`), and
+     * null on every other. It is what makes that story the short one: it ends
+     * on beat 10 exactly, where every other story ends between beats 16 and 24
+     * (`endingBounds`). A column rather than a guess from the beat count or the
+     * title, so nothing else can be mistaken for it.
+     */
+    openingId: text('opening_id'),
+
+    /**
      * The pool story this was copied from. Null for an imported or scripted story.
      *
      * `set null`: when the author leaves, their template goes and this copy stays

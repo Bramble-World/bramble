@@ -51,7 +51,12 @@ Every story ends somewhere around 16–24 beats (`storylines.target_beats`, 20 b
 default). The PostHog event is `story_ended` with `turns` (how many beats
 it took) and `phase`: `closing` when the model chose the moment, `must_end` when
 the cap forced it. A high share of `must_end` means the model is not finding
-endings on its own and the closing instructions need work. From the database:
+endings on its own and the closing instructions need work. **The first story
+is the exception**: it ends on beat 10 by design (`storylines.opening_id` is
+set), so its `story_ended` is `turns: 10, phase: must_end` (later only for a first story already past 10 when this shipped) and says
+nothing about the model. Leave it out when judging the closing instructions
+(`where l.opening_id is null` below, joining `storylines l on l.id =
+s.storyline_id`). From the database:
 
 ```sql
 select date_trunc('day', s.ended_at)  as day,

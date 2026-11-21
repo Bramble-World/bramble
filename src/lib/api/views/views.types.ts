@@ -292,6 +292,10 @@ export type NextStoryView = {
   fromChatGPT: boolean;
 };
 
+export type EndingStatusView = 'ready' | 'writing' | 'unavailable';
+
+export type NextStatusView = 'ready' | 'preparing' | 'none';
+
 export type SessionView = {
   id: string;
   storylineId: string;
@@ -304,15 +308,30 @@ export type SessionView = {
   /**
    * The ending page, once the story has ended. Null while it's going, and for
    * the few seconds after the ending while it's being written: read the session
-   * again shortly.
+   * again shortly (each read tries again if a write failed).
    */
   ending: EndingView | null;
+  /**
+   * Where `ending` stands on an ended session: `ready` (it's there),
+   * `writing` (not yet: read again shortly) or `unavailable` (every attempt
+   * failed and none will be made: stop waiting and move on without it). Null
+   * while the story is going.
+   */
+  endingStatus: EndingStatusView | null;
   /**
    * The story offered next, once this one has ended: the "next episode" card.
    * Null while the story is going, or when the pool has nothing new for this
    * reader. Start it with `POST .../next`.
    */
   next: NextStoryView | null;
+  /**
+   * Where `next` stands on an ended session: `ready` (it's there),
+   * `preparing` (a story the reader asked ChatGPT for is being written and will
+   * be `next`: read again later) or `none` (nothing to offer: the reader has
+   * played everything there is for them; offer making one with ChatGPT). Null
+   * while the story is going.
+   */
+  nextStatus: NextStatusView | null;
   /**
    * Everything already lived through, oldest first, excluding the open turn.
    *

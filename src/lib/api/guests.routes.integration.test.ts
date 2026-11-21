@@ -424,6 +424,12 @@ describe('POST /api/v1/onboarding/story', () => {
       .from(personRelationships)
       .where(eq(personRelationships.userId, guest.id));
     expect(relationship.relationshipType).toBe('ex');
+    // Marked as the first story, which is what makes it end on beat 10.
+    const [storyline] = await db
+      .select({ openingId: storylines.openingId, targetBeats: storylines.targetBeats })
+      .from(storylines)
+      .where(eq(storylines.id, story.storylineId));
+    expect(storyline).toEqual({ openingId: 'are_you_up', targetBeats: 10 });
 
     expect(only('person_named').map((c) => c.event.properties)).toEqual([
       { relationship: 'ex', pronouns_given: 'yes', premise: premise.id },
