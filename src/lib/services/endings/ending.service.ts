@@ -17,6 +17,7 @@ import { contextAsOf } from '../generation/playhead';
 import * as sessions from '../sessions/sessions.service';
 import * as sessionReader from '../sessions/sessions.reader';
 import type { TurnWithChoices } from '../sessions/sessions.types';
+import { relationshipToReader } from '@/lib/ai/prompts/relationship';
 
 /**
  * How many times an ending is attempted in all, across the turn that ended the
@@ -187,14 +188,19 @@ async function composeEnding(
     assembleSessionContext(userId, sessionId),
     sessionReader.listAnsweredTurns(db, sessionId),
   ]);
-  const people = contextAsOf(storyline, session.playheadOrder)
-    .characters.filter((character) => !character.isSelf)
+  const reached = contextAsOf(storyline, session.playheadOrder);
+  const people = reached.characters
+    .filter((character) => !character.isSelf)
     .map((character) => character.name);
+  const toYou = reached.relationships
+    .map((relationship) => relationshipToReader(reached, relationship))
+    .filter((line) => line !== null);
 
   const vars = {
     title: storyline.storyline.title,
     tone: storyline.storyline.tone,
     people,
+    toYou,
     session: played,
   };
   const value = await onceMoreIfTransient(async () => {
