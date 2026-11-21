@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { StorylineContext } from '@/lib/services/generation/generation.types';
 import { renderTimeline } from './timeline';
+import { relationshipToReader } from './relationship';
 
 export type ArcVars = { storyline: StorylineContext };
 
@@ -51,7 +52,11 @@ export const arcPrompt: PromptSpec<ArcVars, ArcOutput> = {
         const described = [dynamic?.closeness, dynamic?.tension, dynamic?.powerBalance]
           .filter(Boolean)
           .join('; ');
-        return `- ${nameOf(storyline, r.characterAId)} and ${nameOf(storyline, r.characterBId)}${described ? `: ${described}` : ''}`;
+        const meaning = relationshipToReader(storyline, r);
+        return [
+          `- ${nameOf(storyline, r.characterAId)} and ${nameOf(storyline, r.characterBId)}${described ? `: ${described}` : ''}`,
+          ...(meaning ? [`  ${meaning}`] : []),
+        ].join('\n');
       }),
       '',
       '## The whole timeline',

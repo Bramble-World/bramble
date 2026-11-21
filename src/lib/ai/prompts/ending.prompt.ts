@@ -16,6 +16,12 @@ export type EndingVars = {
   tone: string | null;
   /** Everyone the reader met, by name. */
   people: string[];
+  /**
+   * What the people the reader picked on the naming screen are to them ("Mae is
+   * your crush: you have never been together…"), so the ending page doesn't
+   * write a crush as an ex. From `relationshipToReader`; empty for the rest.
+   */
+  toYou: string[];
   session: SessionContext;
 };
 
@@ -59,7 +65,7 @@ export const endingPrompt: PromptSpec<EndingVars, EndingOutput> = {
   stage: 'consequence',
   schema: endingOutputSchema,
 
-  render: ({ title, tone, people, session }) => ({
+  render: ({ title, tone, people, toYou, session }) => ({
     system: [
       'A story has just ended. Write its ending page.',
       '',
@@ -80,6 +86,7 @@ export const endingPrompt: PromptSpec<EndingVars, EndingOutput> = {
       `# ${title}`,
       tone ? `Register: ${tone}` : null,
       people.length ? `People: ${people.join(', ')}` : null,
+      ...toYou,
       '',
       '## The playthrough',
       // Numbered by position in the playthrough, which is what the server maps

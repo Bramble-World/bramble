@@ -72,7 +72,7 @@ A real contact from the user's life — a sister, a coworker, an ex — stored *
 The **structural, persistent** fact of what two real people are to each other — siblings, coworkers, close friends. Set once per pair, true regardless of which storyline you're looking at. Deliberately separate from the _narrative_ dynamic (see `characterRelationships` below), the same way `voiceProfile` lives on `persons` while storyline-specific voice deviation lives on `characters`.
 
 - `personAId` / `personBId` — the pair. A `CHECK` constraint (`personAId < personBId`) plus a unique index guarantees the database itself rejects a reversed-duplicate insert — the app must sort the two UUIDs before writing.
-- `relationshipType` — "siblings," "coworkers," etc. For a person named in iPhone onboarding, the chip the reader picked: `ex`, `old_friend`, `crush`, `boss` or `sibling`.
+- `relationshipType` — "siblings," "coworkers," etc. For a person named in iPhone onboarding, the chip the reader picked: `ex`, `old_friend`, `crush`, `boss` or `sibling`. The story's setup is written per relationship (`src/lib/onboarding/premises.ts`: a crush is never written as a past partner), and the turn, consequence, arc and ending prompts render the reader's own relationships with what they mean, not just the label (`src/lib/ai/prompts/relationship.ts`: "Mae is your crush: you have never been together…"); any other type is rendered as its label.
 
 ---
 
