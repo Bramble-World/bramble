@@ -1,4 +1,4 @@
-export { users } from './users';
+export { users, userRoleEnum } from './users';
 export { storylines } from './storylines';
 export { persons } from './persons';
 export { characters, characterRoleEnum } from './characters';

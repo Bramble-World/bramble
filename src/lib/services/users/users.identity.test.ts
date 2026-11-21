@@ -83,10 +83,42 @@ describe('the selection rule', () => {
     for (const status of ['unverified', 'transferable', 'failed', 'expired']) {
       expect(
         identityFromClerkUser(api([{ id: 'i', emailAddress: 'a@b.com', status }], 'i'))
-      ).toEqual({ email: 'a@b.com', verified: false });
+      ).toEqual({ email: 'a@b.com', verified: false, role: 'player' });
     }
     expect(
       identityFromClerkUser(api([{ id: 'i', emailAddress: 'a@b.com', status: 'verified' }], 'i'))
-    ).toEqual({ email: 'a@b.com', verified: true });
+    ).toEqual({ email: 'a@b.com', verified: true, role: 'player' });
+  });
+});
+
+describe('the role', () => {
+  it('is admin only for public metadata { role: "admin" }, in both shapes', () => {
+    const admin = { role: 'admin' };
+    expect(identityFromClerkUser({ ...api(ONE, 'idn_1'), publicMetadata: admin })?.role).toBe(
+      'admin'
+    );
+    expect(identityFromWebhookData({ ...hook(ONE, 'idn_1'), public_metadata: admin })?.role).toBe(
+      'admin'
+    );
+  });
+
+  it.each([
+    ['no metadata', undefined],
+    ['empty metadata', {}],
+    ['another role', { role: 'moderator' }],
+    ['a different case', { role: 'Admin' }],
+    ['not a string', { role: true }],
+  ])('is player with %s', (_label, metadata) => {
+    expect(identityFromClerkUser({ ...api(ONE, 'idn_1'), publicMetadata: metadata })?.role).toBe(
+      'player'
+    );
+    expect(
+      identityFromWebhookData({ ...hook(ONE, 'idn_1'), public_metadata: metadata })?.role
+    ).toBe('player');
+  });
+
+  it('reads public metadata, never metadata a player can write', () => {
+    const unsafe = { unsafe_metadata: { role: 'admin' }, private_metadata: { role: 'admin' } };
+    expect(identityFromWebhookData({ ...hook(ONE, 'idn_1'), ...unsafe })?.role).toBe('player');
   });
 });

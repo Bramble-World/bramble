@@ -11,8 +11,10 @@ import { PostHogAnalytics } from './analytics';
  * never reaches a long-term store, and an analytics pipeline is a long-term
  * store owned by somebody else.
  */
-const sharesUsage = vi.fn();
-vi.mock('@/lib/services/users/users.reader', () => ({ sharesUsage: () => sharesUsage() }));
+const sendsUsageEvents = vi.fn();
+vi.mock('@/lib/services/users/users.reader', () => ({
+  sendsUsageEvents: () => sendsUsageEvents(),
+}));
 
 /** Every event, with realistic values, so the allowlist is checked against all of them. */
 const EVERY_EVENT: AnalyticsEvent[] = [
@@ -85,7 +87,7 @@ describe('the sink', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    sharesUsage.mockResolvedValue(true);
+    sendsUsageEvents.mockResolvedValue(true);
   });
 
   it('is the no-op when no token is configured', async () => {
@@ -134,7 +136,7 @@ describe('track', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    sharesUsage.mockResolvedValue(true);
+    sendsUsageEvents.mockResolvedValue(true);
   });
 
   /**
@@ -157,7 +159,7 @@ describe('track', () => {
 
   it('sends nothing for a reader who opted out', async () => {
     const { track, capture } = await withToken();
-    sharesUsage.mockResolvedValue(false);
+    sendsUsageEvents.mockResolvedValue(false);
 
     await track('user-1', EVERY_EVENT[0]);
 
@@ -179,7 +181,7 @@ describe('track', () => {
   it('swallows a sink that throws', async () => {
     const { track } = await withToken();
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    sharesUsage.mockRejectedValue(new Error('database is on fire'));
+    sendsUsageEvents.mockRejectedValue(new Error('database is on fire'));
 
     await expect(track('user-1', EVERY_EVENT[0])).resolves.toBeUndefined();
   });
@@ -187,7 +189,7 @@ describe('track', () => {
   it('logs a failure without the properties it was sending', async () => {
     const { track } = await withToken();
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
-    sharesUsage.mockRejectedValue(new Error('database is on fire'));
+    sendsUsageEvents.mockRejectedValue(new Error('database is on fire'));
 
     await track('user-1', EVERY_EVENT[1]);
 
@@ -203,6 +205,6 @@ describe('track', () => {
 
     await track('user-1', EVERY_EVENT[0]);
 
-    expect(sharesUsage).not.toHaveBeenCalled();
+    expect(sendsUsageEvents).not.toHaveBeenCalled();
   });
 });

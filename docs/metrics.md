@@ -8,11 +8,19 @@ from the Mac, because server events are _complete_: an ad blocker or a corporate
 firewall can stop the client's, and nothing can stop these. Both ends identify
 the person as `users.id` lowercased, so one human is one PostHog person.
 
+**Admins are left out.** An account whose Clerk public metadata is
+`{ "role": "admin" }` (`users.role = 'admin'`) produces no server events, the
+same rule and the same check as the usage-data opt-out (`sendsUsageEvents` in
+`src/lib/services/users/users.reader.ts`), and `GET /api/me`'s `isAdmin` tells
+the iPhone to send none either. The team playing its own game would otherwise
+blur every funnel. Events sent before someone was made an admin stay in PostHog.
+
 **SQL against our own tables** answers anything about money or limits. Those
 questions need to be exact, and PostHog is a sampled, best-effort pipeline we do
 not own. Everything below runs against the database, needs no new tables, and is
 true even for readers who have opted out of analytics — because none of it is
-analytics, it is accounting.
+analytics, it is accounting. These queries count admins too; to leave the team
+out, join `users u on u.id = s.user_id` and add `and u.role <> 'admin'`.
 
 Run with `doppler run -- psql "$DATABASE_URL"`.
 

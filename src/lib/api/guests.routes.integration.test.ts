@@ -62,11 +62,11 @@ vi.mock('@/lib/analytics/analytics', async (importOriginal) => {
   return {
     ...actual,
     track: async (userId: string, event: never) => {
-      if (!(await (await reader()).sharesUsage(userId))) return;
+      if (!(await (await reader()).sendsUsageEvents(userId))) return;
       captured.push({ userId, event });
     },
     trackAlias: async (userId: string, previousId: string) => {
-      if (!(await (await reader()).sharesUsage(userId))) return;
+      if (!(await (await reader()).sendsUsageEvents(userId))) return;
       aliases.push({ userId, previousId });
     },
   };
@@ -289,6 +289,7 @@ describe('POST /api/v1/guests', () => {
       email: null,
       shareUsage: true,
       isGuest: true,
+      isAdmin: false,
       chatgpt: { connected: false, writing: false },
     });
   });

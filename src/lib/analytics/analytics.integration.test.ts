@@ -25,8 +25,8 @@ vi.mock('@/lib/analytics/analytics', async (importOriginal) => {
     // Wraps the real `track`, so the consent gate and the never-throws guarantee
     // are the ones under test rather than a reimplementation of them.
     track: async (userId: string, event: never) => {
-      const sharesUsage = (await import('@/lib/services/users/users.reader')).sharesUsage;
-      if (!(await sharesUsage(userId))) return;
+      const sendsUsageEvents = (await import('@/lib/services/users/users.reader')).sendsUsageEvents;
+      if (!(await sendsUsageEvents(userId))) return;
       captured.push({ userId, event });
     },
   };
@@ -199,6 +199,16 @@ describe('beat_played', () => {
 
   it('fires nothing for a reader who opted out', async () => {
     await optOut();
+    const session = await sessions.startSession(userId, storylineId);
+
+    await advanceSession(userId, session.id, { generator: fake });
+
+    expect(captured).toHaveLength(0);
+  });
+
+  // The team playing its own game, sharing usage data or not.
+  it('fires nothing for an admin', async () => {
+    await db.update(users).set({ role: 'admin' }).where(eq(users.id, userId));
     const session = await sessions.startSession(userId, storylineId);
 
     await advanceSession(userId, session.id, { generator: fake });

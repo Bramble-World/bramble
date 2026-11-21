@@ -1,3 +1,5 @@
+import type { UserRole } from './users.types';
+
 /**
  * Resolving "which of this Clerk user's email addresses is theirs?" — once.
  *
@@ -14,6 +16,8 @@
 export type ClerkIdentity = {
   email: string;
   verified: boolean;
+  /** `admin` when Clerk's public metadata says `{ "role": "admin" }`. */
+  role: UserRole;
 };
 
 type AddressLike = {
@@ -24,12 +28,25 @@ type AddressLike = {
 type ClerkUserLike = {
   emailAddresses?: (AddressLike & { emailAddress: string })[];
   primaryEmailAddressId?: string | null;
+  publicMetadata?: Record<string, unknown> | null;
 };
 
 type WebhookUserLike = {
   email_addresses?: (AddressLike & { email_address: string })[];
   primary_email_address_id?: string | null;
+  public_metadata?: Record<string, unknown> | null;
 };
+
+/**
+ * The role Clerk's public metadata gives: `admin` only for exactly
+ * `{ "role": "admin" }`. Anything else — no metadata, another value, a typo — is
+ * a player, so removing it in the dashboard is how someone stops being one.
+ * Public metadata, because only the backend and the dashboard can write it; a
+ * player can't make themself an admin from the app.
+ */
+export function roleFromMetadata(metadata: Record<string, unknown> | null | undefined): UserRole {
+  return metadata?.role === 'admin' ? 'admin' : 'player';
+}
 
 /**
  * The rule: the address Clerk marks primary, else the first one.
@@ -41,7 +58,7 @@ type WebhookUserLike = {
 function selectPrimary(
   addresses: { id: string; address: string; verified: boolean }[],
   primaryId: string | null | undefined
-): ClerkIdentity | null {
+): Omit<ClerkIdentity, 'role'> | null {
   const primary = addresses.find((a) => a.id === primaryId) ?? addresses[0];
   if (!primary) return null;
   return { email: primary.address, verified: primary.verified };
@@ -61,7 +78,8 @@ export function identityFromClerkUser(user: ClerkUserLike): ClerkIdentity | null
     address: a.emailAddress,
     verified: isVerified(a),
   }));
-  return selectPrimary(addresses, user.primaryEmailAddressId);
+  const primary = selectPrimary(addresses, user.primaryEmailAddressId);
+  return primary && { ...primary, role: roleFromMetadata(user.publicMetadata) };
 }
 
 /** Adapter for the `user.created` / `user.updated` webhook payload. */
@@ -71,5 +89,6 @@ export function identityFromWebhookData(data: WebhookUserLike): ClerkIdentity | 
     address: a.email_address,
     verified: isVerified(a),
   }));
-  return selectPrimary(addresses, data.primary_email_address_id);
+  const primary = selectPrimary(addresses, data.primary_email_address_id);
+  return primary && { ...primary, role: roleFromMetadata(data.public_metadata) };
 }
