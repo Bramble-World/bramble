@@ -1,0 +1,1 @@
+ALTER TABLE "story_templates" ADD COLUMN "batch_id" uuid;

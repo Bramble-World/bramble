@@ -50,13 +50,15 @@ export function withUser<Context = unknown>(
  * design — the play loop is theirs as much as anyone's. Routes that need an
  * account (imports today) say so here, by signature, rather than each one
  * remembering to check. Refused with `SIGNUP_REQUIRED`, whose remedy is the
- * save screen rather than a sign-out.
+ * save screen rather than a sign-out. `refusal` is the message, for a route
+ * that isn't about importing.
  */
 export function withAccount<Context = unknown>(
-  handler: (user: PublicUser, request: Request, context: Context) => Promise<Response>
+  handler: (user: PublicUser, request: Request, context: Context) => Promise<Response>,
+  refusal = 'Sign up to import a conversation.'
 ) {
   return withUser<Context>(async (user, request, context) => {
-    if (user.isGuest) throw new SignupRequiredError('Sign up to import a conversation.');
+    if (user.isGuest) throw new SignupRequiredError(refusal);
     return handler(user, request, context);
   });
 }

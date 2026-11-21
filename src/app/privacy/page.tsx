@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 19, 2026">
+    <LegalPage title="Privacy Policy" effective="November 20, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -67,9 +67,9 @@ export default function Privacy() {
           you what it sends to OpenAI and asks you to agree.
         </li>
         <li>
-          If you connect Bramble in ChatGPT and ask it for a Bramble story, it sends us something
-          about your life, and we write a story from it that only you play. We delete what it sent
-          once the story is written.
+          If you connect Bramble in ChatGPT and ask it for a Bramble story, or tap a Bramble link
+          ChatGPT writes you, we get something about your life and write stories from it that only
+          you play. We delete what we got once the stories are written.
         </li>
         <li>We don&rsquo;t sell your data, and we don&rsquo;t use it for advertising.</li>
         <li>
@@ -171,6 +171,21 @@ export default function Privacy() {
         (see below).
       </p>
       <p>
+        You can also ask ChatGPT for a Bramble link without connecting: the &ldquo;make a story with
+        chatgpt&rdquo; button in the app opens ChatGPT with that request, and ChatGPT replies with a
+        link that holds up to five situations from what it knows about you, each with the first
+        names of the people in it and who they are to you. What ChatGPT put in the link is in the
+        part after the &ldquo;#&rdquo;, which your browser never sends to our website. When you tap
+        the link, the Bramble app opens and sends it to our server straight away, without showing it
+        to you first: tapping it is your ok. We send it to OpenAI to sort it into the situations we
+        can write stories from. That step leaves out anything about health (including sexual
+        health), mental-health crises or self-harm, money or debt, legal trouble, addresses and
+        other details that identify someone, school or work logistics, anything sexual, and anything
+        too thin to make a story, whatever ChatGPT put in the link. We keep only the situations it
+        picked, never the rest of what the link held, and each one then goes the way a story asked
+        for in ChatGPT does, below. You can make up to five stories a day, however you ask.
+      </p>
+      <p>
         We first send it to OpenAI&rsquo;s moderation service; if it talks about self-harm, abuse or
         someone in danger, we don&rsquo;t keep it. Otherwise we send it to OpenAI to write the
         story, which then becomes your next story in the iPhone app; if you allow notifications, we
@@ -179,7 +194,8 @@ export default function Privacy() {
         the story is written, or as soon as we decide we can&rsquo;t write one from it; after that,
         the story is the only copy. We also note when your account first connected. You can delete a
         story in ChatGPT (&ldquo;delete my bramble story&rdquo;), which removes it and the people it
-        added from your account, and disconnect Bramble in ChatGPT&rsquo;s settings. What ChatGPT
+        added from your account, and disconnect Bramble in ChatGPT&rsquo;s settings; a story made
+        from a link is deleted with your account, or when you email us to delete it. What ChatGPT
         itself keeps is covered by OpenAI&rsquo;s own privacy policy, not this one.
       </p>
 
@@ -317,9 +333,9 @@ export default function Privacy() {
           a story) and the story so far, including the names and pronouns you give people, to write
           each scene; and your answers to the questions about your last life, to check them with its
           moderation service and to write stories from them; and what ChatGPT sends us when you ask
-          it for a story, to check it and write the story. Under OpenAI&rsquo;s terms for its API,
-          it doesn&rsquo;t train its models on this data; it may keep it for up to 30 days to detect
-          abuse.
+          it for a story, or what a Bramble link from ChatGPT holds when you tap it, to sort it,
+          check it and write the stories. Under OpenAI&rsquo;s terms for its API, it doesn&rsquo;t
+          train its models on this data; it may keep it for up to 30 days to detect abuse.
         </li>
         <li>
           <strong>Clerk</strong>: sign-in and account security.
@@ -357,12 +373,12 @@ export default function Privacy() {
         them, and the stories keep a model-written version of it, under the name you have for them.
         We never receive their phone numbers or email addresses. The same goes for someone you name
         when playing on iPhone: we keep the name and pronouns you give them, with your story, and
-        nothing else about them. And for the people ChatGPT names when you ask it for a story: their
-        first names, who they are to you and the little it says about them, kept as part of your
-        story. Stories are only shown to the account that created them. If you think you&rsquo;re in
-        someone&rsquo;s Bramble story and want something removed, email <Mail />. Because we never
-        receive phone numbers or email addresses, we may need help from the person who imported the
-        conversation to find it.
+        nothing else about them. And for the people ChatGPT names when you ask it for a story, or in
+        a link: their first names, who they are to you and the little it says about them, kept as
+        part of your story. Stories are only shown to the account that created them. If you think
+        you&rsquo;re in someone&rsquo;s Bramble story and want something removed, email <Mail />.
+        Because we never receive phone numbers or email addresses, we may need help from the person
+        who imported the conversation to find it.
       </p>
 
       <h2>How long we keep it</h2>
@@ -378,8 +394,9 @@ export default function Privacy() {
           your account. An answer the safety check flags is never kept.
         </li>
         <li>
-          What ChatGPT sends to write a story: until the story is written, or we decide we
-          can&rsquo;t write one from it, usually a few minutes. If moderation flags it, it&rsquo;s
+          What ChatGPT sends to write a story, and the situations we keep from a Bramble link: until
+          the story is written, or we decide we can&rsquo;t write one from it, usually a few
+          minutes. If moderation flags it, it&rsquo;s never kept. The rest of what a link held is
           never kept.
         </li>
         <li>Your account and stories: until you delete them, or ask us to.</li>

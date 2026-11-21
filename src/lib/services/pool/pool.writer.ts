@@ -50,11 +50,13 @@ export async function enqueueForAnswer(
  * Queues a story for one player from what ChatGPT sent, to be written at once:
  * unlike an answer, a context is not edited afterwards, so there is nothing to
  * wait for. Returns the template's id, which is what ChatGPT is told.
+ * `batchId` groups the stories one link asked for (`storyTemplates.batchId`).
  */
 export async function enqueueForContext(
   tx: Executor,
   userId: string,
-  content: ChatGPTContext
+  content: ChatGPTContext,
+  batchId: string | null = null
 ): Promise<string> {
   const [context] = await tx
     .insert(chatgptContexts)
@@ -62,7 +64,13 @@ export async function enqueueForContext(
     .returning({ id: chatgptContexts.id });
   const [template] = await tx
     .insert(storyTemplates)
-    .values({ origin: 'chatgpt', userId, sourceContextId: context.id, status: 'pending' })
+    .values({
+      origin: 'chatgpt',
+      userId,
+      sourceContextId: context.id,
+      batchId,
+      status: 'pending',
+    })
     .returning({ id: storyTemplates.id });
   return template.id;
 }
