@@ -2,6 +2,7 @@ import { RateLimitError, SignupRequiredError } from '@/lib/utils/errors';
 import * as reader from './sessions.reader';
 import * as userReader from '../users/users.reader';
 import { track } from '@/lib/analytics/analytics';
+import type { UserRole } from '../users/users.types';
 
 /**
  * How much a reader may play, and when more becomes available.
@@ -24,6 +25,12 @@ import { track } from '@/lib/analytics/analytics';
  * a refund path to get wrong; the count cannot drift from reality, because the
  * number of turns *is* the number of turns; and the moment a point returns is
  * exact rather than approximated.
+ *
+ * **Admins are unlimited.** The team plays its own game far past twenty turns a
+ * day, so an admin (`users.role`, copied from Clerk) always has a full balance
+ * and is never refused. Still derived, never stored: nothing is written for
+ * them, and removing the role brings the ordinary count straight back — the
+ * turns they played in the last 24 hours count from that moment.
  */
 
 /**
@@ -60,7 +67,27 @@ export type Energy = {
   fullAt: Date | null;
 };
 
-export async function energyFor(userId: string): Promise<Energy> {
+/** An admin's balance: always full, so nothing to report as returning. */
+function unlimited(): Energy {
+  return {
+    remaining: TURN_ENERGY_PER_DAY,
+    limit: TURN_ENERGY_PER_DAY,
+    resetsAt: null,
+    fullAt: null,
+  };
+}
+
+/**
+ * The reader's balance.
+ *
+ * Pass `role` when the caller already holds the user row (every request does),
+ * so a turn costs no extra read; without it, the role is read here. Either way
+ * the answer is the database's, never a guess.
+ */
+export async function energyFor(userId: string, role?: UserRole): Promise<Energy> {
+  const admin = role === undefined ? await userReader.isAdmin(userId) : role === 'admin';
+  if (admin) return unlimited();
+
   const since = new Date(Date.now() - ENERGY_WINDOW_MS);
   const { used, oldest, newest } = await reader.turnsCreatedSince(userId, since);
 
@@ -87,9 +114,11 @@ export async function energyFor(userId: string): Promise<Energy> {
  *
  * At least one second, because a `Retry-After: 0` invites an immediate retry
  * that will fail for the same reason.
+ *
+ * Never throws for an admin, whose balance is always full (`energyFor`).
  */
-export async function assertEnergy(userId: string): Promise<Energy> {
-  const energy = await energyFor(userId);
+export async function assertEnergy(userId: string, role?: UserRole): Promise<Energy> {
+  const energy = await energyFor(userId, role);
   if (energy.remaining > 0) return energy;
 
   const seconds = energy.resetsAt
@@ -142,6 +171,8 @@ export async function assertMayPlay(userId: string): Promise<{ guestBeat: number
     return { guestBeat: used + 1 };
   }
 
-  await assertEnergy(userId);
+  // The role from the row just read, so an admin costs no second query. A row
+  // that isn't there is no admin: `assertEnergy` then counts as for anyone.
+  await assertEnergy(userId, user?.role ?? 'player');
   return { guestBeat: null };
 }

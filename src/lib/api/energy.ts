@@ -10,8 +10,10 @@ import { PublicUser } from '@/lib/services/users/users.types';
  * a number the app has no screen for, and a misleading one — it would count
  * down from twenty when three is the actual limit. Once they sign up, the turns
  * they played count toward their account's energy like any others.
+ *
+ * An admin's is always full (see `energyFor`).
  */
 export async function readerEnergy(user: PublicUser): Promise<EnergyView | null> {
   if (user.isGuest) return null;
-  return energyView(await energyFor(user.id));
+  return energyView(await energyFor(user.id, user.role));
 }

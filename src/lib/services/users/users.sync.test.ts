@@ -56,6 +56,14 @@ describe('user.created', () => {
     expect(writer.insertUserIfAbsent).not.toHaveBeenCalled();
   });
 
+  it('provisions an admin as an admin', async () => {
+    writer.insertUserIfAbsent.mockResolvedValue(row);
+    await applyClerkUserEvent(userEvent('user.created', { public_metadata: { role: 'admin' } }));
+    expect(writer.insertUserIfAbsent).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'admin' })
+    );
+  });
+
   it('passes the unverified flag through to the writer', async () => {
     writer.insertUserIfAbsent.mockResolvedValue(row);
     await applyClerkUserEvent(
@@ -94,6 +102,24 @@ describe('user.updated', () => {
     await expect(applyClerkUserEvent(userEvent('user.updated'))).resolves.toMatchObject({
       action: 'updated',
     });
+  });
+
+  it('makes someone an admin when their public metadata says so', async () => {
+    writer.updateUserByClerkId.mockResolvedValue(row);
+    await applyClerkUserEvent(userEvent('user.updated', { public_metadata: { role: 'admin' } }));
+    expect(writer.updateUserByClerkId).toHaveBeenCalledWith(
+      'user_1',
+      expect.objectContaining({ role: 'admin' })
+    );
+  });
+
+  it('makes them a player again when the role is removed', async () => {
+    writer.updateUserByClerkId.mockResolvedValue(row);
+    await applyClerkUserEvent(userEvent('user.updated', { public_metadata: {} }));
+    expect(writer.updateUserByClerkId).toHaveBeenCalledWith(
+      'user_1',
+      expect.objectContaining({ role: 'player' })
+    );
   });
 
   it('is a no-op for a user we have never seen', async () => {

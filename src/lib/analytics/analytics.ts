@@ -130,10 +130,11 @@ export async function track(userId: string, event: AnalyticsEvent): Promise<void
     // development, every test, CI — does no extra query per event.
     if (!sink.enabled) return;
 
-    // The opt-out, honoured here rather than at each call site, so it cannot be
-    // forgotten by whoever adds the next event. A reader who has turned this off
-    // produces no events at all, not quieter ones.
-    if (!(await userReader.sharesUsage(userId))) return;
+    // The opt-out and the admin exemption, honoured here rather than at each
+    // call site, so they cannot be forgotten by whoever adds the next event. A
+    // reader who has turned this off, or an admin, produces no events at all,
+    // not quieter ones.
+    if (!(await userReader.sendsUsageEvents(userId))) return;
 
     await sink.capture(userId, event);
   } catch (error) {
@@ -152,14 +153,14 @@ export async function track(userId: string, event: AnalyticsEvent): Promise<void
  * join. A guest whose story moves into an existing account loses their row, and
  * without this their three beats would belong to a person who stopped existing.
  *
- * Gated on the account's consent, since it is the account the history is being
- * attached to; never throws, for the same reasons `track` does not.
+ * Gated on the account's consent (and not being an admin), since it is the
+ * account the history is being attached to; never throws, for the same reasons `track` does not.
  */
 export async function trackAlias(userId: string, previousId: string): Promise<void> {
   try {
     const sink = getAnalytics();
     if (!sink.enabled) return;
-    if (!(await userReader.sharesUsage(userId))) return;
+    if (!(await userReader.sendsUsageEvents(userId))) return;
     await sink.alias(userId, previousId);
   } catch (error) {
     console.error('analytics alias failed', {

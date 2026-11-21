@@ -9,8 +9,12 @@ export type User = {
   shareUsage: boolean;
   /** Playing before signing up. See `users.isGuest` in the schema. */
   isGuest: boolean;
+  /** `admin` for the team: unlimited energy, no analytics. See `users.role`. */
+  role: UserRole;
   deletedAt: Date | null;
 };
+
+export type UserRole = 'player' | 'admin';
 
 /**
  * Writer inputs carry `verified`, not a timestamp: the writer derives
@@ -21,6 +25,8 @@ export type NewUser = {
   clerkId: string;
   email: string;
   verified: boolean;
+  /** From Clerk's public metadata. A player when absent. */
+  role?: UserRole;
 };
 
 export type UserPatch = {
@@ -28,6 +34,8 @@ export type UserPatch = {
   verified?: boolean;
   /** The analytics opt-out. Independent of the address fields. */
   shareUsage?: boolean;
+  /** From Clerk's public metadata, on every `user.updated`. */
+  role?: UserRole;
 };
 
 /**
@@ -35,6 +43,7 @@ export type UserPatch = {
  *
  * `isGuest` rides along because handlers branch on it — a guest has no energy
  * balance, and cannot import — and a second read per request to find out would
- * be the same row twice.
+ * be the same row twice. `role` rides along for the same reason: energy and
+ * `GET /api/me` read it from the user already in hand.
  */
-export type PublicUser = Pick<User, 'id' | 'clerkId' | 'email' | 'shareUsage' | 'isGuest'>;
+export type PublicUser = Pick<User, 'id' | 'clerkId' | 'email' | 'shareUsage' | 'isGuest' | 'role'>;

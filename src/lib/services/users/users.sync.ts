@@ -41,6 +41,7 @@ export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutc
           clerkId: event.data.id,
           email: identity.email,
           verified: identity.verified,
+          role: identity.role,
         });
         // A null insert is ambiguous: the row may already exist (lazy provisioning
         // or a redelivery, both benign), but it can equally mean the email belongs
@@ -52,9 +53,12 @@ export async function applyClerkUserEvent(event: WebhookEvent): Promise<SyncOutc
 
       // The writer derives email_verified_at from these two fields, because the
       // answer depends on whether the address itself changed. No read needed.
+      // The role is written every time, so adding or removing
+      // `{ "role": "admin" }` in the dashboard takes effect on the next event.
       const updated = await writer.updateUserByClerkId(event.data.id, {
         email: identity.email,
         verified: identity.verified,
+        role: identity.role,
       });
       // 'noop' here cannot distinguish a soft-deleted user from one we have never
       // seen, because updateUserByClerkId only matches live rows. See issue #18.

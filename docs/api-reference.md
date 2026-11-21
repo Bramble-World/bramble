@@ -150,12 +150,20 @@ No auth.
   "email": "great@brambleworld.com",
   "shareUsage": true,
   "isGuest": false,
+  "isAdmin": false,
   "chatgpt": { "connected": true, "writing": false }
 }
 ```
 
-A guest gets the same shape with `"email": null`, `"isGuest": true` and
-`chatgpt` both false.
+A guest gets the same shape with `"email": null`, `"isGuest": true`,
+`"isAdmin": false` and `chatgpt` both false.
+
+**`isAdmin`** is whether this reader is on the Bramble team. Always present.
+An admin has unlimited energy (see _Energy_) and the server sends no analytics
+about them, so **a client should send none either**: treat `isAdmin: true` like
+`shareUsage: false` for capture. It is only ever the reader's own — no response
+says anything about another account's role. Set in the Clerk dashboard, never by
+a client (see `docs/deployment.md`, _Making someone an admin_).
 
 **`chatgpt`** is Bramble in ChatGPT (`/api/mcp`, below): `connected` once the
 account has used it (it isn't cleared when someone disconnects in ChatGPT, which
@@ -181,7 +189,7 @@ render without a second request. Change it with `PUT /api/v1/me/preferences`.
 twice gives the same answer.
 
 **Honoured server-side, not just in the app.** Every server event checks this
-before it is sent, so turning it off stops the events rather than hiding the
+(and `isAdmin`) before it is sent, so turning it off stops the events rather than hiding the
 toggle. Defaults to `true` for a reader who has never chosen — the events are
 counts, durations and enums about the app's own behaviour, never anything the
 reader wrote.
@@ -1264,6 +1272,13 @@ beats instead of energy (see _Guests and onboarding_):
 **A sliding window, not a daily reset.** Each point returns exactly 24 hours
 after it was spent, so energy trickles back through the day rather than arriving
 in a lump at midnight — and there is no timezone to get wrong.
+
+**An admin is unlimited** (`GET /api/me`'s `isAdmin`): `energy` is always full —
+`remaining` equal to `limit`, `resetsAt` and `fullAt` null — and play never
+answers `RATE_LIMITED` for energy, so no "battery back" notification is sent
+either. Removing the role brings the ordinary count back at once, including the
+turns played in the last 24 hours. Every other limit (ChatGPT's stories a day,
+a guest's beats) is the same for an admin.
 
 ### What costs a point
 

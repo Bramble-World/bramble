@@ -316,6 +316,32 @@ describe('PUT /api/v1/me/preferences', () => {
   });
 });
 
+describe('GET /api/me isAdmin', () => {
+  const setRole = (role: 'admin' | 'player') =>
+    db.update(users).set({ role }).where(eq(users.id, ownerId));
+
+  it('is false for a player, true for an admin, and never names the role', async () => {
+    asOwner();
+    expect((await (await meRoute.GET(get('/api/me'))).json()).isAdmin).toBe(false);
+
+    await setRole('admin');
+    const me = await (await meRoute.GET(get('/api/me'))).json();
+    expect(me.isAdmin).toBe(true);
+    expect(me).not.toHaveProperty('role');
+
+    await setRole('player');
+    expect((await (await meRoute.GET(get('/api/me'))).json()).isAdmin).toBe(false);
+  });
+
+  // Only ever the reader's own.
+  it('says nothing about anyone else', async () => {
+    await setRole('admin');
+    asStranger();
+    expect((await (await meRoute.GET(get('/api/me'))).json()).isAdmin).toBe(false);
+    await setRole('player');
+  });
+});
+
 describe('GET /api/v1/world', () => {
   /**
    * "Not enough context yet" is an invitation, not a failure. A 404 would make the
