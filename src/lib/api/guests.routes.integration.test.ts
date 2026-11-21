@@ -289,6 +289,7 @@ describe('POST /api/v1/guests', () => {
       email: null,
       shareUsage: true,
       isGuest: true,
+      isAdmin: false,
       chatgpt: { connected: false, writing: false },
     });
   });
