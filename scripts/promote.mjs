@@ -156,8 +156,13 @@ async function waitForChecks(number) {
   };
 }
 
-async function promote(base, head) {
-  const count = await ahead(base, head);
+/**
+ * `carrying` is the branch whose commits this hop will end up moving: in a dry
+ * run nothing is merged, so staging → main is counted from dev, as the real
+ * run would carry it.
+ */
+async function promote(base, head, carrying = head) {
+  const count = await ahead(base, dryRun ? carrying : head);
   if (count === 0) {
     console.log(`  ${head} → ${base}: already level, nothing to do`);
     return true;
@@ -178,6 +183,9 @@ async function promote(base, head) {
 
   await sh('gh', ['pr', 'merge', String(number), '--merge']);
   console.log(`    merged`);
+  // The next hop reads origin/<this base>: fetch, or it would compare against
+  // the branch as it was before this merge and find nothing to carry on.
+  await sh('git', ['fetch', '--prune', 'origin']);
   return true;
 }
 
@@ -192,11 +200,15 @@ if (sync) {
   process.exit(0);
 }
 
+// In order, dev → staging first, so one run carries dev all the way to main.
+// (It used to go top-down: staging → main was decided before dev reached
+// staging, so what had just been promoted stopped at staging and needed a
+// second run.)
 console.log(dryRun ? 'promotion plan (--dry-run):' : 'promoting:');
-for (let i = CHAIN.length - 1; i > 0; i--) {
-  const base = CHAIN[i];
-  const head = CHAIN[i - 1];
-  if (!(await promote(base, head))) {
+for (let i = 0; i < CHAIN.length - 1; i++) {
+  const head = CHAIN[i];
+  const base = CHAIN[i + 1];
+  if (!(await promote(base, head, CHAIN[0]))) {
     console.error('\nstopped. Nothing further was merged.');
     process.exit(1);
   }

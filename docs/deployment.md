@@ -19,12 +19,12 @@ secret comes from and which ones are needed before the image is even built.
 
 ## The four processes
 
-| Process    | Command                                                    | Notes                                                                                  |
-| ---------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Web        | `node server.js`                                           | 2 replicas. Liveness `/api/health`, readiness `/api/ready`.                            |
-| Worker     | `node dist/worker/import-worker.js`                        | 1 replica. No port — it polls the `imports` table.                                     |
-| Migrations | `node dist/db/migrate.js`                                  | Porter `predeploy`. Non-zero exit blocks the release.                                  |
-| Sweeps     | `node dist/sweeps/{arc,import,guest,push,ending}-sweep.js` | Cron jobs: arc and guest hourly, import and push every ten minutes, ending every five. |
+| Process    | Command                                                    | Notes                                                                                            |
+| ---------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Web        | `node server.js`                                           | 2–20 replicas, scaling at 70% CPU or 80% memory. Liveness `/api/health`, readiness `/api/ready`. |
+| Worker     | `node dist/worker/import-worker.js`                        | 1 replica. No port — it polls the `imports` table.                                               |
+| Migrations | `node dist/db/migrate.js`                                  | Porter `predeploy`. Non-zero exit blocks the release.                                            |
+| Sweeps     | `node dist/sweeps/{arc,import,guest,push,ending}-sweep.js` | Cron jobs: arc and guest hourly, import and push every ten minutes, ending every five.           |
 
 One image rather than four, so the worker cannot be running different code from
 the server that queued its work. The worker and the sweeps are bundled with
