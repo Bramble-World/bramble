@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 20, 2026">
+    <LegalPage title="Privacy Policy" effective="November 24, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -269,14 +269,15 @@ export default function Privacy() {
         onboarding you reached, or that you made the second of three choices) to PostHog, and crash
         reports (what the app was doing when it crashed, your Mac or iPhone model, its system
         version and Bramble version) to Sentry. Our server also records a few events, such as that a
-        story finished being written and how long it took. These are tied to a random account ID,
-        not your name or email, and never include your messages, the names of people in them, or
-        your stories. On iPhone they start before you sign up, under your guest account&rsquo;s
-        random ID; for a guest, the server records which opening you saw, who the person you named
-        is to you (for example, an ex), whether you chose pronouns, and how many scenes you played
-        &mdash; never the name or the pronouns themselves. Turn them off in Bramble&rsquo;s
-        Settings, with &ldquo;Share anonymous usage data and crash reports&rdquo;; that stops both
-        the app and our server from sending them.
+        story finished being written and how long it took, or that you played a scene and whether
+        the story came from ChatGPT or from our own stories (never which one). These are tied to a
+        random account ID, not your name or email, and never include your messages, the names of
+        people in them, or your stories. On iPhone they start before you sign up, under your guest
+        account&rsquo;s random ID; for a guest, the server records which opening you saw, who the
+        person you named is to you (for example, an ex), whether you chose pronouns, and how many
+        scenes you played &mdash; never the name or the pronouns themselves. Turn them off in
+        Bramble&rsquo;s Settings, with &ldquo;Share anonymous usage data and crash reports&rdquo;;
+        that stops both the app and our server from sending them.
       </p>
 
       <h3>Notifications</h3>

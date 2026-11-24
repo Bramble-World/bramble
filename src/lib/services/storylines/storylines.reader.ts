@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, max } from 'drizzle-orm';
 import { db } from '@/index';
-import { characters, events, storylines } from '@/db/schema/tables';
+import { characters, events, storylines, storyTemplates } from '@/db/schema/tables';
 import { CharacterRole, PublicCharacter, PublicStoryline } from './storylines.types';
 
 const storylineColumns = {
@@ -51,6 +51,22 @@ export async function getStoryline(
     .where(and(eq(storylines.userId, userId), eq(storylines.id, storylineId)))
     .limit(1);
   return storyline ?? null;
+}
+
+/**
+ * Where a story came from, as analytics and the report alert see it: the pool
+ * story's origin, or `none` for one that was never in the pool (a guest's
+ * opening, a Mac import). Never which pool story, and never its author.
+ */
+export type StoryOrigin = (typeof storyTemplates.origin.enumValues)[number] | 'none';
+
+export async function storyOrigin(storylineId: string): Promise<StoryOrigin> {
+  const [row] = await db
+    .select({ origin: storyTemplates.origin })
+    .from(storylines)
+    .innerJoin(storyTemplates, eq(storyTemplates.id, storylines.templateId))
+    .where(eq(storylines.id, storylineId));
+  return row?.origin ?? 'none';
 }
 
 /** Whether these storyline ids all belong to the user. Used before writing a link. */
