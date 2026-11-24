@@ -33,7 +33,8 @@ vi.mock('@/lib/analytics/analytics', async (importOriginal) => {
 });
 
 const { db } = await import('@/index');
-const { storylines: storylinesTable, users } = await import('@/db/schema/tables');
+const { storylines: storylinesTable, storyTemplates, users } = await import('@/db/schema/tables');
+const { SEED_STORIES } = await import('@/lib/pool/seeds');
 const { ALLOWED_PROPERTY_KEYS } = await import('./events');
 const persons = await import('@/lib/services/persons/persons.service');
 const storylines = await import('@/lib/services/storylines/storylines.service');
@@ -115,6 +116,18 @@ beforeEach(async () => {
   registerFixtures(fake);
 });
 
+/** Makes the test story one that came from the pool, with this origin. */
+async function fromThePool(origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt') {
+  const [template] = await db
+    .insert(storyTemplates)
+    .values({ origin, userId, status: 'ready', content: SEED_STORIES['summer-shift'] })
+    .returning({ id: storyTemplates.id });
+  await db
+    .update(storylinesTable)
+    .set({ templateId: template.id })
+    .where(eq(storylinesTable.id, storylineId));
+}
+
 /** Turns opting out on, for this reader. */
 async function optOut() {
   await db.update(users).set({ shareUsage: false }).where(eq(users.id, userId));
@@ -185,7 +198,17 @@ describe('beat_played', () => {
       beyond_script: expect.any(Boolean),
       started_from_event: false,
       generation_ms: expect.any(Number),
+      origin: 'none',
     });
+  });
+
+  it('says which kind of pool story it is, never which one', async () => {
+    await fromThePool('chatgpt');
+    const session = await sessions.startSession(userId, storylineId);
+
+    await advanceSession(userId, session.id, { generator: fake });
+
+    expect(only('beat_played')[0].event.properties.origin).toBe('chatgpt');
   });
 
   it('knows a playthrough that began at a chosen moment', async () => {
@@ -356,5 +379,41 @@ describe('nothing but ids, counts, durations and enums', () => {
     for (const leak of ['Maya', 'Blossom', 'Measured', 'message ', 'Where things stood']) {
       expect(serialised).not.toContain(leak);
     }
+  });
+});
+
+/**
+ * A short budget brings the closing window to beat 2, where the fake ends as
+ * soon as it may.
+ */
+describe('story_ended', () => {
+  async function playToTheEnd() {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 6 })
+      .where(eq(storylinesTable.id, storylineId));
+    const session = await sessions.startSession(userId, storylineId);
+    const first = await advanceSession(userId, session.id, { generator: fake });
+    await commitChoice(userId, first.id, first.choices[0].id);
+    const ending = await advanceSession(userId, session.id, { generator: fake });
+    expect(ending.isEnding).toBe(true);
+  }
+
+  it('fires once, with how long it ran and where it came from', async () => {
+    await playToTheEnd();
+
+    expect(only('story_ended')).toHaveLength(1);
+    expect(only('story_ended')[0].event.properties).toStrictEqual({
+      turns: 2,
+      phase: 'closing',
+      origin: 'none',
+    });
+  });
+
+  it('carries the pool story kind', async () => {
+    await fromThePool('reborn');
+    await playToTheEnd();
+
+    expect(only('story_ended')[0].event.properties.origin).toBe('reborn');
   });
 });

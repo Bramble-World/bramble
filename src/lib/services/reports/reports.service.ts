@@ -12,6 +12,7 @@ import {
 import { track } from '@/lib/analytics/analytics';
 import { ConflictError, NotFoundError } from '@/lib/utils/errors';
 import * as sessions from '../sessions/sessions.service';
+import { StoryOrigin, storyOrigin } from '../storylines/storylines.reader';
 
 /**
  * Players reporting stories (App Store guideline 1.2: content other players
@@ -34,9 +35,6 @@ export type StoryReport = {
   reason: StoryReportReason;
   status: 'open' | 'kept' | 'pulled';
 };
-
-/** Where the reported story came from, as analytics and the alert see it. */
-export type ReportedOrigin = 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
 
 /**
  * Files the reader's report on the story this session plays.
@@ -82,27 +80,18 @@ export async function reportStory(
     })
     .returning({ id: storyReports.id, reason: storyReports.reason, status: storyReports.status });
 
-  const origin = await originOf(session.storylineId);
+  const origin = await storyOrigin(session.storylineId);
   alertTeam(report.id, input.reason, origin);
   await track(userId, { name: 'story_reported', properties: { reason: input.reason, origin } });
 
   return report;
 }
 
-async function originOf(storylineId: string): Promise<ReportedOrigin> {
-  const [row] = await db
-    .select({ origin: storyTemplates.origin })
-    .from(storylines)
-    .innerJoin(storyTemplates, eq(storyTemplates.id, storylines.templateId))
-    .where(eq(storylines.id, storylineId));
-  return row?.origin ?? 'none';
-}
-
 /**
  * One Sentry issue per report, so each one alerts rather than only the first:
  * Sentry mails on a new issue, and reports grouped by message would be one.
  */
-function alertTeam(reportId: string, reason: StoryReportReason, origin: ReportedOrigin): void {
+function alertTeam(reportId: string, reason: StoryReportReason, origin: StoryOrigin): void {
   Sentry.captureMessage('A player reported a story', {
     level: 'warning',
     fingerprint: ['story-report', reportId],
@@ -119,7 +108,7 @@ export type OpenReport = {
   id: string;
   createdAt: Date;
   reason: StoryReportReason;
-  origin: ReportedOrigin;
+  origin: StoryOrigin;
   templateId: string | null;
   /** Open reports on the same pool story, this one included. */
   reportsOnTemplate: number;

@@ -151,6 +151,8 @@ export async function generateTurn(
       // good turn on the resumed branch and to a race loser, and counting those
       // would inflate every figure derived from beats played.
       onCreated: async (written) => {
+        // Looked up only for a beat this call wrote, so a resume pays nothing.
+        const origin = await storylineReader.storyOrigin(session.storylineId);
         await track(userId, {
           name: 'beat_played',
           properties: {
@@ -161,6 +163,7 @@ export async function generateTurn(
             beyond_script: beyondScript,
             started_from_event: session.startedFromEventId !== null,
             generation_ms: meta.durationMs,
+            origin,
           },
         });
         // The onboarding funnel's own count, beside the general one: which of a
@@ -172,7 +175,7 @@ export async function generateTurn(
         if (written.isEnding && phase !== 'open') {
           await track(userId, {
             name: 'story_ended',
-            properties: { turns: written.turnOrder, phase },
+            properties: { turns: written.turnOrder, phase, origin },
           });
         }
       },
