@@ -45,11 +45,19 @@ order by 1 desc;
 is doing anything. If it sits far below 20, the limit is not the thing shaping
 behaviour and tightening it would only annoy people.
 
+Each beat written is also the PostHog event `beat_played`, with `turn_order`,
+`surfaces` (types only), `beyond_script`, `started_from_event`, `generation_ms`
+and `origin`: where the story came from, `seed`, `reborn`, `reddit` or
+`chatgpt` for a pool story, `none` for one never in the pool (a guest's opening,
+a Mac import). Never which story. Breaking retention or beats per player down by
+`origin` is what tells ChatGPT stories from pool ones. A resumed turn is not a
+beat and fires nothing.
+
 ## Stories finished, and how long they ran
 
 Every story ends somewhere around 16–24 beats (`storylines.target_beats`, 20 by
 default). The PostHog event is `story_ended` with `turns` (how many beats
-it took) and `phase`: `closing` when the model chose the moment, `must_end` when
+it took), `origin` (as below) and `phase`: `closing` when the model chose the moment, `must_end` when
 the cap forced it. A high share of `must_end` means the model is not finding
 endings on its own and the closing instructions need work. **The first story
 is the exception**: it ends on beat 10 by design (`storylines.opening_id` is

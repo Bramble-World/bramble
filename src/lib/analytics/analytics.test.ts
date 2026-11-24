@@ -26,6 +26,7 @@ const EVERY_EVENT: AnalyticsEvent[] = [
       beyond_script: false,
       started_from_event: true,
       generation_ms: 4312,
+      origin: 'chatgpt',
     },
   },
   {
@@ -45,6 +46,7 @@ const EVERY_EVENT: AnalyticsEvent[] = [
   { name: 'guest_beat_played', properties: { n: 2 } },
   { name: 'signup_completed', properties: { method: 'passkey', merged: true } },
   { name: 'push_sent', properties: { kind: 'battery_back' } },
+  { name: 'story_ended', properties: { turns: 19, phase: 'closing', origin: 'none' } },
 ];
 
 describe('what a property may be', () => {
