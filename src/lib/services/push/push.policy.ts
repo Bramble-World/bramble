@@ -1,4 +1,5 @@
 import { ENERGY_WINDOW_MS, TURN_ENERGY_PER_DAY } from '../sessions/energy.service';
+import { createHash } from 'node:crypto';
 import type { PushKind, PushMessage } from './push.types';
 
 /**
@@ -32,6 +33,43 @@ export const MESSAGES: Record<PushKind, PushMessage> = {
   story_waiting: { title: 'your story’s waiting.', body: 'pick up where you left off.' },
   story_ready: { title: 'your story’s ready.', body: 'made from your life. it’s on your desk.' },
 };
+
+/**
+ * The "story waiting" wording, tested 50/50 (the user's call, 2026-11-25).
+ * `today` is the message above. `texts` counts the waiting beat's texts,
+ * never naming who sent them or quoting them, or with no texts waiting, says
+ * the story is waiting on a choice. A player keeps one arm, so opens can be
+ * compared person by person (`push_sent`'s `copy`, docs/metrics.md).
+ */
+export type StoryWaitingArm = 'today' | 'texts';
+export type StoryWaitingCopy = 'today' | 'texts' | 'choice';
+
+export function storyWaitingArm(userId: string): StoryWaitingArm {
+  return createHash('sha256').update(`push-copy:${userId}`).digest()[0] % 2 === 0
+    ? 'today'
+    : 'texts';
+}
+
+/** `texts`: how many texts the beat waiting for an answer has; 0 for none, or none waiting. */
+export function storyWaitingMessage(
+  arm: StoryWaitingArm,
+  texts: number
+): { message: PushMessage; copy: StoryWaitingCopy } {
+  if (arm === 'today') return { message: MESSAGES.story_waiting, copy: 'today' };
+  if (texts > 0) {
+    return {
+      message: {
+        title: texts === 1 ? '1 new text in your story.' : `${texts} new texts in your story.`,
+        body: 'they’re waiting on your answer.',
+      },
+      copy: 'texts',
+    };
+  }
+  return {
+    message: { title: 'your story’s waiting on your choice.', body: 'pick up where you left off.' },
+    copy: 'choice',
+  };
+}
 
 export type PushFacts = {
   /** The player's latest turn. */

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { decidePush, MESSAGES, type PushFacts } from './push.policy';
+import {
+  decidePush,
+  MESSAGES,
+  storyWaitingArm,
+  storyWaitingMessage,
+  type PushFacts,
+} from './push.policy';
 
 const HOUR = 60 * 60 * 1000;
 /** 15:00 in New York. */
@@ -116,5 +122,40 @@ describe('every notification', () => {
       'your story’s ready.',
       'made from your life. it’s on your desk.',
     ]);
+  });
+});
+
+describe('the story waiting wording test', () => {
+  it('keeps a player in one arm, and splits players about evenly', () => {
+    expect(storyWaitingArm('a-user')).toBe(storyWaitingArm('a-user'));
+    const arms = Array.from({ length: 1000 }, (_, i) => storyWaitingArm(`user-${i}`));
+    const texts = arms.filter((arm) => arm === 'texts').length;
+    expect(texts).toBeGreaterThan(430);
+    expect(texts).toBeLessThan(570);
+  });
+
+  it("today's arm sends today's words", () => {
+    expect(storyWaitingMessage('today', 3)).toEqual({
+      message: MESSAGES.story_waiting,
+      copy: 'today',
+    });
+  });
+
+  it('counts the waiting texts, and never says who', () => {
+    expect(storyWaitingMessage('texts', 2)).toEqual({
+      message: { title: '2 new texts in your story.', body: 'they’re waiting on your answer.' },
+      copy: 'texts',
+    });
+    expect(storyWaitingMessage('texts', 1).message.title).toBe('1 new text in your story.');
+  });
+
+  it('with no texts waiting, says the story is waiting on a choice', () => {
+    expect(storyWaitingMessage('texts', 0)).toEqual({
+      message: {
+        title: 'your story’s waiting on your choice.',
+        body: 'pick up where you left off.',
+      },
+      copy: 'choice',
+    });
   });
 });
