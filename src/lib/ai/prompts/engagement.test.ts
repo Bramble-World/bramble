@@ -49,11 +49,20 @@ const consequenceVars = {
 describe('the rubric reaches both prompts', () => {
   // Interpolated, never copied. If someone inlines it into one prompt and edits
   // it, this fails rather than the ranking quietly becoming noise.
-  it.each([
-    ['extraction', () => extractionPrompt.render(vars as never).system],
-    ['consequence', () => consequencePrompt.render(consequenceVars as never).system],
-  ])('%s carries the shared rubric verbatim', (_name, render) => {
-    expect(render()).toContain(ENGAGEMENT_RUBRIC);
+  it('extraction carries the shared rubric verbatim', () => {
+    expect(extractionPrompt.render(vars as never).system).toContain(ENGAGEMENT_RUBRIC);
+  });
+
+  // Only imported moments are ranked (world.reader.ts reads `origin =
+  // 'extracted'`), so a played beat's score was written and never read, and the
+  // rubric was input spent on it every decision.
+  it('consequences neither score beats nor carry the rubric', () => {
+    expect(consequencePrompt.render(consequenceVars as never).system).not.toContain(
+      ENGAGEMENT_RUBRIC
+    );
+    expect(Object.keys(consequenceOutputSchema.shape.events.element.shape)).not.toContain(
+      'engagementScore'
+    );
   });
 
   /**
@@ -74,7 +83,7 @@ describe('the rubric reaches both prompts', () => {
   });
 });
 
-describe('both schemas hold the same bounds', () => {
+describe('the score holds its bounds', () => {
   const extraction = (score: unknown) =>
     extractionOutputSchema.shape.beats.element.safeParse({
       title: 't',
@@ -85,29 +94,18 @@ describe('both schemas hold the same bounds', () => {
       engagementScore: score,
     }).success;
 
-  const consequence = (score: unknown) =>
-    consequenceOutputSchema.shape.events.element.safeParse({
-      title: 't',
-      description: 'd',
-      stakes: null,
-      participantCharacterIds: [],
-      actorCharacterId: null,
-      generationRationale: 'r',
-      engagementScore: score,
-    }).success;
-
-  it.each([
-    ['extraction', extraction],
-    ['consequence', consequence],
-  ])('%s accepts 1 through 10 and nothing else', (_name, parse) => {
-    expect(parse(1)).toBe(true);
-    expect(parse(10)).toBe(true);
-    expect(parse(0)).toBe(false);
-    expect(parse(11)).toBe(false);
-    // A float would silently truncate on the way into an integer column.
-    expect(parse(3.5)).toBe(false);
-    // Absent is not optional: a beat with no score is unrankable, and the model
-    // should be told that rather than left to omit it.
-    expect(parse(undefined)).toBe(false);
-  });
+  it.each([['extraction', extraction]])(
+    '%s accepts 1 through 10 and nothing else',
+    (_name, parse) => {
+      expect(parse(1)).toBe(true);
+      expect(parse(10)).toBe(true);
+      expect(parse(0)).toBe(false);
+      expect(parse(11)).toBe(false);
+      // A float would silently truncate on the way into an integer column.
+      expect(parse(3.5)).toBe(false);
+      // Absent is not optional: a beat with no score is unrankable, and the model
+      // should be told that rather than left to omit it.
+      expect(parse(undefined)).toBe(false);
+    }
+  );
 });

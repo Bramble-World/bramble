@@ -217,7 +217,8 @@ select count(*) from users where is_guest and guest_expires_at > now();
 ## Model calls, per stage (logs)
 
 Every successful model call logs one line, `{"event":"generation", ...}`, with
-`prompt`, `stage`, `model`, `effort`, `durationMs`, `inputTokens`,
+`prompt`, `stage`, `model`, `effort`, `tier` (`flex` or `default`, below),
+`durationMs`, `inputTokens`,
 `cachedInputTokens` (read from OpenAI's prompt cache, billed at a tenth),
 `cacheWriteTokens` (written to it, billed at 1.25x), `outputTokens`,
 `reasoningTokens` and `finishReason`. Numbers and names only, never the prompt or
@@ -225,6 +226,19 @@ the output. It is what tells the wait and the cost apart per stage: how long
 consequences take against the beat, how much of a beat is thinking, and whether
 the prompt cache is being hit. A settle after the response that fails logs
 `consequences_later_failed` with the turn id.
+
+**Flex.** The stages nobody waits on (consequences and endings, story summaries,
+pool and ChatGPT stories) ask OpenAI's flex tier first, at Batch prices, and the
+normal tier once if flex refuses or takes longer than the stage allows
+(`StageModel.flex` in `src/lib/ai/models.ts`: 20 s for consequences). A refused
+or slow flex call logs `generation_failed` with `tier: "flex"`, then the normal
+call's line follows. Flex isn't offered on GPT-6.2 or later, so it goes when the
+model changes.
+
+**Short ids.** The beat and consequence prompts show each character and
+relationship by the first six hex digits of its id (`short-ids.ts`), and the
+server reads them back before saving, so the model never spends twenty tokens
+writing a uuid.
 
 **Why the cache stops where it does.** On gpt-6-astra (as on every model from
 GPT-5.6) a request is read from the cache only up to a boundary: the end of the
