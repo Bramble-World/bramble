@@ -51,16 +51,18 @@ type EventFields = {
  * is the only record of why that beat exists at all.
  *
  * Expressing it as a union makes the wrong combination unrepresentable rather
- * than merely documented. `generationRationale` is required on the same branch
- * for the same reason: a steered beat that cannot say why it was added is not
- * traceable, which is the entire point of the origin column.
+ * than merely documented. The lineage (`triggeredByTurnId`) is what makes a
+ * steered beat traceable. `generationRationale`, the model's own note on why,
+ * is optional: the consequence stage stopped writing it (2026-11-25) as no
+ * prompt reads it and no player sees it, only the lab, and it was a fifth of
+ * that stage's output.
  */
 export type NewEvent =
   | ({ origin: 'extracted' } & EventFields)
   | ({
       origin: 'conversation_generated';
       triggeredByTurnId: string;
-      generationRationale: string;
+      generationRationale?: string;
     } & EventFields);
 
 /** Same treatment for `contextEntries.triggeredByTurnId` (invariants.md §4). */
