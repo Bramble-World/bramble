@@ -101,6 +101,18 @@ describe('the OpenAI generator', () => {
     });
   });
 
+  it('passes a cache key through as the prompt cache key, and none when absent', async () => {
+    const keyed = modelReturning('{"narrative":"She waited."}');
+    await createGenerator(() => keyed).run(spec, { title: 'Unsent' }, { cacheKey: 'turn:abc' });
+    expect(keyed.doGenerateCalls[0].providerOptions?.openai).toMatchObject({
+      promptCacheKey: 'turn:abc',
+    });
+
+    const plain = modelReturning('{"narrative":"She waited."}');
+    await createGenerator(() => plain).run(spec, { title: 'Unsent' });
+    expect(plain.doGenerateCalls[0].providerOptions?.openai).not.toHaveProperty('promptCacheKey');
+  });
+
   it('resolves the model id the stage names', async () => {
     let requested = '';
     const generator = createGenerator((modelId) => {

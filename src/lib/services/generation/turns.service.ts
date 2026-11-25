@@ -132,11 +132,14 @@ export async function generateTurn(
   // ending too early, choices on an ending, no ending past the cap). A failed
   // generation costs the reader nothing, so the retry is ours to pay.
   let { value, meta } = await runOnceMore(
-    () => generator.run(turnPrompt, vars, { signal: deps.signal }),
+    () => generator.run(turnPrompt, vars, { signal: deps.signal, cacheKey: `turn:${sessionId}` }),
     deps.signal
   );
   if (!turnIsUsable(value, phase)) {
-    ({ value, meta } = await generator.run(turnPrompt, vars, { signal: deps.signal }));
+    ({ value, meta } = await generator.run(turnPrompt, vars, {
+      signal: deps.signal,
+      cacheKey: `turn:${sessionId}`,
+    }));
     if (!turnIsUsable(value, phase)) {
       throw new GenerationUnusableError('The model broke the story-length rules twice');
     }
@@ -333,7 +336,7 @@ async function workOutConsequences(
             rejectedLabels: turn.choices.filter((c) => c.id !== chosen.id).map((c) => c.label),
           },
         },
-        { signal: deps.signal }
+        { signal: deps.signal, cacheKey: `consequence:${session.id}` }
       ),
     deps.signal
   );

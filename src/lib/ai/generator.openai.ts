@@ -15,7 +15,7 @@ import {
   UpstreamBusyError,
 } from '@/lib/utils/errors';
 import { STAGE_MODELS } from './models';
-import { GenerationMeta, Generator, GenerationResult, PromptSpec } from './prompt';
+import { GenerationMeta, Generator, GenerationResult, PromptSpec, RunOptions } from './prompt';
 
 /**
  * The only file in the repo that imports `ai` or `@ai-sdk/openai`.
@@ -45,7 +45,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
     async run<Vars, Out>(
       spec: PromptSpec<Vars, Out>,
       vars: Vars,
-      opts?: { signal?: AbortSignal }
+      opts?: RunOptions
     ): Promise<GenerationResult<Out>> {
       const { model, reasoningEffort } = STAGE_MODELS[spec.stage];
       const { system, prompt } = spec.render(vars);
@@ -58,7 +58,12 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
           prompt,
           // Reasoning models take effort rather than temperature; gpt-6 and
           // later drop sampling parameters entirely. See models.ts.
-          providerOptions: { openai: { reasoningEffort } },
+          providerOptions: {
+            openai: {
+              reasoningEffort,
+              ...(opts?.cacheKey ? { promptCacheKey: opts.cacheKey } : {}),
+            },
+          },
           output: Output.object({
             schema: spec.schema,
             name: schemaName(spec.name),
