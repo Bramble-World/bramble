@@ -23,7 +23,7 @@ import type { BeatContext } from '@/lib/services/generation/generation.types';
  * throughout because stakes run ~90 characters and a timeline may now hold 40
  * beats; the older ones are context, and only the recent ones are pressure.
  */
-const STAKES_WINDOW = 5;
+export const STAKES_WINDOW = 5;
 
 export function renderTimeline(beats: BeatContext[]): string[] {
   let previous: Date | null = null;

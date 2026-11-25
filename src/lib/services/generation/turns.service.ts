@@ -359,6 +359,7 @@ async function workOutConsequences(
         consequencePrompt,
         {
           storyline,
+          playheadOrder: session.playheadOrder,
           decision: {
             headline: turn.headline,
             narrativeContent: turn.narrativeContent,

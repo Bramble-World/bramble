@@ -218,12 +218,42 @@ select count(*) from users where is_guest and guest_expires_at > now();
 
 Every successful model call logs one line, `{"event":"generation", ...}`, with
 `prompt`, `stage`, `model`, `effort`, `durationMs`, `inputTokens`,
-`cachedInputTokens` (served from OpenAI's prompt cache), `outputTokens`,
+`cachedInputTokens` (read from OpenAI's prompt cache, billed at a tenth),
+`cacheWriteTokens` (written to it, billed at 1.25x), `outputTokens`,
 `reasoningTokens` and `finishReason`. Numbers and names only, never the prompt or
 the output. It is what tells the wait and the cost apart per stage: how long
 consequences take against the beat, how much of a beat is thinking, and whether
 the prompt cache is being hit. A settle after the response that fails logs
 `consequences_later_failed` with the turn id.
+
+**Why the cache stops where it does.** On gpt-6-astra (as on every model from
+GPT-5.6) a request is read from the cache only up to a boundary: the end of the
+system message or a block marked as a breakpoint, not any matching prefix. The
+turn and consequence prompts mark theirs (`src/lib/ai/prompts/cache.ts`): after
+the system message, after the consequence prompt's cast and relationships, and
+inside the timeline at steps of four beats, behind the beats that still change
+(the newest five, which carry "At stake", and on the consequence prompt anything
+after the playhead). Everything after the last mark is new each beat and billed
+at the plain rate. Their lines also carry `shape`, so consecutive beats of one
+session can be compared:
+
+```json
+"shape": {
+  "key": "3f9a01c2",
+  "system": "a1b2c3d4:5321",
+  "blocks": ["0c1d2e3f:812", "9a8b7c6d:20431", "11223344:4120", "55667788:9033"],
+  "sections": ["head:…:120", "Recurring:…:300", "What has happened:…:24551", "Cast:…:2210"]
+}
+```
+
+Each entry is `<first 8 hex of the SHA-256>:<characters>`, never the text. `key`
+is the cache key (`turn:<session>` or `consequence:<session>`) hashed the same
+way, to group one session's calls without its id. `blocks` are the stretches the
+prompt is sent as, each but the last ending on a breakpoint; `sections` are its
+`## ` sections in order (`head` is the part before the first, with the title).
+Between two beats with the same `key`, the cached part should cover the blocks
+whose hashes repeat; the first section whose hash changes is what broke the
+prefix.
 
 ## What is deliberately not here
 
