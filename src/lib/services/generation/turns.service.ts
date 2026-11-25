@@ -50,6 +50,13 @@ export type GenerationDeps = {
    */
   endings?: boolean;
   /**
+   * True only for a client that can show a pause (`clientShowsPauses`: iOS
+   * build 40 and later). Absent, a beat never pauses, so no caller has to
+   * remember to opt out: the reply sweep, the next story's first beat and old
+   * builds all leave it unset.
+   */
+  pauses?: boolean;
+  /**
    * When the player started waiting for this beat (`advanceSession` sets it),
    * so `beat_played` can say how long the wait was, not just the writing.
    */
@@ -146,7 +153,8 @@ export async function generateTurn(
   const phase = deps.endings === false ? 'open' : storyPhase(beat, bounds);
   // Whether this beat may end with someone replying later (pauses.ts). Never
   // for a guest in practice: their story is the first one.
-  const mayPause = pausesAllowed(await pauseFactsFor(userId, storyline.storyline, phase));
+  const mayPause =
+    deps.pauses === true && pausesAllowed(await pauseFactsFor(userId, storyline.storyline, phase));
   const vars = {
     storyline: visible,
     session: sessionContext,

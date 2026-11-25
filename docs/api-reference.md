@@ -970,7 +970,10 @@ On an ended session this returns the ending again, free and with no model call.
 #### Replies later
 
 A beat can end with someone replying later, in real time: "let me think. i'll
-text you in the morning." Answering it sets the session's **`waiting`**:
+text you in the morning." Only a beat asked for by **iOS build 40 or later**
+(`X-Bramble-Client: ios/… (40)`, `MIN_IOS_BUILD_FOR_PAUSES`) may pause: an older
+app, or a request without the header, never gets one, whatever the rollout.
+Answering it sets the session's **`waiting`**:
 
 ```json
 "waiting": { "until": "2026-11-26T14:12:00.000Z", "kind": "tomorrow" }
