@@ -75,6 +75,19 @@ export function assertClientSupported(request: Request): void {
  * teach it. So stories played on the Mac stay endless while it winds down.
  * Anything else, including a request that doesn't say what it is, gets endings.
  */
+/**
+ * The first iPhone build that knows a reply can come later ("the story texts
+ * you", iOS #68): older ones would show a pending reply as a failed beat, so
+ * only this build and later may be given a pause, whatever the rollout says.
+ */
+export const MIN_IOS_BUILD_FOR_PAUSES = 40;
+
+/** Whether the requesting app can show a pause (`MIN_IOS_BUILD_FOR_PAUSES`). */
+export function clientShowsPauses(request: Request): boolean {
+  const client = parseClientHeader(request.headers.get(CLIENT_HEADER));
+  return client?.platform === 'ios' && client.build >= MIN_IOS_BUILD_FOR_PAUSES;
+}
+
 export function clientShowsEndings(request: Request): boolean {
   return parseClientHeader(request.headers.get(CLIENT_HEADER))?.platform !== 'macos';
 }

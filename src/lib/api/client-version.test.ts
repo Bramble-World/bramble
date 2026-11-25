@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CLIENT_HEADER, clientShowsEndings, parseClientHeader } from './client-version';
+import {
+  CLIENT_HEADER,
+  clientShowsEndings,
+  clientShowsPauses,
+  parseClientHeader,
+} from './client-version';
 
 /**
  * The version gate.
@@ -110,5 +115,23 @@ describe('clientShowsEndings', () => {
     expect(clientShowsEndings(from('ios/1.2 (40)'))).toBe(true);
     expect(clientShowsEndings(from())).toBe(true);
     expect(clientShowsEndings(from('not a header'))).toBe(true);
+  });
+});
+
+describe('clientShowsPauses', () => {
+  const from = (header?: string) =>
+    new Request('https://api.test/x', header ? { headers: { [CLIENT_HEADER]: header } } : {});
+
+  it('is iOS build 40 and later only', () => {
+    expect(clientShowsPauses(from('ios/1.1 (40)'))).toBe(true);
+    expect(clientShowsPauses(from('ios/1.2 (51)'))).toBe(true);
+    expect(clientShowsPauses(from('ios/1.1 (39)'))).toBe(false);
+    expect(clientShowsPauses(from('macos/1.1 (99)'))).toBe(false);
+  });
+
+  // Without a header nothing says the app can show it, so it never pauses.
+  it('is false with no header or a broken one', () => {
+    expect(clientShowsPauses(from())).toBe(false);
+    expect(clientShowsPauses(from('not a header'))).toBe(false);
   });
 });
