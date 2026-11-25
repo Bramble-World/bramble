@@ -82,4 +82,14 @@ describe('a beat draft', () => {
     expect(draft.surfaces).toStrictEqual([]);
     expect(draft.headline).toBe('Rosa hands you the marker.');
   });
+
+  it('says what the beat is once the model has moved past it, so a plain beat can show from its headline', () => {
+    expect(
+      beatDraft({ isEnding: false, headline: 'h', surfaceKind: 'none' }, cast).kind
+    ).toBeNull();
+    expect(
+      beatDraft({ isEnding: false, headline: 'h', surfaceKind: 'none', clockTime: null }, cast).kind
+    ).toBe('none');
+    expect(beatDraft({ ...phone, notifications: [] }, cast).kind).toBe('imessage_notifications');
+  });
 });
