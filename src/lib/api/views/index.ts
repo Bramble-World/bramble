@@ -89,6 +89,7 @@ export function surfaceView(surface: ResolvedSurface): SurfaceView {
 
 export function beatDraftView(draft: BeatDraft): BeatDraftView {
   return {
+    kind: draft.kind,
     headline: draft.headline,
     surfaces: draft.surfaces.map(surfaceView),
     narrative: draft.narrative,
