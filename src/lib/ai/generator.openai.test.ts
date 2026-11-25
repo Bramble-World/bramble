@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MockLanguageModelV3 } from 'ai/test';
+import { MockLanguageModelV3, convertArrayToReadableStream } from 'ai/test';
 import { z } from 'zod';
 import {
   GenerationFailedError,
@@ -260,5 +260,58 @@ describe('the OpenAI generator', () => {
     await expect(generator.run(spec, { title: 'Unsent' })).rejects.toThrow(
       /^The model returned no usable output for "test\.turn"$/
     );
+  });
+});
+
+describe('streaming from the OpenAI generator', () => {
+  /** What the provider sends, as pieces of the JSON text. */
+  function modelStreaming(pieces: string[]) {
+    return new MockLanguageModelV3({
+      doStream: async () => ({
+        stream: convertArrayToReadableStream([
+          { type: 'stream-start' as const, warnings: [] },
+          { type: 'text-start' as const, id: '1' },
+          ...pieces.map((delta) => ({ type: 'text-delta' as const, id: '1', delta })),
+          { type: 'text-end' as const, id: '1' },
+          {
+            type: 'finish' as const,
+            finishReason: { unified: 'stop' as const, raw: 'stop' },
+            usage: {
+              inputTokens: { total: 11, noCache: 11, cacheRead: 0, cacheWrite: 0 },
+              outputTokens: { total: 7, text: 7, reasoning: 0 },
+            },
+          },
+        ]) as never,
+      }),
+    });
+  }
+
+  it('reports the object as it is written, and returns it parsed', async () => {
+    const generator = createGenerator(() =>
+      modelStreaming(['{"narr', 'ative":"She ', 'waited."}'])
+    );
+    const partials: unknown[] = [];
+
+    const result = await generator.stream(
+      spec,
+      { title: 'Unsent' },
+      {
+        onPartial: (p) => partials.push(p),
+      }
+    );
+
+    expect(result.value).toStrictEqual({ narrative: 'She waited.' });
+    expect(result.meta.inputTokens).toBe(11);
+    expect(partials.at(-1)).toStrictEqual({ narrative: 'She waited.' });
+    expect(partials.length).toBeGreaterThan(1);
+  });
+
+  it('translates output that does not match the schema into GENERATION_UNUSABLE', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const generator = createGenerator(() => modelStreaming(['{"other":1}']));
+
+    await expect(
+      generator.stream(spec, { title: 'Unsent' }, { onPartial: () => {} })
+    ).rejects.toMatchObject({ code: 'GENERATION_UNUSABLE' });
   });
 });

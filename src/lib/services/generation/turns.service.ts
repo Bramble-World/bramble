@@ -25,6 +25,7 @@ import {
 import { failureFields } from '@/lib/ai/failure';
 import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
 import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
+import { beatDraft, isEmptyDraft, type BeatDraft } from './beat-draft';
 import * as storylineReader from '../storylines/storylines.reader';
 
 /** Injected so a test can supply the fake without touching process env. */
@@ -50,6 +51,17 @@ export type GenerationDeps = {
    * so `beat_played` can say how long the wait was, not just the writing.
    */
   waitStartedAt?: number;
+  /**
+   * Streams the beat: called with each new draft (`BeatDraft`, finished pieces
+   * only) while it's written. Without it the beat is written in one call.
+   */
+  onDraft?: (draft: BeatDraft) => void;
+  /**
+   * A beat already partly sent is being written again (it broke a rule only
+   * the finished beat shows, or the provider failed mid-way): forget the
+   * drafts so far.
+   */
+  onRestart?: () => void;
 };
 
 /**
@@ -131,15 +143,32 @@ export async function generateTurn(
   // One more try when the model breaks a rule the schema cannot express (an
   // ending too early, choices on an ending, no ending past the cap). A failed
   // generation costs the reader nothing, so the retry is ours to pay.
-  let { value, meta } = await runOnceMore(
-    () => generator.run(turnPrompt, vars, { signal: deps.signal, cacheKey: `turn:${sessionId}` }),
-    deps.signal
-  );
+  const options = { signal: deps.signal, cacheKey: `turn:${sessionId}` };
+  let sent = '';
+  let firstDraftAt: number | null = null;
+  const write = () => {
+    if (sent) {
+      sent = '';
+      deps.onRestart?.();
+    }
+    const onDraft = deps.onDraft;
+    if (!onDraft) return generator.run(turnPrompt, vars, options);
+    return generator.stream(turnPrompt, vars, {
+      ...options,
+      onPartial: (partial) => {
+        const draft = beatDraft(partial, visible.characters);
+        const key = JSON.stringify(draft);
+        if (isEmptyDraft(draft) || key === sent) return;
+        sent = key;
+        firstDraftAt ??= Date.now();
+        onDraft(draft);
+      },
+    });
+  };
+
+  let { value, meta } = await runOnceMore(write, deps.signal);
   if (!turnIsUsable(value, phase)) {
-    ({ value, meta } = await generator.run(turnPrompt, vars, {
-      signal: deps.signal,
-      cacheKey: `turn:${sessionId}`,
-    }));
+    ({ value, meta } = await write());
     if (!turnIsUsable(value, phase)) {
       throw new GenerationUnusableError('The model broke the story-length rules twice');
     }
@@ -184,6 +213,9 @@ export async function generateTurn(
             started_from_event: session.startedFromEventId !== null,
             generation_ms: meta.durationMs,
             wait_ms: Date.now() - (deps.waitStartedAt ?? waitFrom),
+            ...(firstDraftAt !== null
+              ? { first_part_ms: firstDraftAt - (deps.waitStartedAt ?? waitFrom) }
+              : {}),
             origin,
           },
         });

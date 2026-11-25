@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { InternalServerError } from '@/lib/utils/errors';
 import { STAGE_MODELS } from './models';
-import { Generator, GenerationResult, PromptSpec, RunOptions } from './prompt';
+import { DeepPartial, Generator, GenerationResult, PromptSpec, RunOptions } from './prompt';
 
 /** What a fixture is handed: the prompt's own vars, plus a stable seed. */
 export type FixtureContext<Vars> = {
@@ -120,7 +120,47 @@ export function createFakeGenerator(): FakeGenerator {
         },
       };
     },
+
+    async stream<Vars, Out>(
+      spec: PromptSpec<Vars, Out>,
+      vars: Vars,
+      opts: RunOptions & { onPartial: (partial: DeepPartial<Out>) => void }
+    ): Promise<GenerationResult<Out>> {
+      const result = await this.run(spec, vars, opts);
+      for (const partial of partialsOf(result.value)) {
+        opts.signal?.throwIfAborted();
+        opts.onPartial(partial);
+      }
+      return result;
+    },
   };
+}
+
+/**
+ * The output as a model writes it: one field at a time in the schema's order,
+ * an array one whole element at a time. Fields are never cut mid-word here, so
+ * a test can tell "complete" from "still being written" only by what follows,
+ * which is the rule the real stream needs too.
+ */
+export function partialsOf<Out>(value: Out): DeepPartial<Out>[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return [value as DeepPartial<Out>];
+  const partials: DeepPartial<Out>[] = [];
+  const growing: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(value as Record<string, unknown>)) {
+    if (Array.isArray(field)) {
+      growing[key] = [];
+      partials.push(structuredClone(growing) as DeepPartial<Out>);
+      for (const element of field) {
+        (growing[key] as unknown[]).push(element);
+        partials.push(structuredClone(growing) as DeepPartial<Out>);
+      }
+    } else {
+      growing[key] = field;
+      partials.push(structuredClone(growing) as DeepPartial<Out>);
+    }
+  }
+  return partials;
 }
 
 /** Stable across runs and machines, unlike a hash of an object's iteration order. */

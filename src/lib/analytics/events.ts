@@ -37,6 +37,11 @@ export type AnalyticsEvent =
          * writing plus anything settled first. What the player waited, less the network.
          */
         wait_ms: number;
+        /**
+         * Streamed only: from the request reaching the server to the first
+         * piece of the beat (its headline or first text) being sent.
+         */
+        first_part_ms?: number;
         /** Where the story came from; `none` for one not from the pool (a guest's opening, a Mac import). Never which one. */
         origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
       };
@@ -184,6 +189,7 @@ export const ALLOWED_PROPERTY_KEYS = [
   'started_from_event',
   'generation_ms',
   'wait_ms',
+  'first_part_ms',
   'status',
   'failure_code',
   'duration_ms',

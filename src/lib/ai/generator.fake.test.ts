@@ -122,3 +122,28 @@ describe('the fake generator', () => {
     });
   });
 });
+
+describe('streaming', () => {
+  it('plays the output back one field at a time, then returns it whole', async () => {
+    const fake = createFakeGenerator();
+    const spec = {
+      name: 'test.stream',
+      stage: 'turn' as const,
+      schema: z.object({ headline: z.string(), texts: z.array(z.string()), narrative: z.string() }),
+      render: () => ({ system: '', prompt: '' }),
+    };
+    fake.register(spec, () => ({ headline: 'h', texts: ['a', 'b'], narrative: 'n' }));
+    const partials: unknown[] = [];
+
+    const result = await fake.stream(spec, {}, { onPartial: (p) => partials.push(p) });
+
+    expect(partials).toStrictEqual([
+      { headline: 'h' },
+      { headline: 'h', texts: [] },
+      { headline: 'h', texts: ['a'] },
+      { headline: 'h', texts: ['a', 'b'] },
+      { headline: 'h', texts: ['a', 'b'], narrative: 'n' },
+    ]);
+    expect(result.value).toStrictEqual({ headline: 'h', texts: ['a', 'b'], narrative: 'n' });
+  });
+});

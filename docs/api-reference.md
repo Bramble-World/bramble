@@ -957,6 +957,28 @@ safe to retry.
 
 On an ended session this returns the ending again, free and with no model call.
 
+#### Streamed (`Accept: text/event-stream`)
+
+Ask for `text/event-stream` and the beat arrives as it's written: its headline
+and first text in a few seconds rather than the whole beat in 10–20. Without the
+header nothing changes (older builds and the Mac app keep the JSON above).
+
+Server-sent events, each `event: <name>` and one `data: <json>` line:
+
+| Event     | Data                                                 | Meaning                                                                                                                                                                                                                                                                            |
+| --------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `draft`   | `BeatDraftView`: `{ headline, surfaces, narrative }` | The beat so far, **finished pieces only**, growing with each event: the headline, then each text (a whole one, never half), then the narrative. `surfaces` has the same shape as on `TurnView`. Show it as it grows; play a text's arrival when a new one appears. No choices yet. |
+| `restart` | `{}`                                                 | The beat sent so far is being written again (it broke a rule only the finished beat shows, or the provider failed mid-way). Clear the draft; new `draft`s follow.                                                                                                                  |
+| `done`    | `{ turn: TurnView, energy }`                         | The finished beat, exactly the JSON response above. It replaces the draft and brings the choices.                                                                                                                                                                                  |
+| `error`   | `{ status, error: { code, message, … } }`            | What the JSON response's error would have been, with its HTTP status.                                                                                                                                                                                                              |
+
+A refusal decided before anything is written (`429 RATE_LIMITED`,
+`403 SIGNUP_REQUIRED`, `404`, …) is an ordinary JSON error response with its
+status, never a stream. A beat already written (resuming an open turn, an ended
+session) streams `done` alone. If the stream breaks, call again, streamed or
+not: the server finishes and saves the beat regardless, and the next call gets
+it at once.
+
 ### `POST /api/v1/sessions/{sessionId}/answer`
 
 ```json

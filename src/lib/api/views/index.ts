@@ -1,6 +1,7 @@
 import type { PublicPerson } from '@/lib/services/persons/persons.types';
 import type { CharacterRole, PublicStoryline } from '@/lib/services/storylines/storylines.types';
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
+import type { BeatDraft } from '@/lib/services/generation/beat-draft';
 import type { ResolvedSurface } from '@/lib/surfaces';
 import type { PublicImport } from '@/lib/services/imports/imports.types';
 import type { Energy } from '@/lib/services/sessions/energy.service';
@@ -8,6 +9,7 @@ import type { WorldEvent } from '@/lib/services/world/world.types';
 import { failureIsRetryable } from '@/lib/services/imports/imports.types';
 import type {
   AnsweredTurnView,
+  BeatDraftView,
   ArcView,
   ChoiceView,
   EnergyView,
@@ -83,6 +85,14 @@ export function surfaceView(surface: ResolvedSurface): SurfaceView {
   }
   // No version and no character ids: the version is a storage concern, and a
   // character id is a per-storyline casting the client has no use for.
+}
+
+export function beatDraftView(draft: BeatDraft): BeatDraftView {
+  return {
+    headline: draft.headline,
+    surfaces: draft.surfaces.map(surfaceView),
+    narrative: draft.narrative,
+  };
 }
 
 export function turnView(turn: TurnWithChoices): TurnView {
