@@ -7,6 +7,7 @@ import {
   GenerationUnusableError,
   UpstreamBusyError,
 } from '@/lib/utils/errors';
+import { createOpenAI } from '@ai-sdk/openai';
 import { createGenerator, schemaName } from './generator.openai';
 import { STAGE_MODELS } from './models';
 import { PromptSpec } from './prompt';
@@ -313,5 +314,117 @@ describe('streaming from the OpenAI generator', () => {
     await expect(
       generator.stream(spec, { title: 'Unsent' }, { onPartial: () => {} })
     ).rejects.toMatchObject({ code: 'GENERATION_UNUSABLE' });
+  });
+});
+
+/**
+ * What reaches OpenAI for a prompt cut for its cache, through the real provider
+ * rather than a mock, because the cut lives in how the provider serialises the
+ * request: on GPT-5.6 and later a cached prefix can only end at a marked block.
+ */
+describe('the prompt cache, on the wire', () => {
+  const cutSpec: PromptSpec<Vars, Out> = {
+    ...spec,
+    render: () => ({
+      system: 'SYSTEM MARKER',
+      prompt: 'STABLE ONE\nSTABLE TWO\nCHANGES',
+      cacheBreaks: [11, 22],
+    }),
+  };
+
+  async function send(chosen: PromptSpec<Vars, Out>) {
+    const bodies: Record<string, unknown>[] = [];
+    const openai = createOpenAI({
+      apiKey: 'test',
+      fetch: async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return new Response(
+          JSON.stringify({
+            id: 'resp_1',
+            created_at: 0,
+            model: STAGE_MODELS.turn.model,
+            output: [
+              {
+                type: 'message',
+                id: 'msg_1',
+                role: 'assistant',
+                status: 'completed',
+                content: [
+                  { type: 'output_text', text: '{"narrative":"She waited."}', annotations: [] },
+                ],
+              },
+            ],
+            usage: {
+              input_tokens: 5000,
+              input_tokens_details: { cached_tokens: 4000, cache_write_tokens: 600 },
+              output_tokens: 10,
+              output_tokens_details: { reasoning_tokens: 0 },
+            },
+            incomplete_details: null,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      },
+    });
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const { meta } = await createGenerator((id) => openai(id)).run(
+      chosen,
+      { title: 'Unsent' },
+      { cacheKey: 'turn:sess-1' }
+    );
+    const line = String(log.mock.calls[0][0]);
+    log.mockRestore();
+    return { body: bodies[0], meta, line };
+  }
+
+  it('marks the system message and each stable stretch, and caches nothing else', async () => {
+    const { body } = await send(cutSpec);
+
+    expect(body.prompt_cache_options).toEqual({ mode: 'explicit' });
+    expect(body.prompt_cache_key).toBe('turn:sess-1');
+    const breakpoint = { mode: 'explicit' };
+    expect(body.input).toEqual([
+      {
+        role: 'developer',
+        content: [
+          { type: 'input_text', text: 'SYSTEM MARKER', prompt_cache_breakpoint: breakpoint },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'STABLE ONE\n', prompt_cache_breakpoint: breakpoint },
+          { type: 'input_text', text: 'STABLE TWO\n', prompt_cache_breakpoint: breakpoint },
+          { type: 'input_text', text: 'CHANGES' },
+        ],
+      },
+    ]);
+  });
+
+  it('sends a prompt without breaks as before', async () => {
+    const { body } = await send(spec);
+
+    expect(body).not.toHaveProperty('prompt_cache_options');
+    expect(body.input).toEqual([
+      { role: 'developer', content: 'SYSTEM MARKER' },
+      { role: 'user', content: [{ type: 'input_text', text: 'PROMPT MARKER Unsent' }] },
+    ]);
+  });
+
+  it('logs cache writes and the request as fingerprints, never its text', async () => {
+    const { meta, line } = await send(cutSpec);
+
+    expect(meta.cachedInputTokens).toBe(4000);
+    expect(meta.cacheWriteTokens).toBe(600);
+    const logged = JSON.parse(line);
+    expect(logged).toMatchObject({ cachedInputTokens: 4000, cacheWriteTokens: 600 });
+    expect(logged.shape.key).toMatch(/^[0-9a-f]{8}$/);
+    expect(logged.shape.system).toMatch(/^[0-9a-f]{8}:13$/);
+    expect(logged.shape.blocks).toHaveLength(3);
+    expect(logged.shape.blocks[2]).toMatch(/^[0-9a-f]{8}:7$/);
+    expect(logged.shape.sections).toEqual([expect.stringMatching(/^head:[0-9a-f]{8}:29$/)]);
+    for (const marker of ['SYSTEM MARKER', 'STABLE', 'CHANGES', 'sess-1', 'She waited']) {
+      expect(line).not.toContain(marker);
+    }
   });
 });

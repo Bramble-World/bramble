@@ -23,8 +23,11 @@ import {
   Generator,
   GenerationResult,
   PromptSpec,
+  RenderedPrompt,
   RunOptions,
 } from './prompt';
+import { promptShape, type PromptShape } from './prompt-shape';
+import { splitAt } from './prompts/cache';
 
 /**
  * The only file in the repo that imports `ai` or `@ai-sdk/openai`.
@@ -53,20 +56,29 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
   /** Everything a call sends, the same whether it streams or not. */
   function request<Vars, Out>(spec: PromptSpec<Vars, Out>, vars: Vars, opts?: RunOptions) {
     const { model, reasoningEffort } = STAGE_MODELS[spec.stage];
-    const { system, prompt } = spec.render(vars);
+    const rendered = spec.render(vars);
+    const cut = Boolean(rendered.cacheBreaks?.length);
     return {
       model,
       reasoningEffort,
+      // Hashes and lengths of the request's parts, for the log line; see
+      // prompt-shape.ts. Only for prompts cut for the cache, which are the ones
+      // whose consecutive requests are worth comparing.
+      shape: cut ? promptShape(rendered, opts?.cacheKey) : undefined,
       settings: {
         model: resolveModel(model),
-        system,
-        prompt,
+        ...(cut ? cachedMessages(rendered) : { system: rendered.system, prompt: rendered.prompt }),
         // Reasoning models take effort rather than temperature; gpt-6 and
         // later drop sampling parameters entirely. See models.ts.
         providerOptions: {
           openai: {
             reasoningEffort,
             ...(opts?.cacheKey ? { promptCacheKey: opts.cacheKey } : {}),
+            // Explicit: only the marked boundaries are written to the cache. In
+            // the default (implicit) mode OpenAI also writes the whole request
+            // at its end, at 1.25x the input price, and the end of a beat's
+            // request is never sent again.
+            ...(cut ? { promptCacheOptions: { mode: 'explicit' as const } } : {}),
           },
         },
         output: Output.object({ schema: spec.schema, name: schemaName(spec.name) }),
@@ -79,6 +91,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
     spec: PromptSpec<unknown, Out>,
     model: string,
     reasoningEffort: string,
+    shape: PromptShape | undefined,
     startedAt: number,
     output: Out,
     usage: LanguageModelUsage,
@@ -89,12 +102,13 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
       model,
       inputTokens: usage.inputTokens ?? 0,
       cachedInputTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens ?? 0,
       outputTokens: usage.outputTokens ?? 0,
       reasoningTokens: usage.outputTokenDetails?.reasoningTokens ?? 0,
       finishReason,
       durationMs: Date.now() - startedAt,
     };
-    logGeneration(spec.stage, reasoningEffort, meta);
+    logGeneration(spec.stage, reasoningEffort, meta, shape);
     return { value: output, meta };
   }
 
@@ -122,7 +136,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
       vars: Vars,
       opts?: RunOptions
     ): Promise<GenerationResult<Out>> {
-      const { model, reasoningEffort, settings } = request(spec, vars, opts);
+      const { model, reasoningEffort, shape, settings } = request(spec, vars, opts);
       const startedAt = Date.now();
       try {
         const result = await generateText(settings);
@@ -130,6 +144,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
           spec as PromptSpec<unknown, Out>,
           model,
           reasoningEffort,
+          shape,
           startedAt,
           result.output as Out,
           result.usage,
@@ -145,7 +160,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
       vars: Vars,
       opts: RunOptions & { onPartial: (partial: DeepPartial<Out>) => void }
     ): Promise<GenerationResult<Out>> {
-      const { model, reasoningEffort, settings } = request(spec, vars, opts);
+      const { model, reasoningEffort, shape, settings } = request(spec, vars, opts);
       const startedAt = Date.now();
       try {
         // A streamed call reports its failure here rather than throwing, and
@@ -170,6 +185,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
           spec as PromptSpec<unknown, Out>,
           model,
           reasoningEffort,
+          shape,
           startedAt,
           output as Out,
           usage,
@@ -179,6 +195,35 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
         throw failed(spec as PromptSpec<unknown, unknown>, error, opts, startedAt);
       }
     },
+  };
+}
+
+/** Marks the end of a content block as a place the prompt cache may stop. */
+const BREAKPOINT = { openai: { promptCacheBreakpoint: { mode: 'explicit' } } };
+
+/**
+ * The request as messages, so that the cache has somewhere to stop inside it.
+ *
+ * On GPT-5.6 and later a cached prefix can end only at a boundary: a message's
+ * end or a block marked as a breakpoint (prompts/cache.ts). The system message
+ * gets one, and the prompt is sent as one block per stretch between its
+ * `cacheBreaks`, each but the last marked. The blocks join back into exactly
+ * the prompt, so the model reads the same text.
+ */
+function cachedMessages({ system, prompt, cacheBreaks = [] }: RenderedPrompt) {
+  const parts = splitAt(prompt, cacheBreaks);
+  return {
+    system: { role: 'system' as const, content: system, providerOptions: BREAKPOINT },
+    prompt: [
+      {
+        role: 'user' as const,
+        content: parts.map((text, index) => ({
+          type: 'text' as const,
+          text,
+          ...(index < parts.length - 1 ? { providerOptions: BREAKPOINT } : {}),
+        })),
+      },
+    ],
   };
 }
 
@@ -231,7 +276,12 @@ function translate(error: unknown, promptName: string): Error {
  * wait and the cost can be read per stage. Numbers and names only, never the
  * prompt or the output, which carry story content.
  */
-function logGeneration(stage: string, effort: string, meta: GenerationMeta): void {
+function logGeneration(
+  stage: string,
+  effort: string,
+  meta: GenerationMeta,
+  shape: PromptShape | undefined
+): void {
   console.info(
     JSON.stringify({
       event: 'generation',
@@ -242,9 +292,11 @@ function logGeneration(stage: string, effort: string, meta: GenerationMeta): voi
       durationMs: meta.durationMs,
       inputTokens: meta.inputTokens,
       cachedInputTokens: meta.cachedInputTokens,
+      cacheWriteTokens: meta.cacheWriteTokens,
       outputTokens: meta.outputTokens,
       reasoningTokens: meta.reasoningTokens,
       finishReason: meta.finishReason,
+      ...(shape ? { shape } : {}),
     })
   );
 }
