@@ -128,7 +128,7 @@ export async function generateTurn(
   const visible = contextAsOf(storyline, session.playheadOrder);
   const beyondScript = scriptExhausted(storyline, session.playheadOrder);
   // The beat about to be written, counting a scripted first beat. The first
-  // story ends on beat 10 and every other between 16 and 24 (`endingBounds`).
+  // story ends on its target (5 or 10) and every other between 16 and 24 (`endingBounds`).
   const beat = sessionContext.turns.length + 1;
   const bounds = endingBounds(storyline.storyline);
   const phase = deps.endings === false ? 'open' : storyPhase(beat, bounds);
@@ -202,6 +202,11 @@ export async function generateTurn(
       onCreated: async (written) => {
         // Looked up only for a beat this call wrote, so a resume pays nothing.
         const origin = await storylineReader.storyOrigin(session.storylineId);
+        // Which arm of the first-story length test this beat is in (story-phase.ts).
+        const firstStory =
+          storyline.storyline.openingId !== null
+            ? { first_story_beats: storyline.storyline.targetBeats }
+            : {};
         await track(userId, {
           name: 'beat_played',
           properties: {
@@ -217,6 +222,7 @@ export async function generateTurn(
               ? { first_part_ms: firstDraftAt - (deps.waitStartedAt ?? waitFrom) }
               : {}),
             origin,
+            ...firstStory,
           },
         });
         // The onboarding funnel's own count, beside the general one: which of a
@@ -228,7 +234,7 @@ export async function generateTurn(
         if (written.isEnding && phase !== 'open') {
           await track(userId, {
             name: 'story_ended',
-            properties: { turns: written.turnOrder, phase, origin },
+            properties: { turns: written.turnOrder, phase, origin, ...firstStory },
           });
         }
       },

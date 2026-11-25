@@ -23,7 +23,7 @@ export type TurnVars = {
   /** How far through its length the story is; decides whether it may, or must, end. */
   phase: StoryPhase;
   /**
-   * On a story whose ending is a fixed beat (the first story's beat 10), how
+   * On a story whose ending is a fixed beat (the first story's beat 5 or 10), how
    * many beats after this one it comes, over the last few before it; null
    * otherwise. Told to the model so the story builds to its ending instead of
    * stopping on it. See `beatsToEnding`.

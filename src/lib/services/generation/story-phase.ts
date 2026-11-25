@@ -6,17 +6,27 @@
  * lands, and at the last beat it must. A soft budget rather than an outline, so
  * a story can run a few beats long when the ending is not there yet.
  *
- * The first story is the exception: it ends on beat 10 exactly, and the beats
- * before it are told how far off it is, so it builds to an ending rather than
- * stopping (`beatsToEnding`).
+ * The first story is the exception: it ends on its target beat exactly (5 or
+ * 10, `FIRST_STORY_LENGTHS`), and the beats before it are told how far off it
+ * is, so it builds to an ending rather than stopping (`beatsToEnding`).
  */
 export type StoryPhase = 'open' | 'closing' | 'must_end';
 
 /** Beats either side of the target: the window opens this many before it and closes this many after. */
 export const CLOSING_WINDOW = 4;
 
-/** The first story's last beat: the ending is beat 10 (the user's call, 2026-11-21). */
-export const FIRST_STORY_ENDING_BEAT = 10;
+/**
+ * The first story's last beat, one of these, picked at random when the story is
+ * written and kept as its `targetBeats`. A 50/50 test (the user's call,
+ * 2026-11-25): 10 since 2026-11-21, against 5, where the first beat on the desk,
+ * right after signing up, is the ending. Each first story's beats carry
+ * `first_story_beats` in analytics (docs/metrics.md).
+ */
+export const FIRST_STORY_LENGTHS = [5, 10] as const;
+
+export function pickFirstStoryLength(random: () => number = Math.random): number {
+  return FIRST_STORY_LENGTHS[random() < 0.5 ? 0 : 1];
+}
 
 /** How many beats before a fixed ending the turn prompt starts counting down to it. */
 export const BUILD_UP_BEATS = 5;
@@ -29,15 +39,15 @@ export type EndingBounds = { earliest: number; latest: number };
 
 /**
  * A story's ending bounds. The first story (the one written from a scripted
- * opening, `storylines.opening_id`) ends on beat 10; every other one between
- * four beats either side of its `targetBeats`.
+ * opening, `storylines.opening_id`) ends exactly on its `targetBeats`; every
+ * other one between four beats either side of it.
  */
 export function endingBounds(story: {
   targetBeats: number;
   openingId: string | null;
 }): EndingBounds {
   if (story.openingId !== null) {
-    return { earliest: FIRST_STORY_ENDING_BEAT, latest: FIRST_STORY_ENDING_BEAT };
+    return { earliest: story.targetBeats, latest: story.targetBeats };
   }
   return {
     earliest: story.targetBeats - CLOSING_WINDOW,
@@ -54,8 +64,8 @@ export function storyPhase(beat: number, bounds: EndingBounds): StoryPhase {
 
 /**
  * For a story whose ending is a fixed beat, how many beats after this one it
- * comes, in the last `BUILD_UP_BEATS` before it: 5 on the first story's beat 5,
- * 1 on its beat 9. Null otherwise — a story with a window decides its own
+ * comes, in the last `BUILD_UP_BEATS` before it: on a 10-beat first story, 5 on
+ * beat 5 and 1 on beat 9. Null otherwise — a story with a window decides its own
  * moment, and one far from its end has no reason to hear about it.
  */
 export function beatsToEnding(beat: number, bounds: EndingBounds): number | null {
