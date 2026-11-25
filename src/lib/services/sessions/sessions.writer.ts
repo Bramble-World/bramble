@@ -1,4 +1,4 @@
-import { and, eq, exists, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, eq, exists, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import {
   events,
   storylineSessions,
@@ -25,6 +25,8 @@ export async function insertSession(
       playheadOrder: storylineSessions.playheadOrder,
       startedFromEventId: storylineSessions.startedFromEventId,
       endedAt: storylineSessions.endedAt,
+      replyDueAt: storylineSessions.replyDueAt,
+      replyDueKind: storylineSessions.replyDueKind,
     });
   return session;
 }
@@ -60,6 +62,7 @@ export async function insertTurn(
       headline: turn.headline,
       isEnding: turn.isEnding ?? false,
       free: turn.free ?? false,
+      replyLater: turn.replyLater ?? null,
     })
     .returning({ id: storyTurns.id });
 
@@ -344,4 +347,25 @@ export async function abandonConsequences(tx: Executor, turnId: string): Promise
         isNull(storyTurns.consequencesAbandonedAt)
       )
     );
+}
+
+/** A reply in the story is owed: no next beat for this playthrough until `dueAt`. */
+export async function setReplyDue(
+  tx: Executor,
+  sessionId: string,
+  dueAt: Date,
+  kind: string
+): Promise<void> {
+  await tx
+    .update(storylineSessions)
+    .set({ replyDueAt: dueAt, replyDueKind: kind })
+    .where(eq(storylineSessions.id, sessionId));
+}
+
+/** The owed reply has been written (by the sweep, or by the reader arriving first). */
+export async function clearReplyDue(tx: Executor, sessionId: string): Promise<void> {
+  await tx
+    .update(storylineSessions)
+    .set({ replyDueAt: null, replyDueKind: null })
+    .where(and(eq(storylineSessions.id, sessionId), isNotNull(storylineSessions.replyDueAt)));
 }

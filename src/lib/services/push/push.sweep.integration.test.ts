@@ -111,6 +111,22 @@ describe('sweepPush', () => {
     expect(apns.sendPush.mock.calls[0][1]).toEqual(expected);
   });
 
+  it('holds "story waiting" back while a reply in the story is owed', async () => {
+    await addTurn(new Date(NOW.getTime() - 30 * HOUR), 1);
+    await db
+      .update(storylineSessions)
+      .set({ replyDueAt: new Date(NOW.getTime() + HOUR), replyDueKind: 'tonight' })
+      .where(eq(storylineSessions.id, sessionId));
+
+    await sweepPush(NOW);
+    expect(apns.sendPush).not.toHaveBeenCalled();
+
+    await db
+      .update(storylineSessions)
+      .set({ replyDueAt: null, replyDueKind: null })
+      .where(eq(storylineSessions.id, sessionId));
+  });
+
   it('tells the battery from a story waiting', async () => {
     for (let i = 0; i < 20; i += 1) {
       await addTurn(new Date(NOW.getTime() - (30 + i * 0.1) * HOUR), i + 1);

@@ -43,6 +43,7 @@ const ORDER = [
   'dateLabel',
   'notifications',
   'narrative',
+  'replyLater',
   'choices',
 ] as const satisfies readonly (keyof TurnOutput)[];
 

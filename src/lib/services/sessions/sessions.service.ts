@@ -11,6 +11,8 @@ import * as reader from './sessions.reader';
 import * as writer from './sessions.writer';
 import { Executor } from '../executor';
 import { NewTurn, PublicSession, TurnWithChoices } from './sessions.types';
+import { dueFor } from '../generation/pauses';
+import { track } from '@/lib/analytics/analytics';
 
 export const findIdleSessions = reader.findIdleSessions;
 export const listSessions = reader.listSessions;
@@ -236,6 +238,9 @@ export async function openTurn(
     const turnOrder = await reader.nextTurnOrder(tx, sessionId);
     const turnId = await writer.insertTurn(tx, sessionId, turnOrder, turn);
     if (turn.isEnding) await writer.markSessionEnded(tx, sessionId);
+    // A beat written is the reply that was owed, whoever wrote it: the reply
+    // sweep, or the reader asking once it was due and before the sweep ran.
+    await writer.clearReplyDue(tx, sessionId);
     // Read back rather than assembled here, so a fresh turn and a resumed one
     // are the same shape by construction — surfaces resolved, choices ordered.
     const written = await reader.getTurn(tx, turnId);
@@ -310,6 +315,16 @@ export async function answerTurn(
 
     const turn = await reader.getTurn(tx, turnId);
     if (!turn) throw new NotFoundError('Turn', turnId);
+
+    // The story pauses here: the next beat is someone replying later, in real
+    // time, so none is written until it's due (pauses.ts). Only on the answer
+    // that made the turn answered: a repeat of the same choice returned above.
+    const kind = turn.replyLater;
+    if (kind === 'soon' || kind === 'tonight' || kind === 'tomorrow') {
+      const due = await dueFor(tx, userId, kind);
+      await writer.setReplyDue(tx, answered.sessionId, due, kind);
+      await track(userId, { name: 'reply_paused', properties: { delay: kind } });
+    }
     return turn;
   });
 }

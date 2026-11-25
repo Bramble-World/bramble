@@ -10,6 +10,10 @@ export type PublicSession = {
   startedFromEventId: string | null;
   /** When the story's ending was written. Null while it is still going. */
   endedAt: Date | null;
+  /** Someone replies later: no next beat until then (pauses.ts). Null when nothing is owed. */
+  replyDueAt: Date | null;
+  /** That pause's kind (`soon`, `tonight`, `tomorrow`), set with `replyDueAt`. */
+  replyDueKind: string | null;
 };
 
 export type PublicChoice = {
@@ -33,6 +37,8 @@ export type PublicTurn = {
   isEnding: boolean;
   selectedChoiceId: string | null;
   respondedAt: Date | null;
+  /** The reply to this beat's answer comes later (pauses.ts). Null for nearly every beat. */
+  replyLater?: string | null;
 };
 
 /**
@@ -51,6 +57,8 @@ export type NewTurn = {
   isEnding?: boolean;
   /** Written without spending energy (the first beat of a next story). */
   free?: boolean;
+  /** The story pauses after this beat (pauses.ts). */
+  replyLater?: 'soon' | 'tonight' | 'tomorrow';
   narrativeContent: string;
   choices: NewChoice[];
   surfaces: NewTurnSurface[];

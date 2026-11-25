@@ -30,6 +30,8 @@ vi.mock('./sessions.writer', () => ({
   touchSession: vi.fn(),
   advancePlayhead: vi.fn(),
   raisePlayheadTo: vi.fn(),
+  clearReplyDue: vi.fn(),
+  setReplyDue: vi.fn(),
 }));
 vi.mock('../storylines/storylines.reader', () => ({ getStoryline: vi.fn() }));
 

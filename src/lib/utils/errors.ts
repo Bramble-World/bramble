@@ -159,6 +159,19 @@ export class StorylineNotReadyError extends AppError {
 }
 
 /** A generation is already running for this session. Wait and re-call. */
+/**
+ * Someone in the story replies later, in real time, and it isn't time yet
+ * (pauses.ts). 409 like the other "not in this state" refusals; nothing was
+ * written or spent. `retryAfter` is the seconds until the reply is due, and the
+ * reply sweep writes it then and sends a notification, so a client should wait
+ * for that rather than retry.
+ */
+export class ReplyPendingError extends AppError {
+  constructor(public retryAfter: number) {
+    super('The reply is not here yet', 'REPLY_PENDING', 409);
+  }
+}
+
 export class GenerationInProgressError extends AppError {
   constructor(public retryAfter = 2) {
     super('A turn is already being generated for this session', 'GENERATION_IN_PROGRESS', 409);

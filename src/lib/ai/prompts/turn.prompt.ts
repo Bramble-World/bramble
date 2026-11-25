@@ -30,6 +30,12 @@ export type TurnVars = {
    * stopping on it. See `beatsToEnding`.
    */
   beatsToEnding: number | null;
+  /**
+   * Whether this beat may end with someone replying later, in real time
+   * (`pausesAllowed`). Optional so a caller that never pauses (the lab,
+   * scripts) needn't say; absent is false.
+   */
+  pausesAllowed?: boolean;
 };
 
 /**
@@ -104,6 +110,14 @@ export const turnOutputSchema = z.object({
     .describe(
       'What you do or feel now, in second person, 1-3 sentences. Never repeats the headline or the words on a surface. No dialogue attribution.'
     ),
+  // After the narrative and before the choices: whether the reply to what the
+  // reader answers comes later, in real time (pauses.ts). Allowed only when the
+  // prompt says so; otherwise the server ignores it.
+  replyLater: z
+    .enum(['none', 'soon', 'tonight', 'tomorrow'])
+    .describe(
+      'Whether the reply to what you answer comes later, in real time. none unless the prompt allows a pause and this beat is a natural one.'
+    ),
   // 0..4 in the schema, because structured output has no conditional length.
   // `turnIsUsable` holds the real rule: empty for an ending, 2-4 otherwise.
   choices: z
@@ -133,7 +147,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
   stage: 'turn',
   schema: turnOutputSchema,
 
-  render: ({ storyline, session, beyondScript, phase, beatsToEnding }) => {
+  render: ({ storyline, session, beyondScript, phase, beatsToEnding, pausesAllowed }) => {
     const stage = onStage(storyline);
 
     return {
@@ -334,6 +348,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
               'do not stall: silence and non-reply are not a beat.',
             ]
           : []),
+        ...(pausesAllowed ? PAUSE_RULES : ['- replyLater is none.']),
         '',
         phase === 'must_end'
           ? 'Write the ending of this story, following on from the choice just made.'
@@ -359,6 +374,21 @@ const ENDING_SHAPE = [
   '  the same story ends differently for someone who chose differently.',
   '- It closes, rather than stopping: the last thing that happens, and what it',
   '  leaves the reader with. No cliffhanger, no "to be continued".',
+];
+
+/**
+ * When a beat may pause for a reply in real time (pauses.ts). Rendered only
+ * when the server allows one; the beat after the answer is then written when
+ * the reply is due, and arrives by notification.
+ */
+const PAUSE_RULES = [
+  '- This beat may pause the story: set replyLater when someone here would',
+  '  naturally answer later, not now. They say they will get back to you, they',
+  '  are going to sleep, the night is ending, or they need time to think.',
+  '  soon is within the hour, tonight is a few hours, tomorrow is the next',
+  '  morning. The choices are then what you say before they go quiet.',
+  '- Most beats do not pause. Never pause mid-conversation just to make the',
+  '  reader wait; when in doubt, replyLater is none.',
 ];
 
 const PHASE_RULES: Record<StoryPhase, string[]> = {
