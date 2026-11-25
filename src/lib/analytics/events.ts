@@ -32,6 +32,11 @@ export type AnalyticsEvent =
         /** Whether this playthrough began at a moment the reader picked. */
         started_from_event: boolean;
         generation_ms: number;
+        /**
+         * From the request reaching the server to the beat being written: the
+         * writing plus anything settled first. What the player waited, less the network.
+         */
+        wait_ms: number;
         /** Where the story came from; `none` for one not from the pool (a guest's opening, a Mac import). Never which one. */
         origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
       };
@@ -178,6 +183,7 @@ export const ALLOWED_PROPERTY_KEYS = [
   'beyond_script',
   'started_from_event',
   'generation_ms',
+  'wait_ms',
   'status',
   'failure_code',
   'duration_ms',

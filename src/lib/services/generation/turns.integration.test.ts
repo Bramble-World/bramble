@@ -675,7 +675,9 @@ describe('endings', () => {
 
     expect(second.isEnding).toBe(false);
     expect(second.choices.length).toBeGreaterThanOrEqual(2);
-    expect(fake.calls.at(-1)!.system).toContain('Do not resolve the story yet');
+    // The beat's call: the first choice's consequences are settled after it.
+    const beat = fake.calls.filter((c) => c.promptName === 'turn.generate').at(-1)!;
+    expect(beat.system).toContain('Do not resolve the story yet');
   });
 
   it('retries once when the model ends the story too early, then gives up', async () => {
@@ -785,33 +787,113 @@ describe('ownership on the unscoped readers', () => {
  * cannot express it.
  */
 describe('advanceSession', () => {
-  it('settles an owed consequence before generating the next turn', async () => {
+  /** The player waits for the beat alone; what their choice changed comes after. */
+  it('writes the beat first, then settles the choice just made', async () => {
     const session = await freshSession();
     const turn = await generateTurn(userId, session.id, { generator: fake });
     await commitChoice(userId, turn.id, turn.choices[0].id);
-
-    // Answered, never resolved — the state a client lands in when it dies
-    // between the two.
-    const owedBefore = await sessionReader.findTurnsOwedConsequences(db, session.id);
-    expect(owedBefore.map((t) => t.id)).toStrictEqual([turn.id]);
-
-    const order: string[] = [];
-    fake.register(consequencePrompt, () => {
-      order.push('consequence');
-      return { events: [], contextEntries: [], relationshipStates: [] };
-    });
-    const realTurnFixture = fake.calls.length;
-    void realTurnFixture;
+    const before = fake.calls.length;
 
     await advanceSession(userId, session.id, { generator: fake });
 
-    // The consequence prompt ran, and it ran before the turn that followed it.
-    const promptOrder = fake.calls.map((c) => c.promptName).slice(-2);
-    expect(promptOrder).toStrictEqual(['consequence.commit', 'turn.generate']);
-    expect(order).toStrictEqual(['consequence']);
+    expect(fake.calls.slice(before).map((c) => c.promptName)).toStrictEqual([
+      'turn.generate',
+      'consequence.commit',
+    ]);
+    expect(await sessionReader.findTurnsOwedConsequences(db, session.id)).toStrictEqual([]);
+  });
 
-    const owedAfter = await sessionReader.findTurnsOwedConsequences(db, session.id);
-    expect(owedAfter).toStrictEqual([]);
+  it('hands that settling to `later`, so the response never waits for it', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+    const queued: Array<() => Promise<void>> = [];
+    const before = fake.calls.length;
+
+    const next = await advanceSession(userId, session.id, {
+      generator: fake,
+      later: (work) => queued.push(work),
+    });
+
+    // Returned with the beat written and the consequences not yet started.
+    expect(next.id).not.toBe(turn.id);
+    expect(fake.calls.slice(before).map((c) => c.promptName)).toStrictEqual(['turn.generate']);
+    expect(queued).toHaveLength(1);
+    const owed = await sessionReader.findTurnsOwedConsequences(db, session.id);
+    expect(owed.map((t) => t.id)).toStrictEqual([turn.id]);
+
+    await queued[0]();
+
+    expect(await sessionReader.findTurnsOwedConsequences(db, session.id)).toStrictEqual([]);
+  });
+
+  /**
+   * Canon is never more than one beat behind: a choice whose settling didn't
+   * finish is settled before the next beat, once a newer choice has been made.
+   */
+  it('settles an older owed choice before the beat, and the newest after', async () => {
+    const session = await freshSession();
+    const first = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, first.id, first.choices[0].id);
+    const second = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, second.id, second.choices[0].id);
+    const owedBefore = await sessionReader.findTurnsOwedConsequences(db, session.id);
+    expect(owedBefore.map((t) => t.id)).toStrictEqual([first.id, second.id]);
+    const before = fake.calls.length;
+
+    await advanceSession(userId, session.id, { generator: fake });
+
+    expect(fake.calls.slice(before).map((c) => c.promptName)).toStrictEqual([
+      'consequence.commit',
+      'turn.generate',
+      'consequence.commit',
+    ]);
+    expect(await sessionReader.findTurnsOwedConsequences(db, session.id)).toStrictEqual([]);
+  });
+
+  /** Players keep the old order until admins have tried the new one. */
+  it('settles the choice before the beat when asked for consequences first', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+    const queued: Array<() => Promise<void>> = [];
+    const before = fake.calls.length;
+
+    await advanceSession(userId, session.id, {
+      generator: fake,
+      consequencesFirst: true,
+      later: (work) => queued.push(work),
+    });
+
+    expect(fake.calls.slice(before).map((c) => c.promptName)).toStrictEqual([
+      'consequence.commit',
+      'turn.generate',
+    ]);
+    expect(queued).toHaveLength(0);
+    expect(await sessionReader.findTurnsOwedConsequences(db, session.id)).toStrictEqual([]);
+  });
+
+  /**
+   * Settled after the beat, a choice's consequences can still be writing when
+   * the reader answers the next beat. Both write the session's playhead; before
+   * both took the session's lock first, Postgres found a deadlock here.
+   */
+  it('lets the reader answer while the last choice is still settling', async () => {
+    for (let round = 0; round < 4; round++) {
+      const session = await freshSession();
+      const first = await generateTurn(userId, session.id, { generator: fake });
+      await commitChoice(userId, first.id, first.choices[0].id);
+      const queued: Array<() => Promise<void>> = [];
+      const next = await advanceSession(userId, session.id, {
+        generator: fake,
+        later: (work) => queued.push(work),
+      });
+
+      await Promise.all([queued[0](), commitChoice(userId, next.id, next.choices[0].id)]);
+
+      const owed = await sessionReader.findTurnsOwedConsequences(db, session.id);
+      expect(owed.map((t) => t.id)).toStrictEqual([next.id]);
+    }
   });
 
   it('is safe to call twice — the second finds the work done', async () => {
