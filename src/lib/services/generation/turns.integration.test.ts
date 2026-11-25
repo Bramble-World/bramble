@@ -26,6 +26,7 @@ import * as sessions from '../sessions/sessions.service';
 import * as timeline from '../timeline/timeline.service';
 import { advanceSession, commitChoice, generateConsequences, generateTurn } from './turns.service';
 import { writeEnding } from '../endings/ending.service';
+import type { BeatDraft } from './beat-draft';
 
 /**
  * The decision loop, end to end, against the fake generator and a real database.
@@ -705,6 +706,67 @@ describe('endings', () => {
   });
 });
 
+describe('a streamed beat written again', () => {
+  afterAll(async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+  });
+
+  it('tells the reader to start over, then streams the beat that is kept', async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 20 })
+      .where(eq(storylinesTable.id, storylineId));
+    let calls = 0;
+    fake.register(turnPrompt, () => {
+      calls += 1;
+      // The first ends the story far too early, which only the finished beat shows.
+      return calls === 1
+        ? {
+            isEnding: true,
+            headline: 'It is over.',
+            surfaceKind: 'none' as const,
+            clockTime: null,
+            dateLabel: null,
+            notifications: [],
+            narrative: 'And that was that.',
+            choices: [],
+          }
+        : {
+            isEnding: false,
+            headline: 'Maya waits for you outside.',
+            surfaceKind: 'none' as const,
+            clockTime: null,
+            dateLabel: null,
+            notifications: [],
+            narrative: 'You see her before she sees you.',
+            choices: [
+              { label: 'Wave', description: null, reply: null },
+              { label: 'Keep walking', description: null, reply: null },
+            ],
+          };
+    });
+    const session = await freshSession();
+    const drafts: BeatDraft[] = [];
+    let restarts = 0;
+
+    const turn = await generateTurn(userId, session.id, {
+      generator: fake,
+      onDraft: (draft) => drafts.push(draft),
+      onRestart: () => {
+        restarts += 1;
+      },
+    });
+
+    expect(restarts).toBe(1);
+    expect(drafts[0].headline).toBe('It is over.');
+    expect(drafts.at(-1)?.headline).toBe('Maya waits for you outside.');
+    expect(turn.isEnding).toBe(false);
+  });
+});
+
 describe('playing several turns', () => {
   it('runs the loop repeatedly without colliding', async () => {
     const session = await freshSession();
@@ -923,6 +985,32 @@ describe('surfaces', () => {
     clockTime: '1:47',
     dateLabel: 'Saturday, June 14',
     notifications,
+  });
+
+  /** Streamed, the reader sees the headline, then each text, then the narrative. */
+  it('streams the headline, then each text, then the narrative, and saves the same beat', async () => {
+    const { maya } = await castIds();
+    fake.register(turnPrompt, () =>
+      phoneBeat([
+        { senderCharacterId: maya, text: 'i have to tell you something' },
+        { senderCharacterId: maya, text: 'are you up' },
+      ])
+    );
+    const session = await freshSession();
+    const drafts: BeatDraft[] = [];
+
+    const turn = await generateTurn(userId, session.id, {
+      generator: fake,
+      onDraft: (draft) => drafts.push(draft),
+    });
+
+    const texts = drafts.map((d) => d.surfaces.flatMap((s) => s.notifications.map((n) => n.text)));
+    expect(drafts[0]).toMatchObject({ headline: 'Maya just texted you at 1:47.', narrative: null });
+    expect(texts).toContainEqual(['i have to tell you something']);
+    expect(texts.at(-1)).toStrictEqual(['i have to tell you something', 'are you up']);
+    expect(drafts.at(-1)?.narrative).toBe('You read it with the sound off.');
+    expect(drafts.at(-1)?.surfaces[0].notifications[0].sender.name).toBe('Maya');
+    expect(turn.surfaces[0].notifications.map((n) => n.text)).toStrictEqual(texts.at(-1));
   });
 
   it('stores the headline and the texts, and serves them with the sender named', async () => {

@@ -862,6 +862,63 @@ describe('the play loop', () => {
     expect(body.turn.surfaces).toEqual(expect.any(Array));
   });
 
+  /** The events in a streamed response, in order. */
+  async function streamedEvents(response: Response) {
+    const text = await response.text();
+    return text
+      .split('\n\n')
+      .filter(Boolean)
+      .map((block) => {
+        const [eventLine, dataLine] = block.split('\n');
+        return {
+          event: eventLine.replace('event: ', ''),
+          data: JSON.parse(dataLine.replace('data: ', '')),
+        };
+      });
+  }
+
+  const streamed = (path: string) =>
+    new Request(`http://api.test${path}`, {
+      method: 'POST',
+      headers: { accept: 'text/event-stream' },
+    });
+
+  it('streams the beat when asked: drafts as it is written, then the same body', async () => {
+    const response = await turnRoute.POST(
+      streamed(`/api/v1/sessions/${sessionId}/turn`),
+      ctx({ sessionId })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const sent = await streamedEvents(response);
+    const drafts = sent.filter((e) => e.event === 'draft');
+    const done = sent.at(-1)!;
+    expect(drafts.length).toBeGreaterThan(0);
+    expect(drafts[0].data.headline).toEqual(expect.any(String));
+    expect(done.event).toBe('done');
+    expect(done.data.turn.choices.length).toBeGreaterThanOrEqual(2);
+    expect(done.data.turn.headline).toBe(drafts.at(-1)!.data.headline);
+    expect(done.data).toHaveProperty('energy');
+
+    // Saved, like any beat: the plain request gets the same one back.
+    const again = await (
+      await turnRoute.POST(post(`/api/v1/sessions/${sessionId}/turn`), ctx({ sessionId }))
+    ).json();
+    expect(again.turn.id).toBe(done.data.turn.id);
+  });
+
+  it('answers a refusal from before anything is written with its own status, not a stream', async () => {
+    const missing = crypto.randomUUID();
+    const response = await turnRoute.POST(
+      streamed(`/api/v1/sessions/${missing}/turn`),
+      ctx({ sessionId: missing })
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get('content-type')).toContain('application/json');
+  });
+
   // Same URL is the loop, the resume and the retry. A second call must find the
   // work done rather than pay for it again.
   it('returns the same turn when called twice', async () => {

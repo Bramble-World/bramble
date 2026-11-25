@@ -48,7 +48,9 @@ behaviour and tightening it would only annoy people.
 Each beat written is also the PostHog event `beat_played`, with `turn_order`,
 `surfaces` (types only), `beyond_script`, `started_from_event`, `generation_ms`
 (the model writing the beat), `wait_ms` (from the request reaching the server to
-the beat being written, so the writing plus anything settled first) and `origin`: where the story came from, `seed`, `reborn`, `reddit` or
+the beat being written, so the writing plus anything settled first),
+`first_part_ms` (streamed beats only: until the headline or first text was sent)
+and `origin`: where the story came from, `seed`, `reborn`, `reddit` or
 `chatgpt` for a pool story, `none` for one never in the pool (a guest's opening,
 a Mac import). Never which story. Breaking retention or beats per player down by
 `origin` is what tells ChatGPT stories from pool ones. A resumed turn is not a

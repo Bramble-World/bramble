@@ -3,9 +3,11 @@ import { withUser } from '@/lib/api/with-user';
 import { scheduleEnding } from '@/lib/api/session-response';
 import { json } from '@/lib/api/respond';
 import { uuidParam } from '@/lib/api/params';
-import { turnView } from '@/lib/api/views';
+import { beatDraftView, turnView } from '@/lib/api/views';
 import { readerEnergy } from '@/lib/api/energy';
-import { advanceSession } from '@/lib/services/generation/turns.service';
+import { advanceSession, type AdvanceDeps } from '@/lib/services/generation/turns.service';
+import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
+import { eventStream, wantsEventStream } from '@/lib/api/event-stream';
 import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
 import { clientShowsEndings } from '@/lib/api/client-version';
 
@@ -51,16 +53,18 @@ export const POST = withUser(async (user, request, { params }: Params) => {
   // wait again (seen in production, 2026-11-13: every failure was the app
   // leaving). Finished, the beat is saved, and the app's next call gets it
   // instantly from the open turn, at no extra cost.
-  const turn = await withDeadline(
-    // The Mac app can't show an ending, so its stories don't get one.
-    (signal) =>
-      advanceSession(user.id, sessionId, {
-        signal,
-        endings: clientShowsEndings(request),
-        later: (work) => after(work),
-      }),
-    TURN_DEADLINE_MS
-  );
+  const advance = (stream: Pick<AdvanceDeps, 'onDraft' | 'onRestart'> = {}) =>
+    withDeadline(
+      // The Mac app can't show an ending, so its stories don't get one.
+      (signal) =>
+        advanceSession(user.id, sessionId, {
+          signal,
+          endings: clientShowsEndings(request),
+          later: (work) => after(work),
+          ...stream,
+        }),
+      TURN_DEADLINE_MS
+    );
 
   // Read after the turn is written, so the balance in this response already
   // reflects the point this request just spent. A client that rendered a stale
@@ -71,7 +75,22 @@ export const POST = withUser(async (user, request, { params }: Params) => {
   // The ending page is written after the response, so the last beat isn't held
   // up by it. A no-op once written. A failure is tried again by the app's next
   // read of the session, and by the ending sweep.
-  if (turn.isEnding) scheduleEnding(user.id, sessionId, 'turn');
+  const finish = async (turn: TurnWithChoices) => {
+    if (turn.isEnding) scheduleEnding(user.id, sessionId, 'turn');
+    return { turn: turnView(turn), energy: await readerEnergy(user) };
+  };
 
-  return json({ turn: turnView(turn), energy: await readerEnergy(user) });
+  if (!wantsEventStream(request)) return json(await finish(await advance()));
+
+  // Streamed: `draft` with each new finished piece (headline, texts, narrative),
+  // `restart` if a half-sent beat is being written again, then `done` with the
+  // same body as above, or `error`. See docs/api-reference.md.
+  return eventStream(
+    ({ send }) =>
+      advance({
+        onDraft: (draft) => send('draft', beatDraftView(draft)),
+        onRestart: () => send('restart', {}),
+      }),
+    finish
+  );
 });
