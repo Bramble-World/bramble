@@ -203,6 +203,17 @@ describe('beat_played', () => {
     });
   });
 
+  it('says when the first piece reached a streaming reader, and only then', async () => {
+    const plain = await sessions.startSession(userId, storylineId);
+    await advanceSession(userId, plain.id, { generator: fake });
+    expect(only('beat_played')[0].event.properties).not.toHaveProperty('first_part_ms');
+
+    captured.length = 0;
+    const streamed = await sessions.startSession(userId, storylineId);
+    await advanceSession(userId, streamed.id, { generator: fake, onDraft: () => {} });
+    expect(only('beat_played')[0].event.properties.first_part_ms).toEqual(expect.any(Number));
+  });
+
   it('says which kind of pool story it is, never which one', async () => {
     await fromThePool('chatgpt');
     const session = await sessions.startSession(userId, storylineId);

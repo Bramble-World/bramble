@@ -64,20 +64,6 @@ export const turnOutputSchema = z.object({
     .string()
     .min(1)
     .describe('The hook: one present-tense sentence to "you" saying what just happened.'),
-  narrative: z
-    .string()
-    .min(1)
-    .describe(
-      'What you do or feel now, in second person: 1-2 short sentences, under 200 characters. Never repeats the headline or the words on a surface. No dialogue attribution.'
-    ),
-  // 0..4 in the schema, because structured output has no conditional length.
-  // `turnIsUsable` holds the real rule: empty for an ending, 2-4 otherwise.
-  choices: z
-    .array(choiceSchema)
-    .max(4)
-    .describe(
-      'Distinct options. No option may be a rephrasing of another. Empty only when isEnding is true.'
-    ),
   // The surface, flattened into the turn rather than nested: nested optional
   // structures are where structured output is least reliable (see the
   // consequence prompt's `dynamic`). `surfaceKind` says which of the fields
@@ -108,6 +94,22 @@ export const turnOutputSchema = z.object({
     )
     .max(MAX_NOTIFICATIONS)
     .describe('Newest first. Empty unless surfaceKind is imessage_notifications.'),
+  // Last, after the texts: streamed, a beat shows its headline and texts while
+  // the narrative and the choices are still being written.
+  narrative: z
+    .string()
+    .min(1)
+    .describe(
+      'What you do or feel now, in second person: 1-2 short sentences, under 200 characters. Never repeats the headline or the words on a surface. No dialogue attribution.'
+    ),
+  // 0..4 in the schema, because structured output has no conditional length.
+  // `turnIsUsable` holds the real rule: empty for an ending, 2-4 otherwise.
+  choices: z
+    .array(choiceSchema)
+    .max(4)
+    .describe(
+      'Distinct options. No option may be a rephrasing of another. Empty only when isEnding is true.'
+    ),
 });
 
 export type TurnOutput = z.infer<typeof turnOutputSchema>;

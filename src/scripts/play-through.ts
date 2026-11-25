@@ -50,6 +50,11 @@ function recording(real: Generator, calls: GenerationMeta[]): Generator {
       calls.push(result.meta);
       return result;
     },
+    async stream(spec, vars, opts) {
+      const result = await real.stream(spec, vars, opts);
+      calls.push(result.meta);
+      return result;
+    },
   };
 }
 

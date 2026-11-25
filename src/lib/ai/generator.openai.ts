@@ -5,6 +5,8 @@ import {
   NoOutputGeneratedError,
   Output,
   generateText,
+  streamText,
+  type LanguageModelUsage,
 } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { env } from '@/env';
@@ -15,7 +17,14 @@ import {
   UpstreamBusyError,
 } from '@/lib/utils/errors';
 import { STAGE_MODELS } from './models';
-import { GenerationMeta, Generator, GenerationResult, PromptSpec, RunOptions } from './prompt';
+import {
+  DeepPartial,
+  GenerationMeta,
+  Generator,
+  GenerationResult,
+  PromptSpec,
+  RunOptions,
+} from './prompt';
 
 /**
  * The only file in the repo that imports `ai` or `@ai-sdk/openai`.
@@ -41,57 +50,133 @@ export function createOpenAIGenerator(apiKey: string): Generator {
  * against the fake instead, so only this file is coupled to the provider.
  */
 export function createGenerator(resolveModel: (modelId: string) => LanguageModel): Generator {
+  /** Everything a call sends, the same whether it streams or not. */
+  function request<Vars, Out>(spec: PromptSpec<Vars, Out>, vars: Vars, opts?: RunOptions) {
+    const { model, reasoningEffort } = STAGE_MODELS[spec.stage];
+    const { system, prompt } = spec.render(vars);
+    return {
+      model,
+      reasoningEffort,
+      settings: {
+        model: resolveModel(model),
+        system,
+        prompt,
+        // Reasoning models take effort rather than temperature; gpt-6 and
+        // later drop sampling parameters entirely. See models.ts.
+        providerOptions: {
+          openai: {
+            reasoningEffort,
+            ...(opts?.cacheKey ? { promptCacheKey: opts.cacheKey } : {}),
+          },
+        },
+        output: Output.object({ schema: spec.schema, name: schemaName(spec.name) }),
+        abortSignal: opts?.signal,
+      },
+    };
+  }
+
+  function finished<Out>(
+    spec: PromptSpec<unknown, Out>,
+    model: string,
+    reasoningEffort: string,
+    startedAt: number,
+    output: Out,
+    usage: LanguageModelUsage,
+    finishReason: string
+  ): GenerationResult<Out> {
+    const meta = {
+      promptName: spec.name,
+      model,
+      inputTokens: usage.inputTokens ?? 0,
+      cachedInputTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      reasoningTokens: usage.outputTokenDetails?.reasoningTokens ?? 0,
+      finishReason,
+      durationMs: Date.now() - startedAt,
+    };
+    logGeneration(spec.stage, reasoningEffort, meta);
+    return { value: output, meta };
+  }
+
+  /**
+   * The cause is attached, never interpolated. The message stays generic
+   * because model output and provider bodies can echo the prompt, and the
+   * prompt carries story content (invariants.md §1) — but discarding the cause
+   * entirely makes a production failure impossible to diagnose, and `cause` is
+   * what Sentry and `console.error` already follow.
+   */
+  function failed(
+    spec: PromptSpec<unknown, unknown>,
+    error: unknown,
+    opts: RunOptions | undefined,
+    startedAt: number
+  ): Error {
+    const translated = translate(error, spec.name);
+    logFailure(spec.name, translated, error, opts?.signal, Date.now() - startedAt);
+    return translated;
+  }
+
   return {
     async run<Vars, Out>(
       spec: PromptSpec<Vars, Out>,
       vars: Vars,
       opts?: RunOptions
     ): Promise<GenerationResult<Out>> {
-      const { model, reasoningEffort } = STAGE_MODELS[spec.stage];
-      const { system, prompt } = spec.render(vars);
+      const { model, reasoningEffort, settings } = request(spec, vars, opts);
       const startedAt = Date.now();
-
       try {
-        const result = await generateText({
-          model: resolveModel(model),
-          system,
-          prompt,
-          // Reasoning models take effort rather than temperature; gpt-6 and
-          // later drop sampling parameters entirely. See models.ts.
-          providerOptions: {
-            openai: {
-              reasoningEffort,
-              ...(opts?.cacheKey ? { promptCacheKey: opts.cacheKey } : {}),
-            },
-          },
-          output: Output.object({
-            schema: spec.schema,
-            name: schemaName(spec.name),
-          }),
-          abortSignal: opts?.signal,
-        });
-
-        const meta = {
-          promptName: spec.name,
+        const result = await generateText(settings);
+        return finished(
+          spec as PromptSpec<unknown, Out>,
           model,
-          inputTokens: result.usage.inputTokens ?? 0,
-          cachedInputTokens: result.usage.inputTokenDetails?.cacheReadTokens ?? 0,
-          outputTokens: result.usage.outputTokens ?? 0,
-          reasoningTokens: result.usage.outputTokenDetails?.reasoningTokens ?? 0,
-          finishReason: result.finishReason,
-          durationMs: Date.now() - startedAt,
-        };
-        logGeneration(spec.stage, reasoningEffort, meta);
-        return { value: result.output, meta };
+          reasoningEffort,
+          startedAt,
+          result.output as Out,
+          result.usage,
+          result.finishReason
+        );
       } catch (error) {
-        // The cause is attached, never interpolated. The message stays generic
-        // because model output and provider bodies can echo the prompt, and the
-        // prompt carries story content (invariants.md §1) — but discarding the
-        // cause entirely makes a production failure impossible to diagnose, and
-        // `cause` is what Sentry and `console.error` already follow.
-        const translated = translate(error, spec.name);
-        logFailure(spec.name, translated, error, opts?.signal, Date.now() - startedAt);
-        throw translated;
+        throw failed(spec as PromptSpec<unknown, unknown>, error, opts, startedAt);
+      }
+    },
+
+    async stream<Vars, Out>(
+      spec: PromptSpec<Vars, Out>,
+      vars: Vars,
+      opts: RunOptions & { onPartial: (partial: DeepPartial<Out>) => void }
+    ): Promise<GenerationResult<Out>> {
+      const { model, reasoningEffort, settings } = request(spec, vars, opts);
+      const startedAt = Date.now();
+      try {
+        // A streamed call reports its failure here rather than throwing, and
+        // the default handler would print it, prompt echo and all.
+        let failure: unknown;
+        const result = streamText({
+          ...settings,
+          onError: ({ error }) => {
+            failure ??= error;
+          },
+        });
+        for await (const partial of result.partialOutputStream) {
+          opts.onPartial(partial as DeepPartial<Out>);
+        }
+        if (failure !== undefined) throw failure;
+        const [output, usage, finishReason] = await Promise.all([
+          result.output,
+          result.usage,
+          result.finishReason,
+        ]);
+        return finished(
+          spec as PromptSpec<unknown, Out>,
+          model,
+          reasoningEffort,
+          startedAt,
+          output as Out,
+          usage,
+          finishReason
+        );
+      } catch (error) {
+        throw failed(spec as PromptSpec<unknown, unknown>, error, opts, startedAt);
       }
     },
   };
