@@ -64,9 +64,10 @@ async function storyFor(userId: string): Promise<string> {
 }
 
 /** Plays beats until one pauses, or `max` are played; returns the paused one, answered. */
-async function playToPause(sessionId: string, max = PAUSE_MIN_BEATS + 2) {
+async function playToPause(sessionId: string, max = PAUSE_MIN_BEATS + 2, pauses = true) {
   for (let i = 0; i < max; i += 1) {
-    const turn = await advanceSession(adminId, sessionId, { generator: fake });
+    // As from iOS build 40 and later, the only app the route lets pause.
+    const turn = await advanceSession(adminId, sessionId, { generator: fake, pauses });
     await commitChoice(adminId, turn.id, turn.choices[0].id);
     const [row] = await db
       .select({ replyLater: storyTurns.replyLater })
@@ -140,6 +141,11 @@ describe('a story that pauses', () => {
       .from(storyTurns)
       .where(eq(storyTurns.sessionId, session.id));
     expect(turns).toHaveLength(PAUSE_MIN_BEATS + 1);
+  });
+
+  it("never pauses for an app that can't show it", async () => {
+    const session = await sessions.startSession(adminId, storylineId);
+    expect(await playToPause(session.id, PAUSE_MIN_BEATS + 2, false)).toBeNull();
   });
 
   it('pauses at most once a day', async () => {
