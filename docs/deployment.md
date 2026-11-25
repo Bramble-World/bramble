@@ -325,6 +325,23 @@ porter app run bramble -- node dist/scripts/review-reports.js restore <templateI
   prompt or the script, then `keep`.
 - Make sure the Sentry project's alert rule mails on a new issue (the default).
 
+## Playing a story through, to judge the writing and the wait
+
+There's no staging, so the real model is tried in production, on a throwaway
+account that plays one of the team's seed stories (never a player's) and is
+deleted when it's done:
+
+```bash
+porter app run bramble -- node dist/scripts/play-through.js            # 10 beats, both orders
+porter app run bramble -- node dist/scripts/play-through.js 12 after the-leak
+```
+
+It prints every beat, the choice it picked, how long the wait was, and each
+model call's time and tokens (input, cached, output, thinking). `both` plays the
+same story with consequences settled after each beat (the new order) and before
+it (the old one), then compares the median waits. Each run costs real model
+calls: about two per beat, per order.
+
 ## Deleting an account on request
 
 The privacy policy (`/privacy`) promises that emailing great@brambleworld.com

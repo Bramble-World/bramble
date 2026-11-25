@@ -25,6 +25,7 @@ vi.mock('./sessions.writer', () => ({
   insertSession: vi.fn(),
   insertTurn: vi.fn(),
   markSessionEnded: vi.fn(),
+  lockSessionOfTurn: vi.fn(),
   answerTurnGuarded: vi.fn(),
   touchSession: vi.fn(),
   advancePlayhead: vi.fn(),
@@ -55,6 +56,19 @@ describe('answerTurn', () => {
     choices: [],
     surfaces: [],
   };
+
+  /** Consequences settling after the last beat take the session first too. */
+  it("takes the session's lock before writing the answer", async () => {
+    writer.answerTurnGuarded.mockResolvedValue({ id: TURN, sessionId: 'session-1' });
+    reader.getTurn.mockResolvedValue(turn);
+
+    await service.answerTurn(USER, TURN, CHOICE);
+
+    expect(writer.lockSessionOfTurn).toHaveBeenCalledWith(expect.anything(), TURN);
+    expect(writer.lockSessionOfTurn.mock.invocationCallOrder[0]).toBeLessThan(
+      writer.answerTurnGuarded.mock.invocationCallOrder[0]
+    );
+  });
 
   it('touches the session after a successful answer', async () => {
     writer.answerTurnGuarded.mockResolvedValue({ id: TURN, sessionId: 'session-1' });

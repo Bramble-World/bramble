@@ -109,13 +109,23 @@ beforeAll(async () => {
   }
 });
 
+/**
+ * Waits out whatever ran after a response (consequences, an ending), so a
+ * test's cleanup never deletes a user under work still writing for them.
+ */
+async function drainAfterWork() {
+  await Promise.allSettled(afterWork.splice(0));
+}
+
 afterAll(async () => {
+  await drainAfterWork();
   for (const clerkId of [OWNER, STRANGER]) {
     await db.delete(users).where(eq(users.clerkId, clerkId));
   }
 });
 
 beforeEach(async () => {
+  await drainAfterWork();
   vi.clearAllMocks();
   for (const clerkId of [OWNER, STRANGER]) {
     await db.delete(users).where(eq(users.clerkId, clerkId));

@@ -31,6 +31,18 @@ const safety = vi.hoisted(() => ({
 const captured: Array<{ userId: string; event: { name: string; properties: unknown } }> = [];
 const aliases: Array<{ userId: string; previousId: string }> = [];
 
+/**
+ * `after()` needs a request scope, which a handler called directly has none of.
+ * The stand-in runs the work at once and keeps it, so cleanup can wait for it.
+ */
+const afterWork = vi.hoisted(() => [] as Promise<unknown>[]);
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (work: () => unknown) => {
+    afterWork.push(Promise.resolve().then(work));
+  },
+}));
+
 vi.mock('@/env', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/env')>();
   // A plain object, so a test can flip GUEST_ATTESTATION and restore it.
@@ -240,6 +252,8 @@ async function cleanUp() {
 }
 
 beforeEach(async () => {
+  // What ran after a response finishes before anything is cleaned up under it.
+  await Promise.allSettled(afterWork.splice(0));
   vi.clearAllMocks();
   captured.length = 0;
   aliases.length = 0;
@@ -250,6 +264,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  await Promise.allSettled(afterWork.splice(0));
   await cleanUp();
   const keys = await redis('test cleanup').keys('ratelimit:guest*');
   if (keys.length) await redis('test cleanup').del(...keys);
