@@ -172,10 +172,10 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '  says what the choice is. Any other choice (calling, going over, putting the',
         '  phone down, waiting, saying something in person) has reply null. Never',
         '  write a reply for a choice that is not literally sending a text.',
-        ...PHASE_RULES[phase],
-        ...(phase === 'open' && beatsToEnding !== null ? buildUpRules(beatsToEnding) : []),
         '',
         'Shape of a beat:',
+        '- Write it straight out. The rules here and the story below are all you need;',
+        '  there is nothing to work out before you begin.',
         '- headline is the hook, one sentence: what just happened, to "you".',
         '- narrative is what you do or feel now. It never repeats the headline, and it',
         '  never repeats words that appear on a surface.',
@@ -195,15 +195,6 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '- Otherwise set surfaceKind to none, clockTime and dateLabel to null, and leave',
         '  notifications empty. Most beats are not texts — do not reach for a phone to',
         '  make a scene feel modern.',
-        ...(beyondScript
-          ? [
-              '',
-              'The setup this story started from has run out. There is no next',
-              'planned event waiting to be told — whatever happens now is something',
-              'these people have not done before. Invent it from who they are, and',
-              'do not stall: silence and non-reply are not a beat.',
-            ]
-          : []),
       ].join('\n'),
 
       prompt: [
@@ -222,6 +213,43 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         // remaining channel leaking the ending into a turn. What has happened
         // below is already this playthrough's history, and it is bounded.
         '',
+        // Cache-friendly order: OpenAI reuses the start of a request that repeats,
+        // so what changes least comes first. The motifs and the history change
+        // rarely or only at their end; the background, the cast's wants and the
+        // relationships move with consequences; the playthrough grows every beat,
+        // and where the story is changes every beat, so it is last.
+        ...(storyline.motifs.length
+          ? [
+              '## Recurring',
+              ...storyline.motifs.map(
+                (m) => `- ${m.label}${m.description ? `: ${m.description}` : ''}`
+              ),
+              '',
+            ]
+          : []),
+        ...(storyline.timeline.length
+          ? ['## What has happened', ...renderTimeline(storyline.timeline), '']
+          : ['## What has happened', 'Nothing yet. This is the very beginning.', '']),
+        // Per-character background was assembled and then dropped on the floor.
+        // Rendered under the same heading rather than a new one, because the rule
+        // that governs this material — "Background is what you know, not what you
+        // state" — keys on the word Background, and material the model has no
+        // instruction about is material it is most likely to blurt.
+        //
+        // Iterated by cast, not by Object.entries: the order is then stable, and
+        // an entry about somebody no longer cast disappears instead of rendering
+        // as "someone".
+        ...(() => {
+          const lines = [
+            ...storyline.background.storylineLevel.map((b) => `- ${b}`),
+            ...storyline.characters.flatMap((character) =>
+              (storyline.background.byCharacterId[character.id] ?? []).map(
+                (entry) => `- ${character.name}: ${entry}`
+              )
+            ),
+          ];
+          return lines.length ? ['## Background (known, not stated)', ...lines, ''] : [];
+        })(),
         '## Cast',
         ...storyline.characters.map((character) =>
           [
@@ -260,38 +288,6 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
           ].join('\n');
         }),
         '',
-        ...(storyline.timeline.length
-          ? ['## What has happened', ...renderTimeline(storyline.timeline), '']
-          : ['## What has happened', 'Nothing yet. This is the very beginning.', '']),
-        // Per-character background was assembled and then dropped on the floor.
-        // Rendered under the same heading rather than a new one, because the rule
-        // that governs this material — "Background is what you know, not what you
-        // state" — keys on the word Background, and material the model has no
-        // instruction about is material it is most likely to blurt.
-        //
-        // Iterated by cast, not by Object.entries: the order is then stable, and
-        // an entry about somebody no longer cast disappears instead of rendering
-        // as "someone".
-        ...(() => {
-          const lines = [
-            ...storyline.background.storylineLevel.map((b) => `- ${b}`),
-            ...storyline.characters.flatMap((character) =>
-              (storyline.background.byCharacterId[character.id] ?? []).map(
-                (entry) => `- ${character.name}: ${entry}`
-              )
-            ),
-          ];
-          return lines.length ? ['## Background (known, not stated)', ...lines, ''] : [];
-        })(),
-        ...(storyline.motifs.length
-          ? [
-              '## Recurring',
-              ...storyline.motifs.map(
-                (m) => `- ${m.label}${m.description ? `: ${m.description}` : ''}`
-              ),
-              '',
-            ]
-          : []),
         ...(session.turns.length
           ? [
               '## This playthrough so far',
@@ -312,6 +308,18 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
               '',
             ]
           : []),
+        '## Where the story is',
+        ...PHASE_RULES[phase],
+        ...(phase === 'open' && beatsToEnding !== null ? buildUpRules(beatsToEnding) : []),
+        ...(beyondScript
+          ? [
+              'The setup this story started from has run out. There is no next',
+              'planned event waiting to be told — whatever happens now is something',
+              'these people have not done before. Invent it from who they are, and',
+              'do not stall: silence and non-reply are not a beat.',
+            ]
+          : []),
+        '',
         phase === 'must_end'
           ? 'Write the ending of this story, following on from the choice just made.'
           : session.turns.length
