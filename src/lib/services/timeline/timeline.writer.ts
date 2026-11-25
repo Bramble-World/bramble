@@ -55,7 +55,7 @@ export async function insertEvent(
       actorCharacterId: input.actorCharacterId,
       origin: input.origin,
       triggeredByTurnId: generated ? input.triggeredByTurnId : null,
-      generationRationale: generated ? input.generationRationale : null,
+      generationRationale: generated ? (input.generationRationale ?? null) : null,
     })
     .returning(returnedEvent);
 

@@ -18,8 +18,9 @@ extraction. Postgres holds only the model's retelling — storylines, people,
 events — and an `imports` row with no message content in it. This is the
 product's central claim, not an implementation detail.
 
-- `events.generationRationale` holds the model's _own reasoning_, never quoted
-  source text.
+- `events.generationRationale`, where there is one, holds the model's _own
+  reasoning_, never quoted source text. The consequence stage stopped writing it
+  (2026-11-25); older generated events keep theirs.
 - **Surface text is generated, never imported.** A `turn_surfaces` notification
   is a line the turn model wrote for the story, in a met character's voice — it
   is shown to the reader, so it must never be a message lifted from the
