@@ -125,6 +125,20 @@ export type ChoiceView = {
   reply: string | null;
 };
 
+/**
+ * A beat while it is still being written, streamed from `POST .../turn` when
+ * the client asks for `text/event-stream`: only finished pieces, growing with
+ * each event. Show it as it grows; the finished beat (`TurnView`, with the
+ * choices) replaces it.
+ */
+export type BeatDraftView = {
+  headline: string | null;
+  /** Finished texts only, in the order they will be in the finished beat. */
+  surfaces: SurfaceView[];
+  /** Null until it's finished. */
+  narrative: string | null;
+};
+
 export type TurnView = {
   id: string;
   /** The one-sentence hook above everything else. Null on turns from before turns had one. */

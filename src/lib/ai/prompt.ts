@@ -64,10 +64,28 @@ export type GenerationResult<Out> = {
  */
 export type RunOptions = { signal?: AbortSignal; cacheKey?: string };
 
+/** What a structured output looks like while it is still being written. */
+export type DeepPartial<T> = T extends (infer E)[]
+  ? DeepPartial<E>[]
+  : T extends object
+    ? { [K in keyof T]?: DeepPartial<T[K]> }
+    : T;
+
 export interface Generator {
   run<Vars, Out>(
     spec: PromptSpec<Vars, Out>,
     vars: Vars,
     opts?: RunOptions
+  ): Promise<GenerationResult<Out>>;
+
+  /**
+   * `run`, reporting the output as it is written: `onPartial` gets the object
+   * so far, fields in the schema's order, the last of them possibly cut off
+   * mid-word. Resolves with the same parsed, schema-checked result as `run`.
+   */
+  stream<Vars, Out>(
+    spec: PromptSpec<Vars, Out>,
+    vars: Vars,
+    opts: RunOptions & { onPartial: (partial: DeepPartial<Out>) => void }
   ): Promise<GenerationResult<Out>>;
 }
