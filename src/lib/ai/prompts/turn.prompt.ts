@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { shortId } from './short-ids';
 import { PromptSpec } from '../prompt';
 import { SessionContext, StorylineContext } from '@/lib/services/generation/generation.types';
 import { renderTimeline, STAKES_WINDOW } from './timeline';
@@ -267,7 +268,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '## Cast',
         ...storyline.characters.map((character) =>
           [
-            `- ${character.name}${character.isSelf ? ' (you)' : ''} [${character.id}] — ${character.role}`,
+            `- ${character.name}${character.isSelf ? ' (you)' : ''} [${shortId(character.id)}] — ${character.role}`,
             // The reader said how to refer to them, so it is not the model's to
             // guess from a name.
             character.pronouns ? `  Pronouns: ${PRONOUN_LABELS[character.pronouns]}` : null,

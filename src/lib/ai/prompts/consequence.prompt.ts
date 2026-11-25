@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { StorylineContext } from '@/lib/services/generation/generation.types';
-import { ENGAGEMENT_RUBRIC, renderTimeline, STAKES_WINDOW } from './timeline';
+import { renderTimeline, STAKES_WINDOW } from './timeline';
+import { shortId } from './short-ids';
 import { CACHE_BREAK, joinLines, PromptLine, steppedBreaks, withBreaks } from './cache';
 import { PRONOUN_LABELS } from './turn.prompt';
 import { relationshipToReader } from './relationship';
@@ -57,12 +58,6 @@ export const consequenceOutputSchema = z.object({
           .describe(
             'The one character who set this beat in motion, if a single person did. Null when it is something that happened to them rather than something someone did.'
           ),
-        engagementScore: z
-          .number()
-          .int()
-          .min(1)
-          .max(10)
-          .describe('How much this beat invites being played from. See the scale in the rules.'),
       })
     )
     .max(2)
@@ -136,8 +131,6 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       '  nobody else ever does anything, and the story stops moving. When the other',
       '  person is the one who moved the scene, the beat is theirs.',
       '- Only reference character and relationship ids that appear below.',
-      '',
-      ENGAGEMENT_RUBRIC,
     ].join('\n'),
 
     ...joinLines([
@@ -146,7 +139,7 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       '## Cast',
       ...storyline.characters.map(
         (c) =>
-          `- ${c.id} — ${c.name}${c.isSelf ? ' (the reader)' : ''}, ${c.role}${c.pronouns ? ` (${PRONOUN_LABELS[c.pronouns]})` : ''}`
+          `- ${shortId(c.id)} — ${c.name}${c.isSelf ? ' (the reader)' : ''}, ${c.role}${c.pronouns ? ` (${PRONOUN_LABELS[c.pronouns]})` : ''}`
       ),
       '',
       '## Relationships',
@@ -155,7 +148,7 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       ...storyline.relationships.map((r) => {
         const meaning = relationshipToReader(storyline, r);
         return [
-          `- ${r.id} — ${nameOf(storyline, r.characterAId)} and ${nameOf(storyline, r.characterBId)}${r.relationshipType ? ` (${r.relationshipType})` : ''}`,
+          `- ${shortId(r.id)} — ${nameOf(storyline, r.characterAId)} and ${nameOf(storyline, r.characterBId)}${r.relationshipType ? ` (${r.relationshipType})` : ''}`,
           ...(meaning ? [`  ${meaning}`] : []),
         ].join('\n');
       }),

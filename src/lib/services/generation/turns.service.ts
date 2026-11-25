@@ -1,7 +1,7 @@
 import { db } from '@/index';
 import { NotFoundError, ValidationError } from '@/lib/utils/errors';
 import { Generator, getGenerator } from '@/lib/ai';
-import { turnIsUsable, turnPrompt } from '@/lib/ai/prompts/turn.prompt';
+import { turnIsUsable, turnPrompt, type TurnOutput } from '@/lib/ai/prompts/turn.prompt';
 import { beatsToEnding, endingBounds, storyPhase } from './story-phase';
 import { consequencePrompt } from '@/lib/ai/prompts/consequence.prompt';
 import * as sessions from '../sessions/sessions.service';
@@ -26,6 +26,8 @@ import { failureFields } from '@/lib/ai/failure';
 import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
 import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
 import { beatDraft, isEmptyDraft, type BeatDraft } from './beat-draft';
+import { idResolver } from '@/lib/ai/prompts/short-ids';
+import type { DeepPartial } from '@/lib/ai/prompt';
 import * as storylineReader from '../storylines/storylines.reader';
 
 /** Injected so a test can supply the fake without touching process env. */
@@ -144,6 +146,8 @@ export async function generateTurn(
   // ending too early, choices on an ending, no ending past the cap). A failed
   // generation costs the reader nothing, so the retry is ours to pay.
   const options = { signal: deps.signal, cacheKey: `turn:${sessionId}` };
+  // The model names senders by the short handle it was shown (short-ids.ts).
+  const sender = idResolver(visible.characters.map((c) => c.id));
   let sent = '';
   let firstDraftAt: number | null = null;
   const write = () => {
@@ -156,7 +160,7 @@ export async function generateTurn(
     return generator.stream(turnPrompt, vars, {
       ...options,
       onPartial: (partial) => {
-        const draft = beatDraft(partial, visible.characters);
+        const draft = beatDraft(withSenders(partial, sender), visible.characters);
         const key = JSON.stringify(draft);
         if (isEmptyDraft(draft) || key === sent) return;
         sent = key;
@@ -176,7 +180,7 @@ export async function generateTurn(
 
   // Senders are checked against the same cut the model was shown, so a text can
   // only come from someone the reader has already met.
-  const surfaces = surfacesFromModel(value, visible.characters);
+  const surfaces = surfacesFromModel(withSenders(value, sender), visible.characters);
 
   return sessions.openTurn(
     userId,
@@ -380,8 +384,11 @@ async function workOutConsequences(
   // decision above or below the only place the reader can see it.
   const anchor = session.playheadOrder;
 
-  const characterIds = new Set(storyline.characters.map((c) => c.id));
-  const relationshipIds = new Set(storyline.relationships.map((r) => r.id));
+  // The model names people and relationships by the short handles it was shown
+  // (short-ids.ts); anything it names that is not in the story resolves to
+  // nothing and is dropped.
+  const character = idResolver(storyline.characters.map((c) => c.id));
+  const relationship = idResolver(storyline.relationships.map((r) => r.id));
 
   const events: NewEvent[] = value.events.map((event) => ({
     origin: 'conversation_generated',
@@ -391,15 +398,13 @@ async function workOutConsequences(
     stakes: event.stakes ?? undefined,
     // Silently dropped rather than rejected: a hallucinated id should not throw
     // away a whole beat, and the timeline service would refuse the write anyway.
-    participantCharacterIds: event.participantCharacterIds.filter((id) => characterIds.has(id)),
+    participantCharacterIds: [
+      ...new Set(event.participantCharacterIds.flatMap((id) => character(id) ?? [])),
+    ],
     // Same treatment for the same reason. Recorded for measurement only — no
     // prompt reads it, because feeding it back would turn "who acts" into a
     // rota, which is the formula this exists to escape.
-    actorCharacterId:
-      event.actorCharacterId && characterIds.has(event.actorCharacterId)
-        ? event.actorCharacterId
-        : undefined,
-    engagementScore: event.engagementScore,
+    actorCharacterId: character(event.actorCharacterId),
   }));
 
   return db.transaction(async (tx) => {
@@ -419,8 +424,7 @@ async function workOutConsequences(
         source: 'conversation_generated',
         triggeredByTurnId: turnId,
         content: entry.content,
-        characterId:
-          entry.characterId && characterIds.has(entry.characterId) ? entry.characterId : undefined,
+        characterId: character(entry.characterId),
       });
     }
 
@@ -431,10 +435,11 @@ async function workOutConsequences(
     let states = 0;
     if (anchorEvent) {
       for (const state of value.relationshipStates) {
-        if (!relationshipIds.has(state.relationshipId)) continue;
+        const relationshipId = relationship(state.relationshipId);
+        if (!relationshipId) continue;
         await timeline.recordRelationshipState(
           {
-            relationshipId: state.relationshipId,
+            relationshipId,
             eventId: anchorEvent.id,
             dynamic: {
               closeness: state.closeness ?? undefined,
@@ -631,4 +636,18 @@ function logLaterFailure(turnId: string, error: unknown): void {
       as: (error as { code?: string })?.code ?? 'unknown',
     })
   );
+}
+
+/** A turn's texts with each sender's handle read back as their character id. */
+function withSenders<T extends DeepPartial<TurnOutput> | TurnOutput>(
+  output: T,
+  sender: (handle: string | null | undefined) => string | undefined
+): T {
+  if (!output.notifications) return output;
+  return {
+    ...output,
+    notifications: output.notifications.map((n) =>
+      n?.senderCharacterId ? { ...n, senderCharacterId: sender(n.senderCharacterId) ?? '' } : n
+    ),
+  };
 }
