@@ -102,8 +102,8 @@ One envelope, every failure:
 { "error": { "code": "VALIDATION_ERROR", "message": "…", "fields": { "turnId": "Required" } } }
 ```
 
-`retryAfter` (seconds) appears on `RATE_LIMITED`, `UPSTREAM_BUSY` and
-`GENERATION_TIMEOUT`.
+`retryAfter` (seconds) appears on `RATE_LIMITED`, `UPSTREAM_BUSY`,
+`GENERATION_TIMEOUT` and `REPLY_PENDING`.
 
 | Status | Code                        | Meaning                                                                                                                  |
 | ------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -117,6 +117,7 @@ One envelope, every failure:
 | 409    | `STORYLINE_NOT_READY`       | Storyline is not `ready` to play                                                                                         |
 | 409    | `IMPORT_LIMIT_REACHED`      | All three conversation slots are spent                                                                                   |
 | 409    | `GENERATION_IN_PROGRESS`    | Another generation holds this session                                                                                    |
+| 409    | `REPLY_PENDING`             | Someone in the story replies later and it isn't time yet (see "Replies later"). Nothing written or spent. `Retry-After`  |
 | 410    | `TRANSCRIPT_EXPIRED`        | Transcript gone before the worker read it. Re-send                                                                       |
 | 413    | `TRANSCRIPT_TOO_LARGE`      | Over 400,000 characters                                                                                                  |
 | 429    | `RATE_LIMITED`              | Out of energy — or, on the guest routes, too many from one address; or no stories from ChatGPT left today. `Retry-After` |
@@ -236,9 +237,10 @@ The notifications switch in settings.
 
 Honoured by the server, which is what sends them. On until turned off.
 
-A notification's payload carries `kind` (`battery_back`, `story_waiting`, or
-`story_ready` when a story asked for in ChatGPT has been written), so the
-app can tell which was opened. It never carries a name or a line of story.
+A notification's payload carries `kind` (`battery_back`, `story_waiting`,
+`story_ready` when a story asked for in ChatGPT has been written, or
+`reply_arrived` when a reply someone in a story owed has been written; see
+"Replies later"), so the app can tell which was opened. It never carries a name or a line of story.
 
 ### `DELETE /api/v1/me`
 
@@ -614,7 +616,8 @@ Query: `?limit=` — optional, clamped to 20.
     "storylineId": "uuid",
     "storylineTitle": "the night before",
     "turnsAnswered": 4,
-    "lastActiveAt": "2026-10-30T19:58:00.000Z"
+    "lastActiveAt": "2026-10-30T19:58:00.000Z",
+    "waiting": null
   },
   "energy": { "remaining": 14, "limit": 20, "resetsAt": "…", "fullAt": "…" }
 }
@@ -635,7 +638,8 @@ Query: `?limit=` — optional, clamped to 20.
 - **`truncated`** — more rankable beats exist than were returned.
 - **`current`** — the story the reader is in now: their most recently active
   session, whatever it was opened from, or `null` if they have never played.
-  `{ "sessionId", "storylineId", "storylineTitle", "turnsAnswered", "lastActiveAt" }`.
+  `{ "sessionId", "storylineId", "storylineTitle", "turnsAnswered", "lastActiveAt", "waiting" }`,
+  `waiting` as on the session (see "Replies later").
   The iPhone's desk resumes it (`GET /api/v1/sessions/{id}`) to light the phone
   for its waiting beat. Always present; branch on the value.
 
@@ -822,6 +826,10 @@ Four states, one remedy each:
 | `blocked`         | The storyline is not playable                                  |
 | `ended`           | The story is over. `turn` is its ending; show it, then move on |
 
+With `awaiting_turn`, check **`waiting`** first: when it isn't null, someone in
+the story replies later and `POST .../turn` answers `409 REPLY_PENDING` until
+then. See "Replies later".
+
 **`ending`** is the notebook's ending page, once the story has ended:
 
 ```json
@@ -958,6 +966,34 @@ Server deadline is 60s; past that you get `504 GENERATION_TIMEOUT`, which is
 safe to retry.
 
 On an ended session this returns the ending again, free and with no model call.
+
+#### Replies later
+
+A beat can end with someone replying later, in real time: "let me think. i'll
+text you in the morning." Answering it sets the session's **`waiting`**:
+
+```json
+"waiting": { "until": "2026-11-26T14:12:00.000Z", "kind": "tomorrow" }
+```
+
+- `kind`: `soon` (within an hour or so), `tonight` (a few hours) or `tomorrow`
+  (the next morning, near when the reader usually plays). Say roughly when;
+  never a countdown. No name: who replies is whoever the reader just answered,
+  in `history`.
+- Until `until`, `POST .../turn` answers **`409 REPLY_PENDING`** with
+  `Retry-After` (seconds to `until`) and writes and spends nothing. There's no
+  skip.
+- At `until` (never between 22:00 and 09:00 where the reader is, and only once
+  they have battery) the server writes the reply as the next beat, spending a
+  point, and sends a `reply_arrived` notification ("2 new texts in your
+  story."). Opening the app then finds it as the open turn. A reader who asks
+  for it once it's due, before the server has, gets it written there and then.
+- `waiting` is `null` with a turn open, on an ended story, and once `until` has
+  passed.
+
+A pause comes only in a story that isn't the reader's first, after at least six
+beats in a day, at most once a day, and not as the story closes. It's rolled
+out to admins first (`PAUSES_ROLLOUT`).
 
 #### Streamed (`Accept: text/event-stream`)
 

@@ -181,6 +181,12 @@ export const env = createEnv({
     /** `true` lets the push sweep send. Anything else stops it, at the next run. */
     PUSH_ENABLED: z.string().optional(),
     /**
+     * Who gets stories that pause for a reply in real time (pauses.ts):
+     * `admins` (the default), `test` (half of players, by a hash of their id,
+     * and every admin) or `off`.
+     */
+    PAUSES_ROLLOUT: z.enum(['admins', 'test', 'off']).default('admins'),
+    /**
      * PostHog's private API, for deleting a person and their events when their
      * account is deleted. A personal API key with `person:write` on this one
      * project, and the project's numeric id. The private API lives on the app
@@ -238,6 +244,7 @@ export const env = createEnv({
     APNS_KEY_ID: process.env.APNS_KEY_ID,
     APNS_PRIVATE_KEY: process.env.APNS_PRIVATE_KEY,
     PUSH_ENABLED: process.env.PUSH_ENABLED,
+    PAUSES_ROLLOUT: process.env.PAUSES_ROLLOUT,
     POSTHOG_PERSONAL_API_KEY: process.env.POSTHOG_PERSONAL_API_KEY,
     POSTHOG_PROJECT_ID: process.env.POSTHOG_PROJECT_ID,
     POSTHOG_API_HOST: process.env.POSTHOG_API_HOST,

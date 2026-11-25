@@ -145,6 +145,7 @@ confidence rather than left in place forever because nobody is sure.
 | `APNS_KEY_ID`               | web         | Apple Developer → Keys      | The key id of a key with Apple Push Notifications service enabled. With `APNS_PRIVATE_KEY` and `APPLE_TEAM_ID`, sends push notifications.                                                                                                                                                              |
 | `APNS_PRIVATE_KEY`          | web         | Apple Developer → Keys      | That key's `.p8`, PEM, multi-line (or one line with `\n`). A secret.                                                                                                                                                                                                                                   |
 | `PUSH_ENABLED`              | worker      | set by hand                 | `true` lets the push sweep send notifications. Anything else stops it at the next run, so it's also the off switch. Public.                                                                                                                                                                            |
+| `PAUSES_ROLLOUT`            | web, worker | set by hand                 | Who gets stories that pause for a reply in real time: `admins` (the default), `test` (half of players and every admin) or `off`. Public.                                                                                                                                                               |
 | `CLERK_JWT_KEY`             | web         | Clerk prod                  | PEM public key. Verifies session JWTs in-process instead of fetching JWKS per request. A latency optimisation, not a requirement.                                                                                                                                                                      |
 | `IOS_TESTFLIGHT_URL`        | web         | App Store Connect           | The iPhone beta's TestFlight public link (`https://testflight.apple.com/join/…`, from the external testing group). Setting it **publishes the iPhone beta**: "get the iPhone beta" appears on the landing page. Read per request.                                                                      |
 | `CHATGPT_OAUTH_CLIENT_ID`   | web         | Clerk dashboard             | Bramble in ChatGPT: the client id of the Clerk OAuth application made for ChatGPT (Configure › OAuth applications, public client with PKCE, ChatGPT's redirect URL). Unset means `/api/mcp` refuses everyone. Not a secret. Also needs `POOL_WORKER_CONCURRENCY` ≥ 1, which writes these stories too.  |
@@ -392,6 +393,30 @@ Porter. To run it by hand:
 
 ```bash
 porter app run bramble -- node dist/sweeps/ending-sweep.js
+```
+
+## The reply sweep
+
+`reply-sweep` (`node dist/sweeps/reply-sweep.js`, cron `*/5 * * * *`) writes the
+replies that have come due in stories that paused for one (the story texts you,
+`pauses.ts`), and sends a `reply_arrived` notification for each. It takes at
+most 30 sessions a run whose `storyline_sessions.reply_due_at` has passed,
+oldest first, one at a time. A reply waits for the next run while it's 22:00 to
+09:00 where the reader is, or while they're out of battery. A session that
+already has an open turn (the reader asked for the reply themselves) only has
+its due time cleared. It logs one `reply-sweep` line of counts per run (`due`,
+`written`, `notified`, `quiet`, `noBattery`, `failed`), and each failure as
+`reply_failed` with the session id and the error's code; a failed reply stays
+due and is tried again next run.
+
+It needs `OPENAI_API_KEY`, `BRAMBLE_AI_MODE`, the APNs keys and `PUSH_ENABLED`
+from the `bramble-prd` group, and `PAUSES_ROLLOUT` decides who gets pauses in
+the first place (set it on the web service; the sweep only writes what's
+owed). After the first deploy with it, check that `reply-sweep` is listed as a
+job with its schedule in Porter. To run it by hand:
+
+```bash
+porter app run bramble -- node dist/sweeps/reply-sweep.js
 ```
 
 ## Health checks

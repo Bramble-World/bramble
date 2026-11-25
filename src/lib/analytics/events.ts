@@ -46,7 +46,19 @@ export type AnalyticsEvent =
         origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
         /** On the first story only: its length in the 5-or-10 test (story-phase.ts). */
         first_story_beats?: number;
+        /** While the pauses test runs, which half this player is in (pauses.ts). */
+        pauses_arm?: 'pauses' | 'none';
       };
+    }
+  | {
+      /** A beat that pauses was answered: its reply comes later, in real time (pauses.ts). */
+      name: 'reply_paused';
+      properties: { delay: 'soon' | 'tonight' | 'tomorrow' };
+    }
+  | {
+      /** The reply sweep wrote a reply that was owed. `late_ms`: how long after it was due. */
+      name: 'reply_arrived';
+      properties: { delay: 'soon' | 'tonight' | 'tomorrow'; late_ms: number };
     }
   | {
       name: 'import_completed';
@@ -172,7 +184,7 @@ export type AnalyticsEvent =
       name: 'push_sent';
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
-        kind: 'battery_back' | 'story_waiting' | 'story_ready';
+        kind: 'battery_back' | 'story_waiting' | 'story_ready' | 'reply_arrived';
         /** For story_waiting: which wording went (push.policy.ts). Never the words or a count. */
         copy?: 'today' | 'texts' | 'choice';
       };

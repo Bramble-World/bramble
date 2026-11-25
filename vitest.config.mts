@@ -26,6 +26,9 @@ export default defineConfig({
         test: {
           name: 'integration',
           environment: 'node',
+          // Stories don't pause for a reply in the general suites, whoever
+          // plays: pauses.integration.test.ts turns them on for itself.
+          env: { PAUSES_ROLLOUT: 'off' },
           globals: true,
           include: ['src/**/*.integration.test.ts'],
           pool: 'forks',

@@ -121,6 +121,8 @@ describe('every notification', () => {
       'pick up where you left off.',
       'your story’s ready.',
       'made from your life. it’s on your desk.',
+      'your story’s waiting on your choice.',
+      'pick up where you left off.',
     ]);
   });
 });
@@ -157,5 +159,11 @@ describe('the story waiting wording test', () => {
       },
       copy: 'choice',
     });
+  });
+});
+
+describe('a reply owed', () => {
+  it('holds back "story waiting": the reply sends its own', () => {
+    expect(decidePush(facts({ replyOwed: true }), NOW)).toBeNull();
   });
 });

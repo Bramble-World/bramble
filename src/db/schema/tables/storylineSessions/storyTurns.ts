@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   index,
   pgTable,
   text,
@@ -112,12 +113,25 @@ export const storyTurns = pgTable(
      */
     consequencesAbandonedAt: timestamp('consequences_abandoned_at', { withTimezone: true }),
 
+    /**
+     * The story pauses after this beat: the reply to whatever the reader answers
+     * comes later, in real time (`soon`, `tonight`, `tomorrow`; see
+     * `pauses.ts`). Null for a beat that carries straight on, which is nearly
+     * all of them. Set only when a pause was allowed when the beat was written;
+     * answering it sets the session's `reply_due_at`.
+     */
+    replyLater: text('reply_later'),
+
     ...timestamps,
   },
   (table) => [
     index('idx_story_turns_session').on(table.sessionId),
     index('idx_story_turns_session_order').on(table.sessionId, table.turnOrder),
     index('idx_story_turns_selected_choice').on(table.selectedChoiceId),
+    check(
+      'chk_story_turns_reply_later',
+      sql`${table.replyLater} IS NULL OR ${table.replyLater} IN ('soon', 'tonight', 'tomorrow')`
+    ),
     // Backs the energy count: how many turns this reader has created in the last
     // 24 hours. The count joins through `storyline_sessions.user_id`, since turns
     // carry no owner of their own, and without a `created_at` here the window

@@ -20,6 +20,7 @@ import type {
   SessionStateView,
   WorldEventView,
   SessionView,
+  WaitingView,
   StorylineDetailView,
   SurfaceView,
   TurnView,
@@ -239,6 +240,8 @@ export function currentPlaythroughView(current: {
   storylineTitle: string;
   turnsAnswered: number;
   lastActiveAt: Date;
+  replyDueAt: Date | null;
+  replyDueKind: string | null;
 }): CurrentPlaythroughView {
   return {
     sessionId: current.sessionId,
@@ -246,7 +249,22 @@ export function currentPlaythroughView(current: {
     storylineTitle: current.storylineTitle,
     turnsAnswered: current.turnsAnswered,
     lastActiveAt: current.lastActiveAt.toISOString(),
+    waiting: waitingView(current.replyDueAt, current.replyDueKind),
   };
+}
+
+/**
+ * A reply owed and not yet due, or null. Once it's due the reader may ask for
+ * it (`POST .../turn` writes it), so it no longer reads as waiting.
+ */
+export function waitingView(
+  dueAt: Date | null,
+  kind: string | null,
+  now = new Date()
+): WaitingView | null {
+  if (!dueAt || dueAt.getTime() <= now.getTime()) return null;
+  if (kind !== 'soon' && kind !== 'tonight' && kind !== 'tomorrow') return null;
+  return { until: dueAt.toISOString(), kind };
 }
 
 export function energyView(energy: Energy): EnergyView {
@@ -270,12 +288,19 @@ export function sessionView(input: {
   nextStatus?: NextStatusView | null;
   ending?: StoredEnding | null;
   endingStatus?: EndingStatusView | null;
+  replyDueAt?: Date | null;
+  replyDueKind?: string | null;
 }): SessionView {
   return {
     id: input.id,
     storylineId: input.storylineId,
     state: input.state,
     turnsAnswered: input.turnsAnswered,
+    // Only with nothing open: a turn on screen is what to answer, whatever is owed.
+    waiting:
+      input.turn || input.state === 'ended'
+        ? null
+        : waitingView(input.replyDueAt ?? null, input.replyDueKind ?? null),
     turn: input.turn ? turnView(input.turn) : null,
     endedAt: iso(input.endedAt),
     ending: input.ending ? endingView(input.ending, input.history) : null,
