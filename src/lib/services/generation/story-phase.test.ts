@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beatsToEnding, endingBounds, storyPhase } from './story-phase';
+import { beatsToEnding, endingBounds, pickFirstStoryLength, storyPhase } from './story-phase';
 
 const pooled = endingBounds({ targetBeats: 20, openingId: null });
 const first = endingBounds({ targetBeats: 10, openingId: 'are_you_up' });
@@ -22,9 +22,27 @@ describe('storyPhase', () => {
 });
 
 describe('the first story', () => {
-  it('ends on beat 10, whatever its target says', () => {
+  it('ends exactly on its target, 10 or 5', () => {
     expect(first).toEqual({ earliest: 10, latest: 10 });
-    expect(endingBounds({ targetBeats: 20, openingId: 'are_you_up' })).toEqual(first);
+    expect(endingBounds({ targetBeats: 5, openingId: 'are_you_up' })).toEqual({
+      earliest: 5,
+      latest: 5,
+    });
+  });
+
+  it('is 5 or 10 beats, half and half', () => {
+    expect(pickFirstStoryLength(() => 0)).toBe(5);
+    expect(pickFirstStoryLength(() => 0.49)).toBe(5);
+    expect(pickFirstStoryLength(() => 0.5)).toBe(10);
+    expect(pickFirstStoryLength(() => 0.99)).toBe(10);
+  });
+
+  it('at 5, ends on the first beat after the call, counting down from beat 1', () => {
+    const short = endingBounds({ targetBeats: 5, openingId: 'are_you_up' });
+    for (const beat of [2, 3, 4]) expect(storyPhase(beat, short)).toBe('open');
+    expect(storyPhase(5, short)).toBe('must_end');
+    expect(beatsToEnding(4, short)).toBe(1);
+    expect(beatsToEnding(2, short)).toBe(3);
   });
 
   it('may not end before beat 10, and must on it', () => {

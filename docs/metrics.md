@@ -63,9 +63,10 @@ default). The PostHog event is `story_ended` with `turns` (how many beats
 it took), `origin` (as below) and `phase`: `closing` when the model chose the moment, `must_end` when
 the cap forced it. A high share of `must_end` means the model is not finding
 endings on its own and the closing instructions need work. **The first story
-is the exception**: it ends on beat 10 by design (`storylines.opening_id` is
-set), so its `story_ended` is `turns: 10, phase: must_end` (later only for a first story already past 10 when this shipped) and says
-nothing about the model. Leave it out when judging the closing instructions
+is the exception**: it ends exactly on its `target_beats` by design
+(`storylines.opening_id` is set), so its `story_ended` is `phase: must_end` with
+`turns` equal to that target (later only for a first story already past 10 when
+endings shipped) and says nothing about the model. Leave it out when judging the closing instructions
 (`where l.opening_id is null` below, joining `storylines l on l.id =
 s.storyline_id`). From the database:
 
@@ -213,6 +214,14 @@ they happen. Live guests right now, from the database:
 ```sql
 select count(*) from users where is_guest and guest_expires_at > now();
 ```
+
+**The first-story length test** (from 2026-11-25): each new guest story is
+written to end on beat 5 or beat 10, half and half (`FIRST_STORY_LENGTHS` in
+`story-phase.ts`, kept as the storyline's `target_beats`). Its `beat_played` and
+`story_ended` events carry `first_story_beats` (5 or 10); a person's arm is the
+value on their first `beat_played`. Compare the two arms on stories finished
+(`story_ended` with `first_story_beats`), next stories started, and days with a
+`beat_played` after the first.
 
 ## Model calls, per stage (logs)
 
