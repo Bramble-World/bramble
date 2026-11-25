@@ -1,0 +1,1 @@
+ALTER TABLE "story_turns" ADD COLUMN "consequences_started_at" timestamp with time zone;

@@ -827,11 +827,8 @@ describe('advanceSession', () => {
     expect(await sessionReader.findTurnsOwedConsequences(db, session.id)).toStrictEqual([]);
   });
 
-  /**
-   * Canon is never more than one beat behind: a choice whose settling didn't
-   * finish is settled before the next beat, once a newer choice has been made.
-   */
-  it('settles an older owed choice before the beat, and the newest after', async () => {
+  /** Everything owed is settled after the beat, oldest first; none of it in the wait. */
+  it('settles every owed choice after the beat, oldest first', async () => {
     const session = await freshSession();
     const first = await generateTurn(userId, session.id, { generator: fake });
     await commitChoice(userId, first.id, first.choices[0].id);
@@ -844,8 +841,8 @@ describe('advanceSession', () => {
     await advanceSession(userId, session.id, { generator: fake });
 
     expect(fake.calls.slice(before).map((c) => c.promptName)).toStrictEqual([
-      'consequence.commit',
       'turn.generate',
+      'consequence.commit',
       'consequence.commit',
     ]);
     expect(await sessionReader.findTurnsOwedConsequences(db, session.id)).toStrictEqual([]);
