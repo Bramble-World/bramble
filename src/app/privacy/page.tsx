@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 24, 2026">
+    <LegalPage title="Privacy Policy" effective="November 25, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -36,23 +36,25 @@ export default function Privacy() {
       </p>
       <p>
         Bramble is operated by {LEGAL_ENTITY} (&ldquo;Bramble&rdquo;, &ldquo;we&rdquo;,
-        &ldquo;us&rdquo;). This policy covers the Bramble apps for Mac and iPhone and the website at
-        brambleworld.com. Questions go to <Mail />.
+        &ldquo;us&rdquo;). This policy covers the Bramble app for iPhone, the website at
+        brambleworld.com, and what Bramble for Mac collected while it was in use: it ended on
+        November 25, 2026. Questions go to <Mail />.
       </p>
 
       <h2>The short version</h2>
       <ul>
         <li>
-          Nothing leaves your Mac until you pick a conversation to send. Bramble reads your messages
-          on your Mac only to show you your conversations and prepare the one you choose.
+          Bramble for Mac ended on November 25, 2026. Its last version reads nothing and sends
+          nothing, and our servers no longer accept earlier versions. While it was in use, nothing
+          left your Mac until you picked a conversation to send.
         </li>
         <li>
-          A conversation you send is encrypted, kept for at most 30 minutes while a story is written
-          from it, and then deleted. Your messages are never saved in our database.
+          A conversation you sent was encrypted, kept for at most 30 minutes while a story was
+          written from it, and then deleted. Your messages were never saved in our database.
         </li>
         <li>
-          Phone numbers and email addresses in that conversation are replaced with random codes on
-          your Mac before it is sent.
+          Phone numbers and email addresses in that conversation were replaced with random codes on
+          your Mac before it was sent.
         </li>
         <li>
           We keep the story: the characters, events and relationships an AI model wrote from your
@@ -207,6 +209,15 @@ export default function Privacy() {
         To decide what to do, someone on our team reads your copy of that story, the one you
         reported. If it came from the stories we offer other players, we may stop offering it. Your
         report is deleted with your account.
+      </p>
+
+      <h3>Bramble for Mac (ended November 25, 2026)</h3>
+      <p>
+        Bramble for Mac has ended. Its last version shows only that, with a link to the iPhone app:
+        it reads none of your messages or contacts and sends nothing. Our servers no longer accept
+        earlier versions, so they can&rsquo;t send anything either. Stories it made stay with your
+        account (on iPhone too) until you delete them or your account. The rest of this section, and
+        the two after it, describe what it did while it was in use.
       </p>
 
       <h3>Messages and contacts on your Mac</h3>
