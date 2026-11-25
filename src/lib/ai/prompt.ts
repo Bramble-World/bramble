@@ -34,7 +34,11 @@ export type GenerationMeta = {
   promptName: string;
   model: string;
   inputTokens: number;
+  /** Of `inputTokens`, how many the provider served from its prompt cache. */
+  cachedInputTokens: number;
   outputTokens: number;
+  /** Of `outputTokens`, how many were the model thinking before it answered. */
+  reasoningTokens: number;
   finishReason: string;
   durationMs: number;
 };

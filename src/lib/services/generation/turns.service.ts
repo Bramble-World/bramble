@@ -23,6 +23,7 @@ import {
   StorylineNotReadyError,
 } from '@/lib/utils/errors';
 import { failureFields } from '@/lib/ai/failure';
+import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
 import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
 import * as storylineReader from '../storylines/storylines.reader';
 
@@ -44,6 +45,21 @@ export type GenerationDeps = {
    * kept open, however long it runs. See `clientShowsEndings`.
    */
   endings?: boolean;
+  /**
+   * When the player started waiting for this beat (`advanceSession` sets it),
+   * so `beat_played` can say how long the wait was, not just the writing.
+   */
+  waitStartedAt?: number;
+};
+
+/**
+ * `advanceSession`'s own: where the newest choice's consequences are settled
+ * once the beat is written. The turn route passes Next's `after`, so they are
+ * worked out after the response and the player never waits for them. Without
+ * one (tests, scripts) they are settled right after the beat, before returning.
+ */
+export type AdvanceDeps = GenerationDeps & {
+  later?: (work: () => Promise<void>) => void;
 };
 
 /**
@@ -63,6 +79,7 @@ export async function generateTurn(
   sessionId: string,
   deps: GenerationDeps = {}
 ): Promise<TurnWithChoices> {
+  const waitFrom = Date.now();
   const session = await sessions.getSession(userId, sessionId);
 
   // A finished story has nothing more to write. Its ending is free to read
@@ -163,6 +180,7 @@ export async function generateTurn(
             beyond_script: beyondScript,
             started_from_event: session.startedFromEventId !== null,
             generation_ms: meta.durationMs,
+            wait_ms: Date.now() - (deps.waitStartedAt ?? waitFrom),
             origin,
           },
         });
@@ -456,8 +474,9 @@ export const CONSEQUENCE_ATTEMPT_BUDGET = 5;
 export async function advanceSession(
   userId: string,
   sessionId: string,
-  deps: GenerationDeps = {}
+  deps: AdvanceDeps = {}
 ): Promise<TurnWithChoices> {
+  const waitStartedAt = Date.now();
   const session = await sessions.getSession(userId, sessionId);
 
   // Nothing is owed and nothing is written after the ending, so this is free.
@@ -469,16 +488,14 @@ export async function advanceSession(
   if (!storyline) throw new NotFoundError('Storyline', session.storylineId);
   if (storyline.status !== 'ready') throw new StorylineNotReadyError(storyline.status);
 
-  // Asked before settling, and only when a new turn is actually needed. Settling
-  // a consequence costs a model call, so discovering the reader is out of energy
-  // afterwards would spend money and then refuse them. `generateTurn` checks
-  // again and is the authority; this only moves the refusal in front of the
-  // spend.
+  // Asked before anything is spent, and only when a new turn is actually
+  // needed. `generateTurn` checks again and is the authority; this only moves
+  // the refusal in front of the spend.
   //
   // Consequences themselves are free. They are owed work from a turn already
-  // paid for, so one point buys "settle what is owed, then give me the next
-  // beat" — which is what this function means. Charging again would bill a
-  // reader twice for one beat because their first attempt failed.
+  // paid for, so one point buys "the next beat, and what the last choice
+  // changed" — charging again would bill a reader twice for one beat because
+  // their first attempt failed.
   //
   // For a guest the same placement holds the beat limit: past it, the answer is
   // SIGNUP_REQUIRED before anything is settled — the last beat's consequences
@@ -487,27 +504,66 @@ export async function advanceSession(
     await assertMayPlay(userId);
   }
 
-  // Oldest first. Each one's beats are canon for the turn after it, so settling
-  // them out of order would build later beats on earlier gaps.
+  // The newest choice's consequences are worked out after the beat, never
+  // while the player waits for it: the beat is written from the playthrough,
+  // which already holds that choice, so canon is at most one beat behind.
+  // Anything older is owed from a later settle that didn't finish, and is
+  // settled first, oldest first, so canon never falls further behind than that.
   const owed = await sessionReader.findTurnsOwedConsequences(db, sessionId);
-  for (const turn of owed) {
-    try {
-      await generateConsequences(userId, turn.id, deps);
-    } catch (error) {
-      // Budget left: fail the whole call, exactly as before. Skipping ahead
-      // would build the next beat on canon missing the reader's last decision —
-      // a silent quality regression with nothing to report it — and most
-      // failures here are transient and clear on the next try.
-      if ((await sessionReader.consequenceAttempts(db, turn.id)) < CONSEQUENCE_ATTEMPT_BUDGET) {
-        throw error;
-      }
-
-      // Budget gone. Stamp it and carry on in the same request, so the tap that
-      // exhausts the budget is the one that gets a turn back rather than a fifth
-      // identical error.
-      await sessionWriter.abandonConsequences(db, turn.id);
-    }
+  const newest = owed.at(-1);
+  for (const turn of owed.slice(0, -1)) {
+    await settleConsequences(userId, turn.id, deps);
   }
 
-  return generateTurn(userId, sessionId, deps);
+  const turn = await generateTurn(userId, sessionId, { ...deps, waitStartedAt });
+
+  if (newest) {
+    // Its own deadline and no caller's signal: the request it rode in on has
+    // been answered. A failure counts against the budget and is retried by the
+    // next call, so it is logged and nothing more.
+    const work = () =>
+      withDeadline(
+        (signal) => settleConsequences(userId, newest.id, { generator: deps.generator, signal }),
+        TURN_DEADLINE_MS
+      ).catch((error) => logLaterFailure(newest.id, error));
+    if (deps.later) deps.later(work);
+    else await work();
+  }
+
+  return turn;
+}
+
+/**
+ * Settles one turn's consequences within the attempt budget.
+ *
+ * Throws while there is budget left: building on canon missing a decision is a
+ * silent quality regression, and most failures are transient. Once the budget
+ * is gone the turn is stamped abandoned and this returns, so the call that
+ * exhausts it is the one that gets a turn back rather than a fifth identical
+ * error.
+ */
+export async function settleConsequences(
+  userId: string,
+  turnId: string,
+  deps: GenerationDeps = {}
+): Promise<void> {
+  try {
+    await generateConsequences(userId, turnId, deps);
+  } catch (error) {
+    if ((await sessionReader.consequenceAttempts(db, turnId)) < CONSEQUENCE_ATTEMPT_BUDGET) {
+      throw error;
+    }
+    await sessionWriter.abandonConsequences(db, turnId);
+  }
+}
+
+/** Ids and codes only: the error can echo the prompt, which holds the story. */
+function logLaterFailure(turnId: string, error: unknown): void {
+  console.warn(
+    JSON.stringify({
+      event: 'consequences_later_failed',
+      turnId,
+      as: (error as { code?: string })?.code ?? 'unknown',
+    })
+  );
 }

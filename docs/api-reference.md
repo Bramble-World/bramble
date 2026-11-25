@@ -940,7 +940,9 @@ name in the story, not a person the reader has met, so it is not a `PersonView`.
 
 ### `POST /api/v1/sessions/{sessionId}/turn`
 
-The only paid endpoint. Settles any owed consequences, then generates.
+The only paid endpoint. Writes the next beat, then works out what the last choice
+changed after the response, so the reader waits for the beat alone. (Anything
+older still owed, from a settle that didn't finish, is settled first.)
 
 No body. Returns `{ "turn": TurnView }` — the same shape nested in `SessionView`
 above. Narrative and choices arrive **together**, so you hold the decision screen
@@ -1320,7 +1322,7 @@ Only **generating a new turn**. Specifically:
   returns it with no model call and no charge, even at zero energy. Being out of
   energy never hides the decision already in front of the reader.
 - **Consequences are free.** They are owed work from a turn already paid for, so
-  one point buys "settle what is owed, then give me the next beat". A reader
+  one point buys "the next beat, and what my last choice changed". A reader
   whose consequence failed and retried is not charged twice.
 - **A failed generation costs nothing.** The balance is counted from turns that
   were actually written, so there is nothing to refund.

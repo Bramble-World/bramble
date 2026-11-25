@@ -15,7 +15,7 @@ import {
   UpstreamBusyError,
 } from '@/lib/utils/errors';
 import { STAGE_MODELS } from './models';
-import { Generator, GenerationResult, PromptSpec } from './prompt';
+import { GenerationMeta, Generator, GenerationResult, PromptSpec } from './prompt';
 
 /**
  * The only file in the repo that imports `ai` or `@ai-sdk/openai`.
@@ -66,17 +66,18 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
           abortSignal: opts?.signal,
         });
 
-        return {
-          value: result.output,
-          meta: {
-            promptName: spec.name,
-            model,
-            inputTokens: result.usage.inputTokens ?? 0,
-            outputTokens: result.usage.outputTokens ?? 0,
-            finishReason: result.finishReason,
-            durationMs: Date.now() - startedAt,
-          },
+        const meta = {
+          promptName: spec.name,
+          model,
+          inputTokens: result.usage.inputTokens ?? 0,
+          cachedInputTokens: result.usage.inputTokenDetails?.cacheReadTokens ?? 0,
+          outputTokens: result.usage.outputTokens ?? 0,
+          reasoningTokens: result.usage.outputTokenDetails?.reasoningTokens ?? 0,
+          finishReason: result.finishReason,
+          durationMs: Date.now() - startedAt,
         };
+        logGeneration(spec.stage, reasoningEffort, meta);
+        return { value: result.output, meta };
       } catch (error) {
         // The cause is attached, never interpolated. The message stays generic
         // because model output and provider bodies can echo the prompt, and the
@@ -133,6 +134,29 @@ function translate(error: unknown, promptName: string): Error {
   }
 
   return withCause(new GenerationFailedError(`Generation failed for "${promptName}"`), error);
+}
+
+/**
+ * One line per model call: which stage, how long, and how many tokens, so the
+ * wait and the cost can be read per stage. Numbers and names only, never the
+ * prompt or the output, which carry story content.
+ */
+function logGeneration(stage: string, effort: string, meta: GenerationMeta): void {
+  console.info(
+    JSON.stringify({
+      event: 'generation',
+      prompt: meta.promptName,
+      stage,
+      model: meta.model,
+      effort,
+      durationMs: meta.durationMs,
+      inputTokens: meta.inputTokens,
+      cachedInputTokens: meta.cachedInputTokens,
+      outputTokens: meta.outputTokens,
+      reasoningTokens: meta.reasoningTokens,
+      finishReason: meta.finishReason,
+    })
+  );
 }
 
 function logFailure(

@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { withUser } from '@/lib/api/with-user';
 import { scheduleEnding } from '@/lib/api/session-response';
 import { json } from '@/lib/api/respond';
@@ -13,13 +14,16 @@ type Params = { params: Promise<{ sessionId: string }> };
 /**
  * Brings a session to a playable state and returns what to show.
  *
- * The only paid endpoint, and deliberately the only one. "Settle what is owed,
- * then generate" is one operation rather than three ordered calls, because
- * consequences must be written before the next turn — the turn prompt reads the
- * canon they write — and publishing that as a sequence would make correctness
- * depend on a shipped binary doing three things in the right order. A client
- * that skipped the middle one would generate every later turn against stale
- * canon, with no error anywhere and quality quietly decaying.
+ * The only paid endpoint, and deliberately the only one. "Write the next beat,
+ * and settle what the last choice changed" is one operation rather than ordered
+ * calls, because publishing it as a sequence would make correctness depend on
+ * a shipped binary doing things in the right order. A client that skipped one
+ * would generate every later turn against stale canon, with no error anywhere
+ * and quality quietly decaying.
+ *
+ * The last choice's consequences are settled after the response (`after`), so
+ * the player waits for the beat alone. The beat is written from the playthrough,
+ * which already holds that choice; canon catches up before the beat after.
  *
  * Convergent, so the same URL is the loop, the resume and the retry. Calling it
  * twice is safe: consequences are claimed transactionally and the turn is
@@ -41,7 +45,7 @@ export const POST = withUser(async (user, request, { params }: Params) => {
   // automatic retries, so one request bills three model calls. This converts
   // that into one paid call and one clean, safely retryable 504.
   //
-  // The app leaving does NOT stop it. A beat takes 20-30 s, and a reader who
+  // The app leaving does NOT stop it. A beat takes 10-20 s, and a reader who
   // locks the phone or switches apps meanwhile drops the request; stopping
   // then threw the work away, and they came back to "try again" and the whole
   // wait again (seen in production, 2026-11-13: every failure was the app
@@ -50,7 +54,11 @@ export const POST = withUser(async (user, request, { params }: Params) => {
   const turn = await withDeadline(
     // The Mac app can't show an ending, so its stories don't get one.
     (signal) =>
-      advanceSession(user.id, sessionId, { signal, endings: clientShowsEndings(request) }),
+      advanceSession(user.id, sessionId, {
+        signal,
+        endings: clientShowsEndings(request),
+        later: (work) => after(work),
+      }),
     TURN_DEADLINE_MS
   );
 
