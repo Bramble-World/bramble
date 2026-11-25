@@ -173,6 +173,8 @@ export type AnalyticsEvent =
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
         kind: 'battery_back' | 'story_waiting' | 'story_ready';
+        /** For story_waiting: which wording went (push.policy.ts). Never the words or a count. */
+        copy?: 'today' | 'texts' | 'choice';
       };
     };
 

@@ -223,6 +223,17 @@ value on their first `beat_played`. Compare the two arms on stories finished
 (`story_ended` with `first_story_beats`), next stories started, and days with a
 `beat_played` after the first.
 
+**The "story waiting" wording test** (from 2026-11-25): each player is in one
+arm for good (`storyWaitingArm` in `push.policy.ts`, a hash of their id).
+`today` keeps "your story's waiting. / pick up where you left off."; `texts`
+says "2 new texts in your story. / they're waiting on your answer." when the
+beat waiting for an answer has texts (a count only, never who sent them), and
+"your story's waiting on your choice." when it has none. `push_sent` carries
+`copy` (`today`, `texts` or `choice`). Compare per person: of the players sent a
+`story_waiting` in each arm, how many have a `notification_opened` with `kind:
+story_waiting` (recorded on cold launches too from iOS build 38) and a
+`beat_played` within an hour of it. Allow a week.
+
 ## Model calls, per stage (logs)
 
 Every successful model call logs one line, `{"event":"generation", ...}`, with

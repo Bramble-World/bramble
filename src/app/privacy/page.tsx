@@ -307,10 +307,11 @@ export default function Privacy() {
         notifications say they&rsquo;re from Bramble and never name the people in your stories or
         quote them. We delete the token when you sign out, when you delete your account, or when
         Apple tells us it no longer works. We also record when we sent each one and what kind it
-        was: that your battery is back, or that your story is waiting. When a story you asked for in
-        ChatGPT is ready, we send one notification saying so, and record only that it was sent in
-        our usage data, if you share it. Turn them off in Bramble&rsquo;s Settings or your
-        device&rsquo;s Settings at any time.
+        was: that your battery is back, or that your story is waiting (and which of two wordings it
+        used; one of them says how many new texts are waiting, never who sent them). When a story
+        you asked for in ChatGPT is ready, we send one notification saying so, and record only that
+        it was sent in our usage data, if you share it. Turn them off in Bramble&rsquo;s Settings or
+        your device&rsquo;s Settings at any time.
       </p>
 
       <h3>Updates and downloads</h3>

@@ -10,8 +10,9 @@ vi.mock('./apns', () => ({ apnsConfigured: () => true, sendPush: vi.fn() }));
 
 const { env } = await import('@/env');
 const { db } = await import('@/index');
-const { pushDevices, pushSends, storyTurns, storylineSessions, turnChoices, users } =
+const { pushDevices, pushSends, storyTurns, storylineSessions, turnChoices, turnSurfaces, users } =
   await import('@/db/schema/tables');
+const { storyWaitingArm, storyWaitingMessage } = await import('./push.policy');
 const apns = vi.mocked(await import('./apns'));
 const storylines = await import('../storylines/storylines.service');
 const { sweepPush } = await import('./push.sweep');
@@ -85,6 +86,29 @@ describe('sweepPush', () => {
 
     expect(apns.sendPush).toHaveBeenCalledOnce();
     expect(await sent()).toMatchObject([{ kind: 'story_waiting', ordinal: 0 }]);
+  });
+
+  it('words "story waiting" by the player\'s arm, counting the waiting texts', async () => {
+    const [{ id: open }] = await db
+      .insert(storyTurns)
+      .values({
+        sessionId,
+        turnOrder: 1,
+        narrativeContent: 'x',
+        createdAt: new Date(NOW.getTime() - 30 * HOUR),
+      })
+      .returning({ id: storyTurns.id });
+    await db.insert(turnSurfaces).values({
+      turnId: open,
+      position: 0,
+      type: 'imessage_notifications',
+      version: 1,
+      payload: { notifications: [{ text: 'a' }, { text: 'b' }] },
+    });
+
+    await sweepPush(NOW);
+    const expected = storyWaitingMessage(storyWaitingArm(userId), 2).message;
+    expect(apns.sendPush.mock.calls[0][1]).toEqual(expected);
   });
 
   it('tells the battery from a story waiting', async () => {
