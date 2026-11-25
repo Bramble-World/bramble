@@ -20,7 +20,7 @@ import { choosePremise, type PremiseId } from '@/lib/onboarding/premises';
 import * as sessionReader from '../sessions/sessions.reader';
 import * as sessionWriter from '../sessions/sessions.writer';
 import { TurnWithChoices } from '../sessions/sessions.types';
-import { FIRST_STORY_ENDING_BEAT } from '../generation/story-phase';
+import { pickFirstStoryLength } from '../generation/story-phase';
 import { GUEST_SELF_NAME } from '../guests/guests.service';
 import { Executor } from '../executor';
 
@@ -166,10 +166,10 @@ async function writeStory(
       tone: setup.storyline.tone,
       // Ready at once: there is no extraction to wait for.
       status: 'ready',
-      // The first story, and so the short one: it ends on beat 10
-      // (`endingBounds`). The target says the same, for anything reading it.
+      // The first story, and so the short one: it ends exactly on its target,
+      // 5 or 10 at random for now (`FIRST_STORY_LENGTHS`, `endingBounds`).
       openingId: opening.id,
-      targetBeats: FIRST_STORY_ENDING_BEAT,
+      targetBeats: pickFirstStoryLength(),
     })
     .returning({ id: storylines.id, title: storylines.title });
 

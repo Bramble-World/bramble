@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { shortId } from './short-ids';
 import { PromptSpec } from '../prompt';
 import { SessionContext, StorylineContext } from '@/lib/services/generation/generation.types';
 import { renderTimeline, STAKES_WINDOW } from './timeline';
@@ -23,7 +24,7 @@ export type TurnVars = {
   /** How far through its length the story is; decides whether it may, or must, end. */
   phase: StoryPhase;
   /**
-   * On a story whose ending is a fixed beat (the first story's beat 10), how
+   * On a story whose ending is a fixed beat (the first story's beat 5 or 10), how
    * many beats after this one it comes, over the last few before it; null
    * otherwise. Told to the model so the story builds to its ending instead of
    * stopping on it. See `beatsToEnding`.
@@ -267,7 +268,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '## Cast',
         ...storyline.characters.map((character) =>
           [
-            `- ${character.name}${character.isSelf ? ' (you)' : ''} [${character.id}] — ${character.role}`,
+            `- ${character.name}${character.isSelf ? ' (you)' : ''} [${shortId(character.id)}] — ${character.role}`,
             // The reader said how to refer to them, so it is not the model's to
             // guess from a name.
             character.pronouns ? `  Pronouns: ${PRONOUN_LABELS[character.pronouns]}` : null,

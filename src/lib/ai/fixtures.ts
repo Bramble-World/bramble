@@ -1,6 +1,7 @@
 import { FakeGenerator } from './generator.fake';
 import { turnPrompt } from './prompts/turn.prompt';
 import { consequencePrompt } from './prompts/consequence.prompt';
+import { shortId } from './prompts/short-ids';
 import { extractionPrompt } from './prompts/extraction.prompt';
 import { arcPrompt } from './prompts/arc.prompt';
 import { checkPrompt, rewritePrompt } from './prompts/pool.prompt';
@@ -55,8 +56,8 @@ export function registerFixtures(fake: FakeGenerator): void {
       dateLabel: onPhone ? 'Saturday, June 14' : null,
       notifications: onPhone
         ? [
-            { senderCharacterId: texter.id, text: 'are you up' },
-            { senderCharacterId: texter.id, text: 'i have to tell you something' },
+            { senderCharacterId: shortId(texter.id), text: 'are you up' },
+            { senderCharacterId: shortId(texter.id), text: 'i have to tell you something' },
           ]
         : [],
       narrative: [
@@ -98,9 +99,9 @@ export function registerFixtures(fake: FakeGenerator): void {
           title: 'A different answer',
           description: `You said something you did not say the first time, and it landed.`,
           stakes: 'Whatever was unsaid is now said.',
-          participantCharacterIds: cast.slice(0, 2).map((c) => c.id),
-          actorCharacterId: cast.find((c) => !c.isSelf)?.id ?? null,
-          engagementScore: 7,
+          // Written back as the model writes them: short handles (short-ids.ts).
+          participantCharacterIds: cast.slice(0, 2).map((c) => shortId(c.id)),
+          actorCharacterId: shortId(cast.find((c) => !c.isSelf)?.id ?? '') || null,
         },
       ],
       contextEntries: [
@@ -112,7 +113,7 @@ export function registerFixtures(fake: FakeGenerator): void {
       relationshipStates: relationship
         ? [
             {
-              relationshipId: relationship.id,
+              relationshipId: shortId(relationship.id),
               closeness: 'closer, uncomfortably so',
               tension: 'lower, but not gone',
               powerBalance: null,
