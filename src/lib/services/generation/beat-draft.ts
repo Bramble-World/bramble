@@ -5,6 +5,7 @@ import {
   surfacesFromModel,
   type ResolvedSurface,
   type SurfaceCastMember,
+  type SurfaceKind,
   type SurfaceModelFields,
 } from '@/lib/surfaces';
 
@@ -22,6 +23,12 @@ import {
  * a sender the reader hasn't met is dropped here exactly as it is there.
  */
 export type BeatDraft = {
+  /**
+   * What the beat is, once the model has said: texts on the phone, or none
+   * (a plain beat). Null until then. Lets a client show a plain beat from its
+   * headline without mistaking a beat whose texts are still coming for one.
+   */
+  kind: SurfaceKind | null;
   headline: string | null;
   surfaces: ResolvedSurface[];
   narrative: string | null;
@@ -50,6 +57,7 @@ export function beatDraft(
   partial: DeepPartial<TurnOutput>,
   cast: readonly DraftCastMember[]
 ): BeatDraft {
+  const kind = finished(partial, 'surfaceKind') ? (partial.surfaceKind ?? null) : null;
   const headline = finished(partial, 'headline') ? partial.headline?.trim() || null : null;
   const narrative = finished(partial, 'narrative') ? partial.narrative?.trim() || null : null;
 
@@ -77,7 +85,7 @@ export function beatDraft(
     }
   }
 
-  return { headline, surfaces, narrative };
+  return { kind, headline, surfaces, narrative };
 }
 
 /** Nothing finished yet: not worth sending. */
