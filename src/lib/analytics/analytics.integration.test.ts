@@ -198,6 +198,7 @@ describe('beat_played', () => {
       beyond_script: expect.any(Boolean),
       started_from_event: false,
       generation_ms: expect.any(Number),
+      wait_ms: expect.any(Number),
       origin: 'none',
     });
   });

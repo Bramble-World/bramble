@@ -47,7 +47,8 @@ behaviour and tightening it would only annoy people.
 
 Each beat written is also the PostHog event `beat_played`, with `turn_order`,
 `surfaces` (types only), `beyond_script`, `started_from_event`, `generation_ms`
-and `origin`: where the story came from, `seed`, `reborn`, `reddit` or
+(the model writing the beat), `wait_ms` (from the request reaching the server to
+the beat being written, so the writing plus anything settled first) and `origin`: where the story came from, `seed`, `reborn`, `reddit` or
 `chatgpt` for a pool story, `none` for one never in the pool (a guest's opening,
 a Mac import). Never which story. Breaking retention or beats per player down by
 `origin` is what tells ChatGPT stories from pool ones. A resumed turn is not a
@@ -211,10 +212,21 @@ they happen. Live guests right now, from the database:
 select count(*) from users where is_guest and guest_expires_at > now();
 ```
 
+## Model calls, per stage (logs)
+
+Every successful model call logs one line, `{"event":"generation", ...}`, with
+`prompt`, `stage`, `model`, `effort`, `durationMs`, `inputTokens`,
+`cachedInputTokens` (served from OpenAI's prompt cache), `outputTokens`,
+`reasoningTokens` and `finishReason`. Numbers and names only, never the prompt or
+the output. It is what tells the wait and the cost apart per stage: how long
+consequences take against the beat, how much of a beat is thinking, and whether
+the prompt cache is being hit. A settle after the response that fails logs
+`consequences_later_failed` with the turn id.
+
 ## What is deliberately not here
 
-**Cost.** `GenerationMeta` carries `inputTokens` and `outputTokens` and every
-call site discards them, so nothing records what anything cost. Beats per day is
+**Cost, stored.** The token counts are logged per call (above) but not kept
+anywhere queryable, so a cost figure means reading the logs. Beats per day is
 a proxy and a poor one, because a turn late in a long playthrough costs
 considerably more than an early one — the consequence stage sends the whole
 timeline. Persisting those counts is what would turn every query above into a

@@ -16,10 +16,13 @@ import { advanceSession, commitChoice, CONSEQUENCE_ATTEMPT_BUDGET } from './turn
  * The escape from the only unrecoverable state the loop had.
  *
  * `consequences_generated_at` could say "done" and "owed" and nothing else, so a
- * turn whose consequences failed *reproducibly* stayed owed forever:
- * `advanceSession` settles before it generates, the settle threw every time, and
- * `generateTurn` was never reached. The session could not produce another beat
- * and no client request could repair it.
+ * turn whose consequences failed *reproducibly* stayed owed forever: the settle
+ * before each beat threw every time, and `generateTurn` was never reached. The
+ * session could not produce another beat and no client request could repair it.
+ *
+ * The newest choice is settled after the beat, and its failure never fails the
+ * call. An older one (a later settle that didn't finish) is settled before the
+ * beat, within this budget.
  *
  * The failing generator here is not a contrivance. The consequence prompt is a
  * pure function of stored state — this turn's narrative, the chosen and rejected
@@ -82,35 +85,63 @@ async function answerOneTurn(sessionId: string): Promise<string> {
   return turn.id;
 }
 
+/**
+ * A choice whose settling failed once after its beat and that is now older
+ * than the newest: the next call settles it before writing anything. Returns
+ * it, with one attempt counted.
+ */
+async function olderOwedTurn(sessionId: string): Promise<string> {
+  const turnId = await answerOneTurn(sessionId);
+  const next = await advanceSession(userId, sessionId, { generator: broken });
+  await commitChoice(userId, next.id, next.choices[0].id);
+  return turnId;
+}
+
 const turnRow = async (turnId: string) => {
   const [row] = await db.select().from(storyTurns).where(eq(storyTurns.id, turnId)).limit(1);
   return row;
 };
 
-describe('the consequence attempt budget', () => {
-  it('counts an attempt even though the work it counts rolled back', async () => {
+describe('the newest choice, settled after its beat', () => {
+  it('never fails the beat, and counts the attempt', async () => {
     const sessionId = (await sessions.startSession(userId, storylineId)).id;
     const turnId = await answerOneTurn(sessionId);
 
-    await expect(advanceSession(userId, sessionId, { generator: broken })).rejects.toThrow();
+    const next = await advanceSession(userId, sessionId, { generator: broken });
 
-    // The whole point of writing this outside the transaction. Inside it, the
-    // failure would take the count with it and the budget could never run out.
+    expect(next.id).not.toBe(turnId);
+    // Counted even though the work it counts rolled back: inside the
+    // transaction, the failure would take the count with it.
     expect(await sessionReader.consequenceAttempts(db, turnId)).toBe(1);
+    const owed = await sessionReader.findTurnsOwedConsequences(db, sessionId);
+    expect(owed.map((t) => t.id)).toStrictEqual([turnId]);
   });
 
-  it('keeps failing the call while there is budget left', async () => {
+  it('is tried again by the next call, still without failing it', async () => {
     const sessionId = (await sessions.startSession(userId, storylineId)).id;
     const turnId = await answerOneTurn(sessionId);
+    const next = await advanceSession(userId, sessionId, { generator: broken });
 
-    for (let attempt = 1; attempt < CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
+    const again = await advanceSession(userId, sessionId, { generator: broken });
+
+    expect(again.id).toBe(next.id);
+    expect(await sessionReader.consequenceAttempts(db, turnId)).toBe(2);
+  });
+});
+
+describe('the consequence attempt budget', () => {
+  it('keeps failing the call while there is budget left', async () => {
+    const sessionId = (await sessions.startSession(userId, storylineId)).id;
+    const turnId = await olderOwedTurn(sessionId);
+
+    for (let attempt = 2; attempt < CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
       await expect(advanceSession(userId, sessionId, { generator: broken })).rejects.toThrow();
       expect((await turnRow(turnId)).consequencesAbandonedAt).toBeNull();
     }
 
     // Still owed, still retryable — a transient outage must not cost a beat.
     const owed = await sessionReader.findTurnsOwedConsequences(db, sessionId);
-    expect(owed.map((t) => t.id)).toStrictEqual([turnId]);
+    expect(owed.map((t) => t.id)).toContain(turnId);
   });
 
   /**
@@ -119,9 +150,9 @@ describe('the consequence attempt budget', () => {
    */
   it('gives up once the budget is gone, and returns a playable turn in the same call', async () => {
     const sessionId = (await sessions.startSession(userId, storylineId)).id;
-    const turnId = await answerOneTurn(sessionId);
+    const turnId = await olderOwedTurn(sessionId);
 
-    for (let attempt = 1; attempt < CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
+    for (let attempt = 2; attempt < CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
       await expect(advanceSession(userId, sessionId, { generator: broken })).rejects.toThrow();
     }
 
@@ -136,9 +167,9 @@ describe('the consequence attempt budget', () => {
   // than inferred from an absence.
   it('leaves the abandoned turn unresolved, never falsely marked done', async () => {
     const sessionId = (await sessions.startSession(userId, storylineId)).id;
-    const turnId = await answerOneTurn(sessionId);
+    const turnId = await olderOwedTurn(sessionId);
 
-    for (let attempt = 0; attempt < CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
+    for (let attempt = 2; attempt <= CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
       await advanceSession(userId, sessionId, { generator: broken }).catch(() => {});
     }
 
@@ -150,13 +181,14 @@ describe('the consequence attempt budget', () => {
 
   it('never asks for an abandoned turn again', async () => {
     const sessionId = (await sessions.startSession(userId, storylineId)).id;
-    const turnId = await answerOneTurn(sessionId);
+    const turnId = await olderOwedTurn(sessionId);
 
-    for (let attempt = 0; attempt < CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
+    for (let attempt = 2; attempt <= CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
       await advanceSession(userId, sessionId, { generator: broken }).catch(() => {});
     }
 
-    expect(await sessionReader.findTurnsOwedConsequences(db, sessionId)).toStrictEqual([]);
+    const owed = await sessionReader.findTurnsOwedConsequences(db, sessionId);
+    expect(owed.map((t) => t.id)).not.toContain(turnId);
     // And the count stops climbing, which is what proves it is not being retried
     // silently on every request from here on.
     await advanceSession(userId, sessionId, { generator: broken }).catch(() => {});
@@ -169,9 +201,8 @@ describe('the consequence attempt budget', () => {
    */
   it('recovers with the budget intact when the next attempt succeeds', async () => {
     const sessionId = (await sessions.startSession(userId, storylineId)).id;
-    const turnId = await answerOneTurn(sessionId);
+    const turnId = await olderOwedTurn(sessionId);
 
-    await expect(advanceSession(userId, sessionId, { generator: broken })).rejects.toThrow();
     const next = await advanceSession(userId, sessionId, { generator: healthy });
 
     const row = await turnRow(turnId);
@@ -184,9 +215,9 @@ describe('the consequence attempt budget', () => {
   // and later decisions resolve normally.
   it('leaves the rest of the session playable', async () => {
     const sessionId = (await sessions.startSession(userId, storylineId)).id;
-    const abandoned = await answerOneTurn(sessionId);
+    const abandoned = await olderOwedTurn(sessionId);
 
-    for (let attempt = 0; attempt < CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
+    for (let attempt = 2; attempt <= CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
       await advanceSession(userId, sessionId, { generator: broken }).catch(() => {});
     }
 
@@ -204,9 +235,9 @@ describe('the consequence attempt budget', () => {
    */
   it('clears abandonment when a direct retry finally succeeds', async () => {
     const sessionId = (await sessions.startSession(userId, storylineId)).id;
-    const turnId = await answerOneTurn(sessionId);
+    const turnId = await olderOwedTurn(sessionId);
 
-    for (let attempt = 0; attempt < CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
+    for (let attempt = 2; attempt <= CONSEQUENCE_ATTEMPT_BUDGET; attempt++) {
       await advanceSession(userId, sessionId, { generator: broken }).catch(() => {});
     }
     expect((await turnRow(turnId)).consequencesAbandonedAt).not.toBeNull();

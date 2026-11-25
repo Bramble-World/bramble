@@ -169,6 +169,31 @@ export async function markSessionEnded(tx: Executor, sessionId: string): Promise
     .where(and(eq(storylineSessions.id, sessionId), isNull(storylineSessions.endedAt)));
 }
 
+/**
+ * Takes the session's row lock, first thing in a transaction that will write it.
+ *
+ * Answering a turn and settling a choice's consequences both write the session
+ * row (the playhead), and since consequences are settled after the beat they
+ * can run while the reader answers the next one. Each took other row locks
+ * first, in different orders, and Postgres found the deadlock. Taking this one
+ * first in both makes them queue on the session instead: two short
+ * transactions, one after the other.
+ */
+export async function lockSession(tx: Executor, sessionId: string): Promise<void> {
+  await tx.execute(
+    sql`SELECT 1 FROM ${storylineSessions} WHERE ${storylineSessions.id} = ${sessionId} FOR UPDATE`
+  );
+}
+
+/** `lockSession` for the session a turn belongs to, before anything else is touched. */
+export async function lockSessionOfTurn(tx: Executor, turnId: string): Promise<void> {
+  await tx.execute(
+    sql`SELECT 1 FROM ${storylineSessions}
+         WHERE ${storylineSessions.id} = (SELECT ${storyTurns.sessionId} FROM ${storyTurns} WHERE ${storyTurns.id} = ${turnId})
+         FOR UPDATE`
+  );
+}
+
 export async function touchSession(tx: Executor, sessionId: string): Promise<void> {
   await tx
     .update(storylineSessions)

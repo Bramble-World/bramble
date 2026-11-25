@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
 import {
@@ -37,7 +37,10 @@ const spec: PromptSpec<Vars, Out> = {
   }),
 };
 
-function modelReturning(text: string) {
+function modelReturning(
+  text: string,
+  usage: object = { inputTokens: { total: 11 }, outputTokens: { total: 7 } }
+) {
   return new MockLanguageModelV3({
     doGenerate: async () => ({
       content: [{ type: 'text' as const, text }],
@@ -46,7 +49,7 @@ function modelReturning(text: string) {
       // undefined counts and an undefined reason rather than a type error. Worth
       // pinning, since this file exists to catch exactly that kind of drift.
       finishReason: { unified: 'stop' as const },
-      usage: { inputTokens: { total: 11 }, outputTokens: { total: 7 } },
+      usage: usage as never,
       warnings: [],
     }),
   });
@@ -119,6 +122,37 @@ describe('the OpenAI generator', () => {
     expect(result.meta.inputTokens).toBe(11);
     expect(result.meta.outputTokens).toBe(7);
     expect(result.meta.finishReason).toBe('stop');
+  });
+
+  it('reads cached and reasoning tokens, and logs one line of numbers per call', async () => {
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const generator = createGenerator(() =>
+      modelReturning('{"narrative":"She waited."}', {
+        inputTokens: { total: 1200, noCache: 200, cacheRead: 1000, cacheWrite: 0 },
+        outputTokens: { total: 300, text: 120, reasoning: 180 },
+      })
+    );
+
+    const { meta } = await generator.run(spec, { title: 'Unsent' });
+
+    expect(meta.cachedInputTokens).toBe(1000);
+    expect(meta.reasoningTokens).toBe(180);
+    expect(log).toHaveBeenCalledTimes(1);
+    const line = String(log.mock.calls[0][0]);
+    expect(JSON.parse(line)).toMatchObject({
+      event: 'generation',
+      prompt: 'test.turn',
+      stage: 'turn',
+      inputTokens: 1200,
+      cachedInputTokens: 1000,
+      outputTokens: 300,
+      reasoningTokens: 180,
+    });
+    // Never the story: not the prompt, not the output.
+    for (const marker of ['SYSTEM MARKER', 'PROMPT MARKER', 'Unsent', 'She waited']) {
+      expect(line).not.toContain(marker);
+    }
+    log.mockRestore();
   });
 
   /**

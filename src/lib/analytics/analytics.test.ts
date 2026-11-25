@@ -26,6 +26,7 @@ const EVERY_EVENT: AnalyticsEvent[] = [
       beyond_script: false,
       started_from_event: true,
       generation_ms: 4312,
+      wait_ms: 4580,
       origin: 'chatgpt',
     },
   },
