@@ -268,6 +268,9 @@ export async function answerTurn(
   choiceId: string
 ): Promise<TurnWithChoices> {
   return db.transaction(async (tx) => {
+    // The session first, as consequences settling after the last beat take it
+    // first too: they may be writing it right now. See `lockSession`.
+    await writer.lockSessionOfTurn(tx, turnId);
     const answered = await writer.answerTurnGuarded(tx, userId, turnId, choiceId);
 
     if (!answered) {

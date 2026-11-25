@@ -350,9 +350,13 @@ export async function generateConsequences(
   }));
 
   return db.transaction(async (tx) => {
-    // The real guard, and the first thing in the transaction. A generation that
-    // ran while another caller was already committing must write nothing at
-    // all — a second set of beats for one decision is worse than a wasted call.
+    // The session's lock before anything else, as answering takes it first too:
+    // settled after the beat, this can run while the reader answers the next
+    // one, and both write the playhead. See `lockSession`.
+    await sessionWriter.lockSession(tx, session.id);
+    // The real guard. A generation that ran while another caller was already
+    // committing must write nothing at all — a second set of beats for one
+    // decision is worse than a wasted call.
     if (!(await sessionWriter.claimConsequences(tx, turnId))) return empty;
 
     const written = await insertAtOrAfter(tx, session.storylineId, anchor, events);

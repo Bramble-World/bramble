@@ -851,6 +851,29 @@ describe('advanceSession', () => {
     expect(await sessionReader.findTurnsOwedConsequences(db, session.id)).toStrictEqual([]);
   });
 
+  /**
+   * Settled after the beat, a choice's consequences can still be writing when
+   * the reader answers the next beat. Both write the session's playhead; before
+   * both took the session's lock first, Postgres found a deadlock here.
+   */
+  it('lets the reader answer while the last choice is still settling', async () => {
+    for (let round = 0; round < 4; round++) {
+      const session = await freshSession();
+      const first = await generateTurn(userId, session.id, { generator: fake });
+      await commitChoice(userId, first.id, first.choices[0].id);
+      const queued: Array<() => Promise<void>> = [];
+      const next = await advanceSession(userId, session.id, {
+        generator: fake,
+        later: (work) => queued.push(work),
+      });
+
+      await Promise.all([queued[0](), commitChoice(userId, next.id, next.choices[0].id)]);
+
+      const owed = await sessionReader.findTurnsOwedConsequences(db, session.id);
+      expect(owed.map((t) => t.id)).toStrictEqual([next.id]);
+    }
+  });
+
   it('is safe to call twice — the second finds the work done', async () => {
     const session = await freshSession();
     await advanceSession(userId, session.id, { generator: fake });
