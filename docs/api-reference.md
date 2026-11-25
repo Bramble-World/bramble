@@ -940,9 +940,10 @@ name in the story, not a person the reader has met, so it is not a `PersonView`.
 
 ### `POST /api/v1/sessions/{sessionId}/turn`
 
-The only paid endpoint. Writes the next beat, then works out what the last choice
-changed after the response, so the reader waits for the beat alone. (Anything
-older still owed, from a settle that didn't finish, is settled first.)
+The only paid endpoint. Writes the next beat, then works out what the reader's
+choices changed after the response (oldest first), so the reader waits for the
+beat alone. For players this is still before the beat until it's checked with
+admins (`consequencesFirst`).
 
 No body. Returns `{ "turn": TurnView }` — the same shape nested in `SessionView`
 above. Narrative and choices arrive **together**, so you hold the decision screen
