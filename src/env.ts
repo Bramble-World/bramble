@@ -77,18 +77,6 @@ export const env = createEnv({
      */
     POOL_WORKER_CONCURRENCY: z.coerce.number().int().min(0).max(8).default(0),
     /**
-     * The oldest macOS build this server will serve, or 0 to serve any.
-     *
-     * A number rather than a version string: builds are monotonic and directly
-     * comparable, where "1.10" against "1.9" needs a parser and an argument
-     * about semantics.
-     *
-     * Defaults to 0, so the gate is off everywhere that has not set it. A
-     * misconfiguration here locks out every client at once, so the failure mode
-     * has to be "serve everyone" rather than "serve nobody".
-     */
-    MIN_MACOS_BUILD: z.coerce.number().int().min(0).default(0),
-    /**
      * The iPhone beta's TestFlight public link (`https://testflight.apple.com/join/…`).
      *
      * Public: it is rendered as an href on the landing page. Still not
@@ -233,7 +221,6 @@ export const env = createEnv({
     IMPORT_MASTER_KEY: process.env.IMPORT_MASTER_KEY,
     IMPORT_WORKER_CONCURRENCY: process.env.IMPORT_WORKER_CONCURRENCY,
     POOL_WORKER_CONCURRENCY: process.env.POOL_WORKER_CONCURRENCY,
-    MIN_MACOS_BUILD: process.env.MIN_MACOS_BUILD,
     IOS_TESTFLIGHT_URL: process.env.IOS_TESTFLIGHT_URL,
     CHATGPT_OAUTH_CLIENT_ID: process.env.CHATGPT_OAUTH_CLIENT_ID,
     OPENAI_APPS_CHALLENGE: process.env.OPENAI_APPS_CHALLENGE,

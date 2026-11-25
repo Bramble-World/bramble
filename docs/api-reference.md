@@ -66,8 +66,9 @@ The macOS app sends its build on every request (the iPhone app sends
 X-Bramble-Client: macos/1.2 (57)
 ```
 
-The server may refuse builds older than a configured minimum
-(`MIN_MACOS_BUILD`), answering **426 Upgrade Required**:
+Bramble for Mac has ended (2026-11-25): the server refuses **every** macOS
+build, answering **426 Upgrade Required**, which the Mac app answers by
+installing its last build (it shows that the app has ended and calls nothing):
 
 ```json
 {

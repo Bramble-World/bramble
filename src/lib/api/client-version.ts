@@ -1,21 +1,16 @@
-import { env } from '@/env';
 import { ClientTooOldError } from '@/lib/utils/errors';
 
 /**
- * Refusing clients too old to be served correctly.
+ * Which clients are served.
  *
- * The Mac sends `X-Bramble-Client: macos/<version> (<build>)` — for example
- * `macos/1.2 (57)`. When a shipped build can no longer be trusted against this
- * server, raising `MIN_MACOS_BUILD` past it turns every call it makes into a 426
- * telling the person to update, rather than letting it fail in whatever way its
- * own bugs dictate.
+ * The Mac sent `X-Bramble-Client: macos/<version> (<build>)` (for example
+ * `macos/1.0 (11)`) and the iPhone sends `ios/…`. Bramble for Mac has ended, so
+ * every Mac build is refused with a 426, which its "time to update" screen
+ * answers by installing the last Mac build, which says the app has ended.
  *
- * **Everything unrecognised is let through**, and that is the important half.
- * The web app sends no such header, nor does curl, nor does any Mac build from
- * before the header existed — and a gate that refused them would take the
- * product off the air to enforce a version policy. The only thing that can fail
- * this check is a client that identified itself, as macOS, with a build number
- * we can read and that is too low.
+ * **Everything unrecognised is let through.** The web app sends no such header,
+ * nor does curl, and a gate that refused them would take the product off the
+ * air.
  */
 
 /** `macos/1.2 (57)` — platform, version, build. Whitespace is tolerated. */
@@ -63,20 +58,13 @@ export function parseClientHeader(value: string | null): ClientIdentity | null {
  * someone has to remember to keep in step.
  */
 export function assertClientSupported(request: Request): void {
-  const minimum = env.MIN_MACOS_BUILD;
-  // A short-circuit, not a behavioural guard: no build can be below zero, so
-  // removing this would change no answer. It is here so that the default
-  // configuration — the gate off, which is every environment that has not set
-  // it — does not read and parse a header on every single request.
-  if (minimum <= 0) return;
-
-  const client = parseClientHeader(request.headers.get(CLIENT_HEADER));
-  // Only macOS is gated. Another platform identifying itself is not something
-  // this minimum has an opinion about, and guessing would lock out a client we
-  // have not shipped yet.
-  if (client?.platform !== 'macos') return;
-
-  if (client.build < minimum) throw new ClientTooOldError();
+  // Bramble for Mac has ended (2026-11-25, the user's call). Every Mac build
+  // that talks to the API is refused: its "time to update" screen installs the
+  // last Mac build from the update feed, which shows that the app has ended and
+  // calls nothing. Only macOS is refused; anything else is served.
+  if (parseClientHeader(request.headers.get(CLIENT_HEADER))?.platform === 'macos') {
+    throw new ClientTooOldError();
+  }
 }
 
 /**
