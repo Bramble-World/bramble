@@ -63,9 +63,10 @@ default). The PostHog event is `story_ended` with `turns` (how many beats
 it took), `origin` (as below) and `phase`: `closing` when the model chose the moment, `must_end` when
 the cap forced it. A high share of `must_end` means the model is not finding
 endings on its own and the closing instructions need work. **The first story
-is the exception**: it ends on beat 10 by design (`storylines.opening_id` is
-set), so its `story_ended` is `turns: 10, phase: must_end` (later only for a first story already past 10 when this shipped) and says
-nothing about the model. Leave it out when judging the closing instructions
+is the exception**: it ends exactly on its `target_beats` by design
+(`storylines.opening_id` is set), so its `story_ended` is `phase: must_end` with
+`turns` equal to that target (later only for a first story already past 10 when
+endings shipped) and says nothing about the model. Leave it out when judging the closing instructions
 (`where l.opening_id is null` below, joining `storylines l on l.id =
 s.storyline_id`). From the database:
 
@@ -214,10 +215,19 @@ they happen. Live guests right now, from the database:
 select count(*) from users where is_guest and guest_expires_at > now();
 ```
 
+**The first-story length test** (from 2026-11-25): each new guest story is
+written to end on beat 5 or beat 10, half and half (`FIRST_STORY_LENGTHS` in
+`story-phase.ts`, kept as the storyline's `target_beats`). Its `beat_played` and
+`story_ended` events carry `first_story_beats` (5 or 10); a person's arm is the
+value on their first `beat_played`. Compare the two arms on stories finished
+(`story_ended` with `first_story_beats`), next stories started, and days with a
+`beat_played` after the first.
+
 ## Model calls, per stage (logs)
 
 Every successful model call logs one line, `{"event":"generation", ...}`, with
-`prompt`, `stage`, `model`, `effort`, `durationMs`, `inputTokens`,
+`prompt`, `stage`, `model`, `effort`, `tier` (`flex` or `default`, below),
+`durationMs`, `inputTokens`,
 `cachedInputTokens` (read from OpenAI's prompt cache, billed at a tenth),
 `cacheWriteTokens` (written to it, billed at 1.25x), `outputTokens`,
 `reasoningTokens` and `finishReason`. Numbers and names only, never the prompt or
@@ -225,6 +235,19 @@ the output. It is what tells the wait and the cost apart per stage: how long
 consequences take against the beat, how much of a beat is thinking, and whether
 the prompt cache is being hit. A settle after the response that fails logs
 `consequences_later_failed` with the turn id.
+
+**Flex.** The stages nobody waits on (consequences and endings, story summaries,
+pool and ChatGPT stories) ask OpenAI's flex tier first, at Batch prices, and the
+normal tier once if flex refuses or takes longer than the stage allows
+(`StageModel.flex` in `src/lib/ai/models.ts`: 20 s for consequences). A refused
+or slow flex call logs `generation_failed` with `tier: "flex"`, then the normal
+call's line follows. Flex isn't offered on GPT-6.2 or later, so it goes when the
+model changes.
+
+**Short ids.** The beat and consequence prompts show each character and
+relationship by the first six hex digits of its id (`short-ids.ts`), and the
+server reads them back before saving, so the model never spends twenty tokens
+writing a uuid.
 
 **Why the cache stops where it does.** On gpt-6-astra (as on every model from
 GPT-5.6) a request is read from the cache only up to a boundary: the end of the

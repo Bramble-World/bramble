@@ -1224,15 +1224,16 @@ describe('a provider failure', () => {
 });
 
 /**
- * The first story (the one written from the 1:47 am opening) ends on beat 10,
- * whatever its target, and counts down to it from beat 5. The fake ends as
- * soon as it may, so any beat before 10 that could end would.
+ * The first story (the one written from the 1:47 am opening) ends exactly on
+ * its target, 10 or 5, and counts down to it over the five beats before. The
+ * fake ends as soon as it may, so any beat before the target that could end
+ * would.
  */
 describe('the first story', () => {
   beforeEach(async () => {
     await db
       .update(storylinesTable)
-      .set({ openingId: 'are_you_up', targetBeats: 20 })
+      .set({ openingId: 'are_you_up', targetBeats: 10 })
       .where(eq(storylinesTable.id, storylineId));
   });
   afterAll(async () => {
@@ -1263,10 +1264,26 @@ describe('the first story', () => {
     expect(asks[9]).toContain('It must end now.');
   });
 
+  it('at 5 beats, ends on beat 5 and says which arm it was', async () => {
+    await db
+      .update(storylinesTable)
+      .set({ targetBeats: 5 })
+      .where(eq(storylinesTable.id, storylineId));
+    const session = await freshSession();
+    const beats = [];
+    for (let beat = 1; beat <= 5; beat++) {
+      const turn = await advanceSession(userId, session.id, { generator: fake });
+      beats.push(turn);
+      if (turn.isEnding) break;
+      await commitChoice(userId, turn.id, turn.choices[0].id);
+    }
+    expect(beats.map((turn) => turn.isEnding)).toStrictEqual([false, false, false, false, true]);
+  });
+
   it('leaves every other story to its own window', async () => {
     await db
       .update(storylinesTable)
-      .set({ openingId: null })
+      .set({ openingId: null, targetBeats: 20 })
       .where(eq(storylinesTable.id, storylineId));
     const session = await freshSession();
     for (let beat = 1; beat <= 10; beat++) {

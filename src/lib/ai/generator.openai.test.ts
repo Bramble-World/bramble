@@ -427,4 +427,96 @@ describe('the prompt cache, on the wire', () => {
       expect(line).not.toContain(marker);
     }
   });
+
+  describe('the flex tier', () => {
+    const background: PromptSpec<Vars, Out> = {
+      ...spec,
+      name: 'test.consequence',
+      stage: 'consequence',
+    };
+
+    function modelAnswering(...answers: Array<'ok' | 'busy' | 'broken' | 'slow'>) {
+      let call = 0;
+      return new MockLanguageModelV3({
+        doGenerate: async ({ abortSignal }) => {
+          const answer = answers[call++];
+          if (answer === 'busy')
+            throw Object.assign(new Error('Resource unavailable'), { statusCode: 429 });
+          if (answer === 'broken')
+            throw Object.assign(new Error('Bad request'), { statusCode: 400 });
+          if (answer === 'slow') {
+            await new Promise((_, reject) => {
+              if (abortSignal?.aborted) reject(abortSignal.reason);
+              abortSignal?.addEventListener('abort', () => reject(abortSignal.reason));
+            });
+          }
+          return {
+            content: [{ type: 'text' as const, text: '{"narrative":"x"}' }],
+            finishReason: { unified: 'stop' as const },
+            usage: { inputTokens: { total: 1 }, outputTokens: { total: 1 } } as never,
+            warnings: [],
+          };
+        },
+      });
+    }
+
+    const tiers = (model: MockLanguageModelV3) =>
+      model.doGenerateCalls.map(
+        (c) => (c.providerOptions?.openai as { serviceTier?: string })?.serviceTier ?? 'default'
+      );
+
+    it('asks a background stage at flex, and a beat at the normal tier', async () => {
+      const flex = modelAnswering('ok');
+      await createGenerator(() => flex).run(background, { title: 'x' });
+      expect(tiers(flex)).toEqual(['flex']);
+
+      const beat = modelAnswering('ok');
+      await createGenerator(() => beat).run(spec, { title: 'x' });
+      expect(tiers(beat)).toEqual(['default']);
+    });
+
+    it('asks once more at the normal tier when flex refuses', async () => {
+      const model = modelAnswering('busy', 'ok');
+      const result = await createGenerator(() => model).run(background, { title: 'x' });
+      expect(result.value).toEqual({ narrative: 'x' });
+      expect(tiers(model)).toEqual(['flex', 'default']);
+    });
+
+    it('asks at the normal tier when flex is too slow', async () => {
+      // AbortSignal.timeout runs on the real clock, so the stage's patience is
+      // shortened for the test rather than the clock faked.
+      const flex = STAGE_MODELS.consequence.flex!;
+      const withinMs = flex.withinMs;
+      flex.withinMs = 20;
+      try {
+        const model = modelAnswering('slow', 'ok');
+        const result = await createGenerator(() => model).run(background, { title: 'x' });
+        expect(result.value).toEqual({ narrative: 'x' });
+        expect(tiers(model)).toEqual(['flex', 'default']);
+      } finally {
+        flex.withinMs = withinMs;
+      }
+    });
+
+    it('does not ask again for a failure the normal tier would share', async () => {
+      const model = modelAnswering('broken', 'ok');
+      await expect(
+        createGenerator(() => model).run(background, { title: 'x' })
+      ).rejects.toBeInstanceOf(GenerationFailedError);
+      expect(tiers(model)).toEqual(['flex']);
+    });
+
+    it('does not ask again once the caller has given up', async () => {
+      const controller = new AbortController();
+      const model = modelAnswering('slow', 'ok');
+      const run = createGenerator(() => model).run(
+        background,
+        { title: 'x' },
+        { signal: controller.signal }
+      );
+      controller.abort();
+      await expect(run).rejects.toBeInstanceOf(GenerationTimeoutError);
+      expect(tiers(model)).toEqual(['flex']);
+    });
+  });
 });

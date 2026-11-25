@@ -44,6 +44,8 @@ export type AnalyticsEvent =
         first_part_ms?: number;
         /** Where the story came from; `none` for one not from the pool (a guest's opening, a Mac import). Never which one. */
         origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
+        /** On the first story only: its length in the 5-or-10 test (story-phase.ts). */
+        first_story_beats?: number;
       };
     }
   | {
@@ -124,6 +126,8 @@ export type AnalyticsEvent =
         phase: 'closing' | 'must_end';
         /** Where the story came from; `none` for one not from the pool. Never which one. */
         origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
+        /** On the first story only: its length in the 5-or-10 test (story-phase.ts). */
+        first_story_beats?: number;
       };
     }
   | {

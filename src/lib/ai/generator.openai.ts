@@ -54,13 +54,20 @@ export function createOpenAIGenerator(apiKey: string): Generator {
  */
 export function createGenerator(resolveModel: (modelId: string) => LanguageModel): Generator {
   /** Everything a call sends, the same whether it streams or not. */
-  function request<Vars, Out>(spec: PromptSpec<Vars, Out>, vars: Vars, opts?: RunOptions) {
+  function request<Vars, Out>(
+    spec: PromptSpec<Vars, Out>,
+    vars: Vars,
+    opts?: RunOptions,
+    tier: Tier = 'default',
+    signal: AbortSignal | undefined = opts?.signal
+  ) {
     const { model, reasoningEffort } = STAGE_MODELS[spec.stage];
     const rendered = spec.render(vars);
     const cut = Boolean(rendered.cacheBreaks?.length);
     return {
       model,
       reasoningEffort,
+      tier,
       // Hashes and lengths of the request's parts, for the log line; see
       // prompt-shape.ts. Only for prompts cut for the cache, which are the ones
       // whose consecutive requests are worth comparing.
@@ -73,6 +80,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
         providerOptions: {
           openai: {
             reasoningEffort,
+            ...(tier === 'flex' ? { serviceTier: 'flex' as const } : {}),
             ...(opts?.cacheKey ? { promptCacheKey: opts.cacheKey } : {}),
             // Explicit: only the marked boundaries are written to the cache. In
             // the default (implicit) mode OpenAI also writes the whole request
@@ -82,7 +90,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
           },
         },
         output: Output.object({ schema: spec.schema, name: schemaName(spec.name) }),
-        abortSignal: opts?.signal,
+        abortSignal: signal,
       },
     };
   }
@@ -91,6 +99,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
     spec: PromptSpec<unknown, Out>,
     model: string,
     reasoningEffort: string,
+    tier: Tier,
     shape: PromptShape | undefined,
     startedAt: number,
     output: Out,
@@ -108,7 +117,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
       finishReason,
       durationMs: Date.now() - startedAt,
     };
-    logGeneration(spec.stage, reasoningEffort, meta, shape);
+    logGeneration(spec.stage, reasoningEffort, tier, meta, shape);
     return { value: output, meta };
   }
 
@@ -123,11 +132,39 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
     spec: PromptSpec<unknown, unknown>,
     error: unknown,
     opts: RunOptions | undefined,
-    startedAt: number
+    startedAt: number,
+    tier: Tier = 'default'
   ): Error {
     const translated = translate(error, spec.name);
-    logFailure(spec.name, translated, error, opts?.signal, Date.now() - startedAt);
+    logFailure(spec.name, tier, translated, error, opts?.signal, Date.now() - startedAt);
     return translated;
+  }
+
+  async function attempt<Vars, Out>(
+    spec: PromptSpec<Vars, Out>,
+    vars: Vars,
+    opts: RunOptions | undefined,
+    tier: Tier,
+    signal: AbortSignal | undefined
+  ): Promise<GenerationResult<Out>> {
+    const { model, reasoningEffort, shape, settings } = request(spec, vars, opts, tier, signal);
+    const startedAt = Date.now();
+    try {
+      const result = await generateText(settings);
+      return finished(
+        spec as PromptSpec<unknown, Out>,
+        model,
+        reasoningEffort,
+        tier,
+        shape,
+        startedAt,
+        result.output as Out,
+        result.usage,
+        result.finishReason
+      );
+    } catch (error) {
+      throw failed(spec as PromptSpec<unknown, unknown>, error, opts, startedAt, tier);
+    }
   }
 
   return {
@@ -136,22 +173,23 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
       vars: Vars,
       opts?: RunOptions
     ): Promise<GenerationResult<Out>> {
-      const { model, reasoningEffort, shape, settings } = request(spec, vars, opts);
-      const startedAt = Date.now();
+      const flex = STAGE_MODELS[spec.stage].flex;
+      if (!flex) return attempt(spec, vars, opts, 'default', opts?.signal);
+
+      // Flex first, then the normal tier once if flex refused (429, its "resource
+      // unavailable") or ran past its time. Our caller giving up is not a reason
+      // to ask again, and nor is anything else going wrong: that would fail at
+      // the normal tier too, at twice the price.
+      const patience = AbortSignal.timeout(flex.withinMs);
+      const signal = opts?.signal ? AbortSignal.any([opts.signal, patience]) : patience;
       try {
-        const result = await generateText(settings);
-        return finished(
-          spec as PromptSpec<unknown, Out>,
-          model,
-          reasoningEffort,
-          shape,
-          startedAt,
-          result.output as Out,
-          result.usage,
-          result.finishReason
-        );
+        return await attempt(spec, vars, opts, 'flex', signal);
       } catch (error) {
-        throw failed(spec as PromptSpec<unknown, unknown>, error, opts, startedAt);
+        if (opts?.signal?.aborted) throw error;
+        const refused = error instanceof UpstreamBusyError;
+        const tooSlow = patience.aborted && error instanceof GenerationTimeoutError;
+        if (!refused && !tooSlow) throw error;
+        return attempt(spec, vars, opts, 'default', opts?.signal);
       }
     },
 
@@ -185,6 +223,7 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
           spec as PromptSpec<unknown, Out>,
           model,
           reasoningEffort,
+          'default',
           shape,
           startedAt,
           output as Out,
@@ -197,6 +236,9 @@ export function createGenerator(resolveModel: (modelId: string) => LanguageModel
     },
   };
 }
+
+/** Which OpenAI service tier a call was asked at; see `StageModel.flex`. */
+type Tier = 'default' | 'flex';
 
 /** Marks the end of a content block as a place the prompt cache may stop. */
 const BREAKPOINT = { openai: { promptCacheBreakpoint: { mode: 'explicit' } } };
@@ -279,6 +321,7 @@ function translate(error: unknown, promptName: string): Error {
 function logGeneration(
   stage: string,
   effort: string,
+  tier: Tier,
   meta: GenerationMeta,
   shape: PromptShape | undefined
 ): void {
@@ -289,6 +332,7 @@ function logGeneration(
       stage,
       model: meta.model,
       effort,
+      tier,
       durationMs: meta.durationMs,
       inputTokens: meta.inputTokens,
       cachedInputTokens: meta.cachedInputTokens,
@@ -303,6 +347,7 @@ function logGeneration(
 
 function logFailure(
   promptName: string,
+  tier: Tier,
   translated: Error,
   error: unknown,
   signal: AbortSignal | undefined,
@@ -312,6 +357,7 @@ function logFailure(
     JSON.stringify({
       event: 'generation_failed',
       prompt: promptName,
+      tier,
       // The error's code, not its class name: the server bundle drops class
       // names, so `name` logged as "".
       as: (translated as { code?: string }).code ?? translated.name,
