@@ -78,8 +78,8 @@ describe('turn prompt', () => {
    * has been observed to stall — three consecutive turns of nobody replying.
    */
   it('tells the model when the setup it started from has run out', () => {
-    expect(render({ beyondScript: true }).system).toContain('has run out');
-    expect(render({ beyondScript: false }).system).not.toContain('has run out');
+    expect(render({ beyondScript: true }).prompt).toContain('has run out');
+    expect(render({ beyondScript: false }).prompt).not.toContain('has run out');
   });
 });
 
@@ -91,6 +91,29 @@ describe('turn prompt', () => {
  * none — while being present in 11 of them. She reacted in the prose and never
  * initiated, because nothing gave her anything of her own to drive at.
  */
+/**
+ * OpenAI caches a request's prefix. Everything that changes from beat to beat
+ * goes last, so a session's requests share as long a prefix as they can.
+ */
+describe('cache-friendly order', () => {
+  it('keeps the instructions the same whatever the phase or the script', () => {
+    const a = render({ phase: 'open', beatsToEnding: 9, beyondScript: false }).system;
+    const b = render({ phase: 'closing', beatsToEnding: 0, beyondScript: true }).system;
+    expect(a).toBe(b);
+  });
+
+  it('puts where the story is after the story so far, just before the ask', () => {
+    const { prompt } = render({ phase: 'closing' });
+    const where = prompt.indexOf('## Where the story is');
+    expect(where).toBeGreaterThan(prompt.indexOf('## What has happened'));
+    expect(where).toBeLessThan(prompt.lastIndexOf('Write the'));
+  });
+
+  it('asks for a short narrative', () => {
+    expect(render().system).toContain('under 200');
+  });
+});
+
 describe('agency and invention', () => {
   it('asks for a character who starts something, not one who merely answers', () => {
     const { system } = render();
@@ -375,47 +398,49 @@ describe('replies', () => {
  */
 describe('endings', () => {
   it('forbids an ending before the closing window', () => {
-    const { system } = render({ phase: 'open' });
+    const { prompt } = render({ phase: 'open' });
 
-    expect(system).toContain('Do not resolve the story yet');
-    expect(system).not.toContain('isEnding true');
+    expect(prompt).toContain('Do not resolve the story yet');
+    expect(prompt).not.toContain('isEnding true');
   });
 
   it('lets the model end the story when it lands, and not merely because it may', () => {
-    const { system } = render({ phase: 'closing' });
+    const { prompt } = render({ phase: 'closing' });
 
-    expect(system).toContain('When the beat you');
-    expect(system).toContain('Do not end it just because you may.');
-    expect(system).toContain('isEnding true and no choices');
+    expect(prompt).toContain('When the beat you');
+    expect(prompt).toContain('Do not end it just because you may.');
+    expect(prompt).toContain('isEnding true and no choices');
   });
 
   it('counts down to a fixed ending, without resolving anything early', () => {
-    const { system } = render({ phase: 'open', beatsToEnding: 5 });
+    const { prompt } = render({ phase: 'open', beatsToEnding: 5 });
 
-    expect(system).toContain('The story ends 5 beats after this one');
-    expect(system).toContain('Do not resolve the story yet');
-    expect(system).not.toContain('isEnding true');
+    expect(prompt).toContain('The story ends 5 beats after this one');
+    expect(prompt).toContain('Do not resolve the story yet');
+    expect(prompt).not.toContain('isEnding true');
   });
 
   it('makes the beat before a fixed ending its final decision', () => {
-    const { system } = render({ phase: 'open', beatsToEnding: 1 });
+    const { prompt } = render({ phase: 'open', beatsToEnding: 1 });
 
-    expect(system).toContain('The next beat is the last one');
-    expect(system).toContain('the one the ending turns on');
+    expect(prompt).toContain('The next beat is the last one');
+    expect(prompt).toContain('the one the ending turns on');
   });
 
   it('says nothing about a countdown when there is none', () => {
-    const { system } = render({ phase: 'open' });
+    const { system, prompt } = render({ phase: 'open' });
 
-    expect(system).not.toContain('beats after this one');
-    expect(system).not.toContain('The next beat is the last one');
+    for (const text of [system, prompt]) {
+      expect(text).not.toContain('beats after this one');
+      expect(text).not.toContain('The next beat is the last one');
+    }
   });
 
   it('asks for the ending past the cap, shaped by what the reader chose', () => {
-    const { system, prompt } = render({ phase: 'must_end' });
+    const { prompt } = render({ phase: 'must_end' });
 
-    expect(system).toContain('It must end now.');
-    expect(system).toContain('Their choices decide how it ends');
+    expect(prompt).toContain('It must end now.');
+    expect(prompt).toContain('Their choices decide how it ends');
     expect(prompt).toContain('Write the ending of this story');
   });
 });
