@@ -53,73 +53,27 @@ describe('the gate', () => {
       headers: header ? { [CLIENT_HEADER]: header } : {},
     });
 
-  async function withMinimum(MIN_MACOS_BUILD: number) {
-    vi.resetModules();
-    vi.doMock('@/env', () => ({ env: { MIN_MACOS_BUILD } }));
-    return import('./client-version');
-  }
+  /** Bramble for Mac has ended: whatever the build, the Mac is refused. */
+  it.each(['macos/1.0 (11)', 'macos/0.1 (1)', 'macos/9.9 (999)'])('refuses %s', async (header) => {
+    const { assertClientSupported } = await import('./client-version');
 
-  it('refuses a build below the minimum', async () => {
-    const { assertClientSupported } = await withMinimum(57);
-
-    expect(() => assertClientSupported(request('macos/1.1 (56)'))).toThrow(/too old/i);
-  });
-
-  // The minimum is the oldest *supported* build, not the oldest refused one.
-  it('serves a build exactly at the minimum', async () => {
-    const { assertClientSupported } = await withMinimum(57);
-
-    expect(() => assertClientSupported(request('macos/1.2 (57)'))).not.toThrow();
-  });
-
-  it('serves a build above the minimum', async () => {
-    const { assertClientSupported } = await withMinimum(57);
-
-    expect(() => assertClientSupported(request('macos/1.3 (58)'))).not.toThrow();
+    expect(() => assertClientSupported(request(header))).toThrow(/too old/i);
   });
 
   it.each([
     ['no header', undefined],
     ['an unparseable header', 'something-else'],
     ['a build number it cannot read', 'macos/1.2 (beta)'],
-    ['a platform it does not gate', 'ios/0.1 (1)'],
+    ['the iPhone', 'ios/1.1 (35)'],
   ])('serves a request with %s', async (_label, header) => {
-    const { assertClientSupported } = await withMinimum(57);
+    const { assertClientSupported } = await import('./client-version');
 
     expect(() => assertClientSupported(request(header))).not.toThrow();
-  });
-
-  /**
-   * Unset means off. A misconfiguration here would lock out every client at
-   * once, so the failure mode has to be "serve everyone".
-   */
-  it('serves everything when the gate is unset', async () => {
-    const { assertClientSupported } = await withMinimum(0);
-
-    expect(() => assertClientSupported(request('macos/0.1 (1)'))).not.toThrow();
-  });
-
-  /**
-   * With the gate off there is no answer the header could change, so it is not
-   * read at all — which is the whole of what the zero check buys, since no build
-   * can be below zero. Asserted directly because the behaviour is otherwise
-   * identical either way.
-   */
-  it('does not even read the header when the gate is unset', async () => {
-    const { assertClientSupported } = await withMinimum(0);
-    const req = request('macos/0.1 (1)');
-    const read = vi.spyOn(req.headers, 'get');
-
-    assertClientSupported(req);
-
-    expect(read).not.toHaveBeenCalled();
   });
 });
 
 describe('the refusal itself', () => {
   it('is a 426 in the standard envelope', async () => {
-    vi.resetModules();
-    vi.doMock('@/env', () => ({ env: { MIN_MACOS_BUILD: 57 } }));
     const { assertClientSupported } = await import('./client-version');
     const { handleError } = await import('@/lib/utils/api.handler-errors');
 
