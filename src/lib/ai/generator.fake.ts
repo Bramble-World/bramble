@@ -113,6 +113,7 @@ export function createFakeGenerator(): FakeGenerator {
           model: `fake:${STAGE_MODELS[spec.stage].model}`,
           inputTokens: 0,
           cachedInputTokens: 0,
+          cacheWriteTokens: 0,
           outputTokens: 0,
           reasoningTokens: 0,
           finishReason: 'stop',

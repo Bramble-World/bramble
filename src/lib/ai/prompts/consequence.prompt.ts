@@ -1,12 +1,19 @@
 import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { StorylineContext } from '@/lib/services/generation/generation.types';
-import { ENGAGEMENT_RUBRIC, renderTimeline } from './timeline';
+import { ENGAGEMENT_RUBRIC, renderTimeline, STAKES_WINDOW } from './timeline';
+import { CACHE_BREAK, joinLines, PromptLine, steppedBreaks, withBreaks } from './cache';
 import { PRONOUN_LABELS } from './turn.prompt';
 import { relationshipToReader } from './relationship';
 
 export type ConsequenceVars = {
   storyline: StorylineContext;
+  /**
+   * Where the session's reader is. Not shown to the model, which is given the
+   * whole timeline: it only says where this decision's beats will land, so the
+   * prompt cache is cut before that point (see `stableBeats`).
+   */
+  playheadOrder: number;
   /** What the user was shown, and what they picked. */
   decision: {
     headline: string | null;
@@ -95,7 +102,7 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
   stage: 'consequence',
   schema: consequenceOutputSchema,
 
-  render: ({ storyline, decision }) => ({
+  render: ({ storyline, decision, playheadOrder }) => ({
     system: [
       "You decide what a reader's choice changed about a story, and record it.",
       '',
@@ -133,7 +140,7 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       ENGAGEMENT_RUBRIC,
     ].join('\n'),
 
-    prompt: [
+    ...joinLines([
       `# ${storyline.storyline.title}`,
       '',
       '## Cast',
@@ -153,8 +160,14 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
         ].join('\n');
       }),
       '',
+      // The cast and relationships are the storyline's, not the playthrough's,
+      // so they repeat on every decision; the timeline after them grows.
+      CACHE_BREAK,
       '## Timeline',
-      ...renderTimeline(storyline.timeline),
+      ...withBreaks(
+        renderTimeline(storyline.timeline),
+        steppedBreaks(stableBeats(storyline, playheadOrder))
+      ),
       '',
       '## The decision',
       decision.headline,
@@ -167,11 +180,20 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
         : null,
       '',
       'Record what changed.',
-    ]
-      .filter((line) => line !== null)
-      .join('\n'),
+    ] satisfies PromptLine[]),
   }),
 };
+
+/**
+ * How many of the timeline's beats the next decision's prompt will render the
+ * same way: those up to the playhead, where this decision's beats are inserted,
+ * and none inside the stakes window at the end, whose lines change as it moves.
+ */
+function stableBeats(storyline: StorylineContext, playheadOrder: number): number {
+  const ahead = storyline.timeline.findIndex((beat) => beat.narrativeOrder > playheadOrder);
+  const reached = ahead === -1 ? storyline.timeline.length : ahead;
+  return Math.min(reached, storyline.timeline.length - STAKES_WINDOW);
+}
 
 function nameOf(storyline: StorylineContext, characterId: string): string {
   return storyline.characters.find((c) => c.id === characterId)?.name ?? 'someone';

@@ -27,7 +27,18 @@ export type PromptSpec<Vars, Out> = {
   readonly stage: StageName;
   /** The entire contract between the prompt and everything downstream. */
   readonly schema: z.ZodType<Out>;
-  readonly render: (vars: Vars) => { system: string; prompt: string };
+  readonly render: (vars: Vars) => RenderedPrompt;
+};
+
+export type RenderedPrompt = {
+  system: string;
+  prompt: string;
+  /**
+   * Offsets into `prompt` where a stretch the next request will repeat ends,
+   * for the provider's prompt cache. Absent for a prompt that is not sent again
+   * with the same start. See `prompts/cache.ts`.
+   */
+  cacheBreaks?: number[];
 };
 
 export type GenerationMeta = {
@@ -36,6 +47,8 @@ export type GenerationMeta = {
   inputTokens: number;
   /** Of `inputTokens`, how many the provider served from its prompt cache. */
   cachedInputTokens: number;
+  /** Of `inputTokens`, how many were written to the prompt cache (billed at 1.25x). */
+  cacheWriteTokens: number;
   outputTokens: number;
   /** Of `outputTokens`, how many were the model thinking before it answered. */
   reasoningTokens: number;

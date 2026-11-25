@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { PromptSpec } from '../prompt';
 import { SessionContext, StorylineContext } from '@/lib/services/generation/generation.types';
-import { renderTimeline } from './timeline';
+import { renderTimeline, STAKES_WINDOW } from './timeline';
+import { joinLines, PromptLine, steppedBreaks, withBreaks } from './cache';
 import { relationshipToReader } from './relationship';
 import { SURFACE_KINDS } from '@/lib/surfaces';
 import { MAX_NOTIFICATION_CHARS, MAX_NOTIFICATIONS } from '@/lib/surfaces/imessage.surface';
@@ -197,7 +198,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
         '  make a scene feel modern.',
       ].join('\n'),
 
-      prompt: [
+      ...joinLines([
         `# ${storyline.storyline.title}`,
         // Directive, not descriptive. Extraction already reads the register well
         // — "ambitious, funny, increasingly strained" — and it was rendered as a
@@ -227,8 +228,21 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
               '',
             ]
           : []),
+        //
+        // The timeline only grows at its end (consequences land at the playhead,
+        // and the playhead only reveals the next beat), and a beat is rendered
+        // the same way every time once it is older than the stakes window. So
+        // the cache is cut inside it, at steps the next beat will repeat; see
+        // cache.ts. Everything after the timeline moves with consequences.
         ...(storyline.timeline.length
-          ? ['## What has happened', ...renderTimeline(storyline.timeline), '']
+          ? [
+              '## What has happened',
+              ...withBreaks(
+                renderTimeline(storyline.timeline),
+                steppedBreaks(storyline.timeline.length - STAKES_WINDOW)
+              ),
+              '',
+            ]
           : ['## What has happened', 'Nothing yet. This is the very beginning.', '']),
         // Per-character background was assembled and then dropped on the floor.
         // Rendered under the same heading rather than a new one, because the rule
@@ -325,9 +339,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
           : session.turns.length
             ? 'Write the next beat, following on from the choice just made.'
             : 'Write the opening beat of this playthrough.',
-      ]
-        .filter((line) => line !== null)
-        .join('\n'),
+      ] satisfies PromptLine[]),
     };
   },
 };

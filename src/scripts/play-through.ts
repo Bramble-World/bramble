@@ -68,7 +68,7 @@ function describeCall(meta: GenerationMeta): string {
   const stage = meta.promptName.split('.')[0];
   return (
     `${stage} ${seconds(meta.durationMs)} ` +
-    `(in ${meta.inputTokens}, cached ${meta.cachedInputTokens}, ` +
+    `(in ${meta.inputTokens}, cached ${meta.cachedInputTokens}, written ${meta.cacheWriteTokens}, ` +
     `out ${meta.outputTokens}, thinking ${meta.reasoningTokens})`
   );
 }
