@@ -40,6 +40,7 @@ const GROUP = 'bramble-prd';
  */
 const PUBLIC = new Set([
   'PUSH_ENABLED',
+  'PAUSES_ROLLOUT',
   'BRAMBLE_AI_MODE',
   'POSTHOG_HOST',
   'NEXT_PUBLIC_APP_URL',
@@ -90,6 +91,7 @@ const KNOWN = new Set([
   'APNS_KEY_ID',
   'APNS_PRIVATE_KEY',
   'PUSH_ENABLED',
+  'PAUSES_ROLLOUT',
   'POSTHOG_PERSONAL_API_KEY',
   'POSTHOG_PROJECT_ID',
   'POSTHOG_API_HOST',

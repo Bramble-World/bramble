@@ -67,6 +67,8 @@ export function registerFixtures(fake: FakeGenerator): void {
       ]
         .filter(Boolean)
         .join(' '),
+      // Pauses whenever it's allowed, so the reply-later path is exercised.
+      replyLater: vars.pausesAllowed ? ('soon' as const) : ('none' as const),
       choices: [
         { label: 'Say the true thing', description: 'It will not be taken well.', reply: null },
         // A text back on a phone beat, so the reply path is played too.

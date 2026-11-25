@@ -41,6 +41,8 @@ export async function sessionResponse(userId: string, sessionId: string): Promis
     nextStatus: ended ? await nextStatusFor(userId, next) : null,
     ending: record?.ending ?? null,
     endingStatus: record ? endingStatus(record) : null,
+    replyDueAt: snapshot.session.replyDueAt,
+    replyDueKind: snapshot.session.replyDueKind,
   });
 }
 

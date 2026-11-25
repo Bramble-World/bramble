@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { env } from '@/env';
 import { db } from '@/index';
 import {
@@ -68,6 +68,12 @@ async function factsFor(
     .where(eq(pushSends.userId, userId))
     .orderBy(desc(pushSends.sentAt));
 
+  const [owed] = await db
+    .select({ id: storylineSessions.id })
+    .from(storylineSessions)
+    .where(and(eq(storylineSessions.userId, userId), isNotNull(storylineSessions.replyDueAt)))
+    .limit(1);
+
   return {
     lastTurnId: last.id,
     facts: {
@@ -81,6 +87,7 @@ async function factsFor(
         .map((send) => ({ kind: send.kind as PushKind, sentAt: send.sentAt })),
       lastSentAt: sends[0]?.sentAt ?? null,
       unlimitedEnergy,
+      replyOwed: owed !== undefined,
     },
   };
 }

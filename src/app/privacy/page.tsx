@@ -310,8 +310,10 @@ export default function Privacy() {
         was: that your battery is back, or that your story is waiting (and which of two wordings it
         used; one of them says how many new texts are waiting, never who sent them). When a story
         you asked for in ChatGPT is ready, we send one notification saying so, and record only that
-        it was sent in our usage data, if you share it. Turn them off in Bramble&rsquo;s Settings or
-        your device&rsquo;s Settings at any time.
+        it was sent in our usage data, if you share it. Sometimes someone in a story replies later,
+        in real time: we store when that reply is due, write it then, and may send a notification
+        when it arrives, saying how many new texts are waiting and never who sent them. Turn them
+        off in Bramble&rsquo;s Settings or your device&rsquo;s Settings at any time.
       </p>
 
       <h3>Updates and downloads</h3>

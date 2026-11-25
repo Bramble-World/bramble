@@ -191,6 +191,20 @@ services:
     # retry. Usually none.
     timeoutSeconds: 600
 
+  - name: reply-sweep
+    type: job
+    run: node dist/sweeps/reply-sweep.js
+    # Every five minutes. Writes the replies that have come due in stories that
+    # paused for one (the story texts you) and sends a notification for each.
+    # A reply waits for the reader's battery and their morning.
+    cron: '*/5 * * * *'
+    cpuCores: 0.25
+    ramMegabytes: 512
+    allowConcurrent: false
+    # At most 30 beats a run, one at a time, each with its 60 s deadline. Usually
+    # a handful.
+    timeoutSeconds: 1800
+
 # Build-time values that are public by definition, so they belong in version
 # control rather than in a dashboard.
 #

@@ -68,6 +68,8 @@ const sessionColumns = {
   playheadOrder: storylineSessions.playheadOrder,
   startedFromEventId: storylineSessions.startedFromEventId,
   endedAt: storylineSessions.endedAt,
+  replyDueAt: storylineSessions.replyDueAt,
+  replyDueKind: storylineSessions.replyDueKind,
 };
 
 export async function getSession(userId: string, sessionId: string): Promise<PublicSession | null> {
@@ -397,6 +399,8 @@ export async function currentPlaythrough(userId: string): Promise<{
   storylineTitle: string;
   turnsAnswered: number;
   lastActiveAt: Date;
+  replyDueAt: Date | null;
+  replyDueKind: string | null;
 } | null> {
   const [row] = await db
     .select({
@@ -404,6 +408,8 @@ export async function currentPlaythrough(userId: string): Promise<{
       storylineId: storylineSessions.storylineId,
       storylineTitle: storylines.title,
       lastActiveAt: storylineSessions.lastActiveAt,
+      replyDueAt: storylineSessions.replyDueAt,
+      replyDueKind: storylineSessions.replyDueKind,
       // Literal identifiers for the correlation, for the reason given in
       // playthroughsForEvents: the column helpers drop the outer table's prefix.
       turnsAnswered: sql<number>`(
