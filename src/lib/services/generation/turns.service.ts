@@ -254,6 +254,8 @@ export type Consequences = {
   events: number;
   contextEntries: number;
   relationshipStates: number;
+  /** Another request is working them out right now, so this one did nothing. */
+  busy?: boolean;
 };
 
 /**
@@ -273,6 +275,20 @@ export async function generateConsequences(
   turnId: string,
   deps: GenerationDeps = {}
 ): Promise<Consequences> {
+  try {
+    return await workOutConsequences(userId, turnId, deps);
+  } catch (error) {
+    // Given up at once, so the next attempt needn't wait out the lease.
+    await sessionWriter.releaseConsequenceLease(db, turnId);
+    throw error;
+  }
+}
+
+async function workOutConsequences(
+  userId: string,
+  turnId: string,
+  deps: GenerationDeps
+): Promise<Consequences> {
   const empty: Consequences = { events: 0, contextEntries: 0, relationshipStates: 0 };
 
   const turn = await sessionReader.getTurn(db, turnId);
@@ -289,13 +305,15 @@ export async function generateConsequences(
   // transaction is, because this read and that write are seconds apart.
   if (await sessionReader.turnHasResolvedConsequences(db, turnId)) return empty;
 
-  // Counted here, before the work, and on `db` rather than in a transaction:
-  // everything below either commits together or rolls back together, so a
-  // counter written inside that boundary would be undone by the very failure it
-  // exists to count. Placed above context assembly as well as the model call,
-  // because both are pure functions of stored state and both can fail the same
-  // way every time.
-  await sessionWriter.recordConsequenceAttempt(db, turnId);
+  // Counted and leased here, before the work, on `db` rather than in a
+  // transaction (a count inside it would roll back with the failure it counts).
+  // Placed above context assembly as well as the model call, because both are
+  // pure functions of stored state and both can fail the same way every time.
+  // Held by another request: it's being worked out now, and paying for it
+  // twice would buy nothing.
+  if (!(await sessionWriter.startConsequenceAttempt(db, turnId))) {
+    return { ...empty, busy: true };
+  }
 
   // Deliberately the WHOLE timeline, unlike generateTurn. This stage is
   // reasoning about what a decision changed, which needs the story entire; and
@@ -515,28 +533,37 @@ export async function advanceSession(
     await assertMayPlay(userId);
   }
 
-  // The newest choice's consequences are worked out after the beat, never
-  // while the player waits for it: the beat is written from the playthrough,
-  // which already holds that choice, so canon is at most one beat behind.
-  // Anything older is owed from a later settle that didn't finish, and is
-  // settled first, oldest first, so canon never falls further behind than that.
+  // What a choice changed is worked out after the beat, never while the reader
+  // waits for it: the beat is written from the playthrough, which already holds
+  // every choice, so canon only trails it. Oldest first, as each one's beats are
+  // canon for the next. A reader who answers before the last settle finishes
+  // finds it still owed; the lease makes this request skip what that one is
+  // still doing rather than pay for it again.
   const owed = await sessionReader.findTurnsOwedConsequences(db, sessionId);
-  const newest = deps.consequencesFirst ? undefined : owed.at(-1);
-  for (const turn of newest ? owed.slice(0, -1) : owed) {
-    await settleConsequences(userId, turn.id, deps);
+  if (deps.consequencesFirst) {
+    for (const turn of owed) await settleConsequences(userId, turn.id, deps);
   }
 
   const turn = await generateTurn(userId, sessionId, { ...deps, waitStartedAt });
 
-  if (newest) {
+  if (!deps.consequencesFirst && owed.length) {
     // Its own deadline and no caller's signal: the request it rode in on has
-    // been answered. A failure counts against the budget and is retried by the
-    // next call, so it is logged and nothing more.
-    const work = () =>
-      withDeadline(
-        (signal) => settleConsequences(userId, newest.id, { generator: deps.generator, signal }),
-        TURN_DEADLINE_MS
-      ).catch((error) => logLaterFailure(newest.id, error));
+    // been answered. It stops at the first turn that fails or that another
+    // request holds, as a later one can't be settled before it; the next call
+    // picks up from there. A failure counts against the budget and is logged.
+    const work = async () => {
+      for (const owedTurn of owed) {
+        const settled = await withDeadline(
+          (signal) =>
+            settleConsequences(userId, owedTurn.id, { generator: deps.generator, signal }),
+          TURN_DEADLINE_MS
+        ).catch((error) => {
+          logLaterFailure(owedTurn.id, error);
+          return false;
+        });
+        if (!settled) return;
+      }
+    };
     if (deps.later) deps.later(work);
     else await work();
   }
@@ -545,7 +572,8 @@ export async function advanceSession(
 }
 
 /**
- * Settles one turn's consequences within the attempt budget.
+ * Settles one turn's consequences within the attempt budget. False when another
+ * request is working them out right now.
  *
  * Throws while there is budget left: building on canon missing a decision is a
  * silent quality regression, and most failures are transient. Once the budget
@@ -557,14 +585,15 @@ export async function settleConsequences(
   userId: string,
   turnId: string,
   deps: GenerationDeps = {}
-): Promise<void> {
+): Promise<boolean> {
   try {
-    await generateConsequences(userId, turnId, deps);
+    return !(await generateConsequences(userId, turnId, deps)).busy;
   } catch (error) {
     if ((await sessionReader.consequenceAttempts(db, turnId)) < CONSEQUENCE_ATTEMPT_BUDGET) {
       throw error;
     }
     await sessionWriter.abandonConsequences(db, turnId);
+    return true;
   }
 }
 

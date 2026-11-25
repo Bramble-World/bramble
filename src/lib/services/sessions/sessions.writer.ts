@@ -1,4 +1,4 @@
-import { and, eq, exists, isNull, lt, sql } from 'drizzle-orm';
+import { and, eq, exists, isNull, lt, or, sql } from 'drizzle-orm';
 import {
   events,
   storylineSessions,
@@ -280,21 +280,46 @@ export async function claimConsequences(tx: Executor, turnId: string): Promise<b
 }
 
 /**
- * Records that working out this turn's consequences is being attempted.
- *
- * Its own statement, on `db` rather than a caller's transaction, and deliberately
- * so: every transaction in `generateConsequences` is rolled back by the failure
- * this counter exists to count, which would leave the count at zero no matter how
- * many times it was tried. The write has to survive the failure to mean anything.
- *
- * Incremented in SQL rather than read-then-written, so two concurrent callers
- * cannot both read 2 and both write 3.
+ * How long an attempt at a turn's consequences holds it before another request
+ * may take it over: the model call's own deadline (60 s) with room to write.
  */
-export async function recordConsequenceAttempt(tx: Executor, turnId: string): Promise<void> {
+export const CONSEQUENCE_LEASE_MS = 90_000;
+
+/**
+ * Starts an attempt at this turn's consequences, unless one is already under
+ * way: counts it and takes the lease in one statement, and says whether it did.
+ *
+ * On `db`, never in a transaction: the work it counts either commits together or
+ * rolls back together, so a count written inside that boundary would be undone
+ * by the very failure it exists to count.
+ */
+export async function startConsequenceAttempt(tx: Executor, turnId: string): Promise<boolean> {
+  const [row] = await tx
+    .update(storyTurns)
+    .set({
+      consequenceAttempts: sql`${storyTurns.consequenceAttempts} + 1`,
+      consequencesStartedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(storyTurns.id, turnId),
+        isNull(storyTurns.consequencesGeneratedAt),
+        or(
+          isNull(storyTurns.consequencesStartedAt),
+          lt(storyTurns.consequencesStartedAt, new Date(Date.now() - CONSEQUENCE_LEASE_MS))
+        )
+      )
+    )
+    .returning({ id: storyTurns.id });
+  return row !== undefined;
+}
+
+/** Gives the lease up after a failed attempt, so the next one needn't wait it out. */
+export async function releaseConsequenceLease(tx: Executor, turnId: string): Promise<void> {
   await tx
     .update(storyTurns)
-    .set({ consequenceAttempts: sql`${storyTurns.consequenceAttempts} + 1` })
-    .where(eq(storyTurns.id, turnId));
+    .set({ consequencesStartedAt: null })
+    .where(and(eq(storyTurns.id, turnId), isNull(storyTurns.consequencesGeneratedAt)));
 }
 
 /**

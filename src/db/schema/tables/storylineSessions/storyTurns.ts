@@ -89,6 +89,16 @@ export const storyTurns = pgTable(
     consequenceAttempts: integer('consequence_attempts').notNull().default(0),
 
     /**
+     * When the attempt in progress started: a short lease, so two requests
+     * never work out the same turn's consequences at once and pay for them
+     * twice. They are settled after the beat, which takes longer than a reader
+     * takes to answer the next one, so the next request routinely finds them
+     * still owed. A lease older than `CONSEQUENCE_LEASE_MS` has died with its
+     * request and may be taken over; a failed attempt gives it up at once.
+     */
+    consequencesStartedAt: timestamp('consequences_started_at', { withTimezone: true }),
+
+    /**
      * When we stopped trying.
      *
      * Kept apart from `consequences_generated_at` rather than folded into it:
