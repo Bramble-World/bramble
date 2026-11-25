@@ -13,7 +13,8 @@
  *
  *   beats   how many beats to play, 10 by default
  *   order   `after`  consequences settled after each beat (the new order)
- *           `before` consequences settled before it (the old one)
+ *           `before` consequences settled before it (the order before
+ *                    2026-11-25, kept to compare against)
  *           `both`   the same story both ways, one after the other (default)
  *   seed    a seed story's slug, `summer-shift` by default
  *
@@ -28,7 +29,12 @@ import type { GenerationMeta } from '@/lib/ai/prompt';
 import { SEED_STORIES } from '@/lib/pool/seeds';
 import { surfaceHistoryLine } from '@/lib/surfaces';
 import { instantiateTemplate } from '@/lib/services/pool/next.service';
-import { advanceSession, commitChoice } from '@/lib/services/generation/turns.service';
+import {
+  advanceSession,
+  commitChoice,
+  settleConsequences,
+} from '@/lib/services/generation/turns.service';
+import { findTurnsOwedConsequences } from '@/lib/services/sessions/sessions.reader';
 
 type Order = 'after' | 'before';
 
@@ -88,9 +94,14 @@ async function play(order: Order, templateId: string, owners: string[]): Promise
     let pending: (() => Promise<void>) | null = null;
 
     const started = Date.now();
+    // The old order, for comparison: what's owed is settled first, inside the wait.
+    if (order === 'before') {
+      for (const owed of await findTurnsOwedConsequences(db, sessionId)) {
+        await settleConsequences(user.id, owed.id, { generator });
+      }
+    }
     const turn = await advanceSession(user.id, sessionId, {
       generator,
-      consequencesFirst: order === 'before',
       later: (work) => {
         pending = work;
       },

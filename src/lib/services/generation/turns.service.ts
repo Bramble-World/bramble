@@ -60,13 +60,6 @@ export type GenerationDeps = {
  */
 export type AdvanceDeps = GenerationDeps & {
   later?: (work: () => Promise<void>) => void;
-  /**
-   * Settles every owed choice, the newest included, before the beat: the order
-   * before consequences moved after it. Kept for players while admins try the
-   * new order (the user's call, 2026-11-24, as there is no staging); removed
-   * once it is on for everyone.
-   */
-  consequencesFirst?: boolean;
 };
 
 /**
@@ -540,13 +533,10 @@ export async function advanceSession(
   // finds it still owed; the lease makes this request skip what that one is
   // still doing rather than pay for it again.
   const owed = await sessionReader.findTurnsOwedConsequences(db, sessionId);
-  if (deps.consequencesFirst) {
-    for (const turn of owed) await settleConsequences(userId, turn.id, deps);
-  }
 
   const turn = await generateTurn(userId, sessionId, { ...deps, waitStartedAt });
 
-  if (!deps.consequencesFirst && owed.length) {
+  if (owed.length) {
     // Its own deadline and no caller's signal: the request it rode in on has
     // been answered. It stops at the first turn that fails or that another
     // request holds, as a later one can't be settled before it; the next call
