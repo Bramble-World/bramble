@@ -9,7 +9,7 @@ import { advanceSession, type AdvanceDeps } from '@/lib/services/generation/turn
 import type { TurnWithChoices } from '@/lib/services/sessions/sessions.types';
 import { eventStream, wantsEventStream } from '@/lib/api/event-stream';
 import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
-import { clientShowsEndings } from '@/lib/api/client-version';
+import { clientShowsEndings, clientShowsPauses } from '@/lib/api/client-version';
 
 type Params = { params: Promise<{ sessionId: string }> };
 
@@ -60,6 +60,8 @@ export const POST = withUser(async (user, request, { params }: Params) => {
         advanceSession(user.id, sessionId, {
           signal,
           endings: clientShowsEndings(request),
+          // Only an app that can show "hasn't replied yet" may be given a pause.
+          pauses: clientShowsPauses(request),
           later: (work) => after(work),
           ...stream,
         }),
