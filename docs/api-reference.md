@@ -942,8 +942,7 @@ name in the story, not a person the reader has met, so it is not a `PersonView`.
 
 The only paid endpoint. Writes the next beat, then works out what the reader's
 choices changed after the response (oldest first), so the reader waits for the
-beat alone. For players this is still before the beat until it's checked with
-admins (`consequencesFirst`).
+beat alone.
 
 No body. Returns `{ "turn": TurnView }` — the same shape nested in `SessionView`
 above. Narrative and choices arrive **together**, so you hold the decision screen
