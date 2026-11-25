@@ -132,6 +132,12 @@ export type ChoiceView = {
  * choices) replaces it.
  */
 export type BeatDraftView = {
+  /**
+   * `imessage_notifications` (texts are coming) or `none` (a plain beat), once
+   * the model has written it; null before. A client can show a plain beat from
+   * its headline, and wait for the first text otherwise.
+   */
+  kind: 'imessage_notifications' | 'none' | null;
   headline: string | null;
   /** Finished texts only, in the order they will be in the finished beat. */
   surfaces: SurfaceView[];
