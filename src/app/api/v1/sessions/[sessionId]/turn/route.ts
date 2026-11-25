@@ -58,6 +58,9 @@ export const POST = withUser(async (user, request, { params }: Params) => {
         signal,
         endings: clientShowsEndings(request),
         later: (work) => after(work),
+        // Admins try consequences-after-the-beat first; players keep the old
+        // order until it's checked. See `AdvanceDeps.consequencesFirst`.
+        consequencesFirst: user.role !== 'admin',
       }),
     TURN_DEADLINE_MS
   );

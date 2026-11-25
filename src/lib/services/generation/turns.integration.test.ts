@@ -851,6 +851,28 @@ describe('advanceSession', () => {
     expect(await sessionReader.findTurnsOwedConsequences(db, session.id)).toStrictEqual([]);
   });
 
+  /** Players keep the old order until admins have tried the new one. */
+  it('settles the choice before the beat when asked for consequences first', async () => {
+    const session = await freshSession();
+    const turn = await generateTurn(userId, session.id, { generator: fake });
+    await commitChoice(userId, turn.id, turn.choices[0].id);
+    const queued: Array<() => Promise<void>> = [];
+    const before = fake.calls.length;
+
+    await advanceSession(userId, session.id, {
+      generator: fake,
+      consequencesFirst: true,
+      later: (work) => queued.push(work),
+    });
+
+    expect(fake.calls.slice(before).map((c) => c.promptName)).toStrictEqual([
+      'consequence.commit',
+      'turn.generate',
+    ]);
+    expect(queued).toHaveLength(0);
+    expect(await sessionReader.findTurnsOwedConsequences(db, session.id)).toStrictEqual([]);
+  });
+
   /**
    * Settled after the beat, a choice's consequences can still be writing when
    * the reader answers the next beat. Both write the session's playhead; before

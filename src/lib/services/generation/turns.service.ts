@@ -60,6 +60,13 @@ export type GenerationDeps = {
  */
 export type AdvanceDeps = GenerationDeps & {
   later?: (work: () => Promise<void>) => void;
+  /**
+   * Settles every owed choice, the newest included, before the beat: the order
+   * before consequences moved after it. Kept for players while admins try the
+   * new order (the user's call, 2026-11-24, as there is no staging); removed
+   * once it is on for everyone.
+   */
+  consequencesFirst?: boolean;
 };
 
 /**
@@ -514,8 +521,8 @@ export async function advanceSession(
   // Anything older is owed from a later settle that didn't finish, and is
   // settled first, oldest first, so canon never falls further behind than that.
   const owed = await sessionReader.findTurnsOwedConsequences(db, sessionId);
-  const newest = owed.at(-1);
-  for (const turn of owed.slice(0, -1)) {
+  const newest = deps.consequencesFirst ? undefined : owed.at(-1);
+  for (const turn of newest ? owed.slice(0, -1) : owed) {
     await settleConsequences(userId, turn.id, deps);
   }
 
