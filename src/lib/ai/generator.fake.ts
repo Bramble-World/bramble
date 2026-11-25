@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { InternalServerError } from '@/lib/utils/errors';
 import { STAGE_MODELS } from './models';
-import { Generator, GenerationResult, PromptSpec } from './prompt';
+import { Generator, GenerationResult, PromptSpec, RunOptions } from './prompt';
 
 /** What a fixture is handed: the prompt's own vars, plus a stable seed. */
 export type FixtureContext<Vars> = {
@@ -78,7 +78,7 @@ export function createFakeGenerator(): FakeGenerator {
     async run<Vars, Out>(
       spec: PromptSpec<Vars, Out>,
       vars: Vars,
-      opts?: { signal?: AbortSignal }
+      opts?: RunOptions
     ): Promise<GenerationResult<Out>> {
       // As the real client does: a call made on an aborted signal never starts.
       opts?.signal?.throwIfAborted();
