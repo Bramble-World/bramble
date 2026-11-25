@@ -1,12 +1,25 @@
-import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 import { env } from '@/env';
 import { db } from '@/index';
-import { pushDevices, pushSends, storylineSessions, storyTurns, users } from '@/db/schema/tables';
+import {
+  pushDevices,
+  pushSends,
+  storylineSessions,
+  storyTurns,
+  turnSurfaces,
+  users,
+} from '@/db/schema/tables';
 import { track } from '@/lib/analytics/analytics';
 import { withIosClient } from '@/lib/analytics/client-context';
 import { ENERGY_WINDOW_MS } from '../sessions/energy.service';
 import { apnsConfigured } from './apns';
-import { decidePush, MESSAGES, type PushFacts } from './push.policy';
+import {
+  decidePush,
+  MESSAGES,
+  storyWaitingArm,
+  storyWaitingMessage,
+  type PushFacts,
+} from './push.policy';
 import { sendToUser } from './push.service';
 import type { PushKind } from './push.types';
 
@@ -72,6 +85,31 @@ async function factsFor(
   };
 }
 
+/**
+ * How many texts the player's latest beat has, if it's still waiting for an
+ * answer; 0 if it was answered, is an ending, or has no texts. A count only:
+ * who sent them and what they say never leave here.
+ */
+async function waitingTexts(turnId: string): Promise<number> {
+  const [row] = await db
+    .select({
+      texts: sql<number>`coalesce(sum(jsonb_array_length(${turnSurfaces.payload} -> 'notifications')), 0)::int`,
+    })
+    .from(storyTurns)
+    .leftJoin(
+      turnSurfaces,
+      and(eq(turnSurfaces.turnId, storyTurns.id), eq(turnSurfaces.type, 'imessage_notifications'))
+    )
+    .where(
+      and(
+        eq(storyTurns.id, turnId),
+        isNull(storyTurns.selectedChoiceId),
+        eq(storyTurns.isEnding, false)
+      )
+    );
+  return row?.texts ?? 0;
+}
+
 /** The notifications that are due. Off until `PUSH_ENABLED` says otherwise. */
 export async function sweepPush(now = new Date()): Promise<Record<string, number>> {
   const result = { due: 0, delivered: 0, undelivered: 0 };
@@ -102,12 +140,19 @@ export async function sweepPush(now = new Date()): Promise<Record<string, number
       .returning({ id: pushSends.id });
     if (!claimed) continue;
 
-    const sent = await sendToUser(id, MESSAGES[decision.kind], decision.kind);
+    const { message, copy } =
+      decision.kind === 'story_waiting'
+        ? storyWaitingMessage(storyWaitingArm(id), await waitingTexts(found.lastTurnId))
+        : { message: MESSAGES[decision.kind], copy: undefined };
+    const sent = await sendToUser(id, message, decision.kind);
     if (sent.delivered > 0) {
       result.delivered += 1;
       // Only iPhones get these, so it goes where the iPhone's events go.
       await withIosClient(() =>
-        track(id, { name: 'push_sent', properties: { kind: decision.kind } })
+        track(id, {
+          name: 'push_sent',
+          properties: { kind: decision.kind, ...(copy ? { copy } : {}) },
+        })
       );
     } else {
       // Nothing arrived, so it doesn't count: the next run tries again.
