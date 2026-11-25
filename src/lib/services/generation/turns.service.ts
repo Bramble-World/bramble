@@ -385,7 +385,6 @@ async function workOutConsequences(
   const events: NewEvent[] = value.events.map((event) => ({
     origin: 'conversation_generated',
     triggeredByTurnId: turnId,
-    generationRationale: event.generationRationale,
     title: event.title,
     description: event.description,
     stakes: event.stakes ?? undefined,

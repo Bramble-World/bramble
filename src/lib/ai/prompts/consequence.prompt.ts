@@ -50,12 +50,6 @@ export const consequenceOutputSchema = z.object({
           .describe(
             'The one character who set this beat in motion, if a single person did. Null when it is something that happened to them rather than something someone did.'
           ),
-        generationRationale: z
-          .string()
-          .min(1)
-          .describe(
-            'Why this beat follows from the choice. Your own reasoning — never quote the story text back.'
-          ),
         engagementScore: z
           .number()
           .int()
@@ -134,8 +128,6 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       '  which every beat is the reader doing something teaches every later turn that',
       '  nobody else ever does anything, and the story stops moving. When the other',
       '  person is the one who moved the scene, the beat is theirs.',
-      '- generationRationale is your own reasoning about why the beat follows. Never',
-      '  quote or paraphrase the narration back into it.',
       '- Only reference character and relationship ids that appear below.',
       '',
       ENGAGEMENT_RUBRIC,

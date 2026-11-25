@@ -100,8 +100,6 @@ export function registerFixtures(fake: FakeGenerator): void {
           stakes: 'Whatever was unsaid is now said.',
           participantCharacterIds: cast.slice(0, 2).map((c) => c.id),
           actorCharacterId: cast.find((c) => !c.isSelf)?.id ?? null,
-          generationRationale:
-            'The reader chose to be direct where the original exchange was evasive, so the story now has to account for that having been said out loud.',
           engagementScore: 7,
         },
       ],
