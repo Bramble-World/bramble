@@ -269,6 +269,20 @@ export type CurrentPlaythroughView = {
   storylineTitle: string;
   turnsAnswered: number;
   lastActiveAt: string;
+  /** Someone in it replies later, in real time; see `SessionView.waiting`. */
+  waiting: WaitingView | null;
+};
+
+/**
+ * Someone in the story replies later, in real time (the story texts you). Until
+ * `until`, `POST .../turn` answers 409 `REPLY_PENDING` and writes nothing; at it
+ * the server writes the reply and sends a `reply_arrived` notification. `kind`
+ * says roughly when: `soon` (within the hour or so), `tonight` (a few hours) or
+ * `tomorrow` (the next morning). No name: who replies is in the history.
+ */
+export type WaitingView = {
+  until: string;
+  kind: 'soon' | 'tonight' | 'tomorrow';
 };
 
 /**
@@ -321,6 +335,8 @@ export type SessionView = {
   storylineId: string;
   state: SessionStateView;
   turnsAnswered: number;
+  /** Someone replies later: no next beat until then. Null otherwise. See `WaitingView`. */
+  waiting: WaitingView | null;
   /** The open turn, or with `ended` the story's ending. */
   turn: TurnView | null;
   /** When the story ended. Null while it is still going. */

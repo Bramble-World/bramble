@@ -41,6 +41,9 @@ export const pushSends = pgTable(
   (table) => [
     uniqueIndex('idx_push_sends_once').on(table.anchorTurnId, table.kind, table.ordinal),
     index('idx_push_sends_user').on(table.userId, table.sentAt),
-    check('chk_push_sends_kind', sql`${table.kind} IN ('battery_back', 'story_waiting')`),
+    check(
+      'chk_push_sends_kind',
+      sql`${table.kind} IN ('battery_back', 'story_waiting', 'reply_arrived')`
+    ),
   ]
 );

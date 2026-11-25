@@ -352,6 +352,7 @@ describe('replies', () => {
       clockTime: null,
       dateLabel: null,
       notifications: [],
+      replyLater: 'none',
     };
     const choice = { label: 'Text back: "tell me."', description: null };
 

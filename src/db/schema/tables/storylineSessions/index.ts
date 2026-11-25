@@ -3,6 +3,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  text,
   timestamp,
   uuid,
   type AnyPgColumn,
@@ -113,6 +114,16 @@ export const storylineSessions = pgTable(
       onDelete: 'set null',
     }),
 
+    /**
+     * Someone in the story replies later, in real time: until then no next beat
+     * is written for this playthrough, and at it the reply sweep writes it and
+     * says so by notification. Set when a beat with `reply_later` is answered,
+     * cleared when its reply is written. `reply_due_kind` is that beat's
+     * `reply_later`, so the app can say roughly when without reading the turn.
+     */
+    replyDueAt: timestamp('reply_due_at', { withTimezone: true }),
+    replyDueKind: text('reply_due_kind'),
+
     ...timestamps,
   },
   (table) => [
@@ -122,6 +133,11 @@ export const storylineSessions = pgTable(
     index('idx_storyline_sessions_last_active').on(table.lastActiveAt),
     // The ending sweep: ended sessions whose ending is still owed. Partial, so
     // it holds only the handful waiting rather than every finished story.
+    // The reply sweep: playthroughs with a reply owed. Partial, so it holds only
+    // the few waiting.
+    index('idx_storyline_sessions_reply_due')
+      .on(table.replyDueAt)
+      .where(sql`${table.replyDueAt} IS NOT NULL`),
     index('idx_storyline_sessions_ending_owed')
       .on(table.endedAt)
       .where(sql`${table.endedAt} IS NOT NULL AND ${table.ending} IS NULL`),

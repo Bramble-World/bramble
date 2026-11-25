@@ -234,6 +234,18 @@ beat waiting for an answer has texts (a count only, never who sent them), and
 story_waiting` (recorded on cold launches too from iOS build 38) and a
 `beat_played` within an hour of it. Allow a week.
 
+**The pauses test** (the story texts you; `pauses.ts`): with
+`PAUSES_ROLLOUT=test`, half of players (by a hash of their id, its own salt) get
+stories that pause for a reply in real time, and every admin does. Their
+`beat_played` carries `pauses_arm` (`pauses` or `none`) while the test runs. A
+pause records `reply_paused` (`delay`: `soon`, `tonight`, `tomorrow`) when the
+beat is answered, and `reply_arrived` (`delay`, `late_ms`: how long after it was
+due) when the sweep writes the reply; `push_sent` with `kind: reply_arrived`
+when it was announced. Read it after about two weeks: day-7 returns (a
+`beat_played` 7 days after the first) and beats per player per week, split by
+`pauses_arm` on each player's first `beat_played`, plus `notification_opened`
+with `kind: reply_arrived` against its `push_sent`.
+
 ## Model calls, per stage (logs)
 
 Every successful model call logs one line, `{"event":"generation", ...}`, with

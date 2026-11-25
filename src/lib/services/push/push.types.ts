@@ -4,9 +4,12 @@ export type PushEnvironment = (typeof PUSH_ENVIRONMENTS)[number];
 /**
  * `story_ready` is sent once, when a story asked for in ChatGPT has been
  * written (`announceStoryReady`), not by the sweep, and isn't kept in
- * `push_sends`: a template becomes ready only once.
+ * `push_sends`: a template becomes ready only once. `reply_arrived` is sent by
+ * the reply sweep when a reply someone in the story owed has been written
+ * (pauses.ts), and is kept in `push_sends`, which is also what keeps "story
+ * waiting" at least 20 hours behind it.
  */
-export type PushKind = 'battery_back' | 'story_waiting' | 'story_ready';
+export type PushKind = 'battery_back' | 'story_waiting' | 'story_ready' | 'reply_arrived';
 
 /**
  * What a notification says. Apple carries this text, and a lock screen shows it

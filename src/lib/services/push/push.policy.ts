@@ -32,6 +32,12 @@ export const MESSAGES: Record<PushKind, PushMessage> = {
   battery_back: { title: 'your phone has charged.', body: 'your story’s waiting.' },
   story_waiting: { title: 'your story’s waiting.', body: 'pick up where you left off.' },
   story_ready: { title: 'your story’s ready.', body: 'made from your life. it’s on your desk.' },
+  // The reply sweep counts the texts it brings (`storyWaitingMessage`); this is
+  // only the wording without a count.
+  reply_arrived: {
+    title: 'your story’s waiting on your choice.',
+    body: 'pick up where you left off.',
+  },
 };
 
 /**
@@ -86,6 +92,11 @@ export type PushFacts = {
   lastSentAt: Date | null;
   /** An admin, whose battery never runs out, so it never comes back either. */
   unlimitedEnergy: boolean;
+  /**
+   * Someone in a story of theirs replies later (pauses.ts): the reply's own
+   * notification is coming, so no "story waiting" meanwhile.
+   */
+  replyOwed?: boolean;
 };
 
 export type PushDecision = { kind: PushKind; ordinal: number };
@@ -117,6 +128,7 @@ export function decidePush(facts: PushFacts, now: Date): PushDecision | null {
     }
   }
 
+  if (facts.replyOwed) return null;
   const ordinal = facts.sends.filter((send) => send.kind === 'story_waiting').length;
   const wait = WAITING_AFTER_MS[ordinal];
   if (wait === undefined || at - away < wait) return null;

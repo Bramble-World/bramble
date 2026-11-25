@@ -1,5 +1,5 @@
 import { db } from '@/index';
-import { NotFoundError, ValidationError } from '@/lib/utils/errors';
+import { NotFoundError, ReplyPendingError, ValidationError } from '@/lib/utils/errors';
 import { Generator, getGenerator } from '@/lib/ai';
 import { turnIsUsable, turnPrompt, type TurnOutput } from '@/lib/ai/prompts/turn.prompt';
 import { beatsToEnding, endingBounds, storyPhase } from './story-phase';
@@ -27,6 +27,7 @@ import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
 import { surfaceHistoryLine, surfacesFromModel } from '@/lib/surfaces';
 import { beatDraft, isEmptyDraft, type BeatDraft } from './beat-draft';
 import { idResolver } from '@/lib/ai/prompts/short-ids';
+import { pauseFactsFor, pausesAllowed, pausesArmProperty } from './pauses';
 import type { DeepPartial } from '@/lib/ai/prompt';
 import * as storylineReader from '../storylines/storylines.reader';
 
@@ -64,6 +65,11 @@ export type GenerationDeps = {
    * drafts so far.
    */
   onRestart?: () => void;
+  /**
+   * The reply sweep writing a reply that has come due: skips the "not yet"
+   * refusal, which a request racing the clock could otherwise hit.
+   */
+  dueReply?: boolean;
 };
 
 /**
@@ -103,6 +109,10 @@ export async function generateTurn(
   const open = await sessionReader.getOpenTurn(db, sessionId);
   if (open) return open;
 
+  // Someone replies later and it isn't time yet: nothing to write, nothing spent.
+  // The reply sweep writes it when it's due (`deps.dueReply`).
+  if (!deps.dueReply) assertNoReplyPending(session);
+
   // Charged here and nowhere earlier, because here is where a model call becomes
   // necessary. A reader out of energy still gets the turn above for free — being
   // out of energy should not hide the decision already in front of them — and a
@@ -134,12 +144,16 @@ export async function generateTurn(
   const beat = sessionContext.turns.length + 1;
   const bounds = endingBounds(storyline.storyline);
   const phase = deps.endings === false ? 'open' : storyPhase(beat, bounds);
+  // Whether this beat may end with someone replying later (pauses.ts). Never
+  // for a guest in practice: their story is the first one.
+  const mayPause = pausesAllowed(await pauseFactsFor(userId, storyline.storyline, phase));
   const vars = {
     storyline: visible,
     session: sessionContext,
     beyondScript,
     phase,
     beatsToEnding: deps.endings === false ? null : beatsToEnding(beat, bounds),
+    pausesAllowed: mayPause,
   };
 
   // One more try when the model breaks a rule the schema cannot express (an
@@ -190,6 +204,9 @@ export async function generateTurn(
       narrativeContent: value.narrative,
       isEnding: value.isEnding,
       free,
+      // Ignored unless a pause was allowed: the model is told, but the server decides.
+      replyLater:
+        mayPause && !value.isEnding && value.replyLater !== 'none' ? value.replyLater : undefined,
       choices: value.choices.map((choice) => ({
         label: choice.label,
         // The schema says nullable because structured output has no absent; the
@@ -227,6 +244,7 @@ export async function generateTurn(
               : {}),
             origin,
             ...firstStory,
+            ...(await pausesArmProperty(userId)),
           },
         });
         // The onboarding funnel's own count, beside the general one: which of a
@@ -569,6 +587,7 @@ export async function advanceSession(
   // SIGNUP_REQUIRED before anything is settled — the last beat's consequences
   // are written when the account plays on, not paid for on a guest's behalf now.
   if (!(await sessionReader.getOpenTurn(db, sessionId))) {
+    if (!deps.dueReply) assertNoReplyPending(session);
     await assertMayPlay(userId);
   }
 
@@ -656,4 +675,11 @@ function withSenders<T extends DeepPartial<TurnOutput> | TurnOutput>(
       n?.senderCharacterId ? { ...n, senderCharacterId: sender(n.senderCharacterId) ?? '' } : n
     ),
   };
+}
+
+/** Refuses a beat while someone in the story is still to reply (pauses.ts). */
+function assertNoReplyPending(session: { replyDueAt: Date | null }): void {
+  if (!session.replyDueAt) return;
+  const left = session.replyDueAt.getTime() - Date.now();
+  if (left > 0) throw new ReplyPendingError(Math.max(1, Math.ceil(left / 1000)));
 }
