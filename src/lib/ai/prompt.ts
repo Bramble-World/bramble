@@ -57,10 +57,17 @@ export type GenerationResult<Out> = {
  * behind this one method. There is nothing that needs to happen once per
  * *stage*, which is the other half of why no stage abstraction exists.
  */
+/**
+ * How one call runs. `cacheKey` groups requests that share most of their
+ * prompt (one session's beats), so the provider serves that prefix from its
+ * cache: cheaper, and a little faster to start.
+ */
+export type RunOptions = { signal?: AbortSignal; cacheKey?: string };
+
 export interface Generator {
   run<Vars, Out>(
     spec: PromptSpec<Vars, Out>,
     vars: Vars,
-    opts?: { signal?: AbortSignal }
+    opts?: RunOptions
   ): Promise<GenerationResult<Out>>;
 }

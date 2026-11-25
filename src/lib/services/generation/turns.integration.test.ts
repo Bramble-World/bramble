@@ -645,8 +645,8 @@ describe('endings', () => {
     await playToTheEnd();
 
     const [opening, closing] = fake.calls.filter((c) => c.promptName === 'turn.generate');
-    expect(opening.system).toContain('Do not resolve the story yet');
-    expect(closing.system).toContain('Do not end it just because you may.');
+    expect(opening.prompt).toContain('Do not resolve the story yet');
+    expect(closing.prompt).toContain('Do not end it just because you may.');
   });
 
   it('serves the ending again for free, without calling the model', async () => {
@@ -677,7 +677,7 @@ describe('endings', () => {
     expect(second.choices.length).toBeGreaterThanOrEqual(2);
     // The beat's call: the first choice's consequences are settled after it.
     const beat = fake.calls.filter((c) => c.promptName === 'turn.generate').at(-1)!;
-    expect(beat.system).toContain('Do not resolve the story yet');
+    expect(beat.prompt).toContain('Do not resolve the story yet');
   });
 
   it('retries once when the model ends the story too early, then gives up', async () => {
@@ -1167,11 +1167,11 @@ describe('the first story', () => {
       ...Array<boolean>(9).fill(false),
       true,
     ]);
-    const systems = fake.calls.filter((c) => c.promptName === 'turn.generate').map((c) => c.system);
-    expect(systems[3]).not.toContain('beats after this one');
-    expect(systems[4]).toContain('The story ends 5 beats after this one');
-    expect(systems[8]).toContain('The next beat is the last one');
-    expect(systems[9]).toContain('It must end now.');
+    const asks = fake.calls.filter((c) => c.promptName === 'turn.generate').map((c) => c.prompt);
+    expect(asks[3]).not.toContain('beats after this one');
+    expect(asks[4]).toContain('The story ends 5 beats after this one');
+    expect(asks[8]).toContain('The next beat is the last one');
+    expect(asks[9]).toContain('It must end now.');
   });
 
   it('leaves every other story to its own window', async () => {
