@@ -237,11 +237,19 @@ async function storiesFromLink(
   // nothing to write from (fit.ts).
   const returned = value.situations.slice(0, MAX_LINK_SITUATIONS);
   const notes: Partial<Record<FitNote, number>> = {};
-  const situations = returned.flatMap((situation) => {
-    const fitted = fitSituation(situation);
-    for (const note of fitted.notes) notes[note] = (notes[note] ?? 0) + 1;
-    return fitted.context ? [fitted.context] : [];
-  });
+  const fit = (list: typeof returned) =>
+    list.flatMap((situation) => {
+      const fitted = fitSituation(situation);
+      for (const note of fitted.notes) notes[note] = (notes[note] ?? 0) + 1;
+      return fitted.context ? [fitted.context] : [];
+    });
+  let situations = fit(returned);
+  // Nothing kept, but the model named the strongest thin one: the player asked
+  // for a story, so they get that one rather than "nothing there". It has been
+  // through the same Drop list, and goes through moderation and the writer's
+  // own checks like any other.
+  const fellBack = situations.length === 0 && value.fallback != null;
+  if (fellBack) situations = fit([value.fallback!]);
   // Counts, codes and the note's size only: never the note or anything in it.
   const shape = noteShape(note);
   const skipped = countCodes(value.skipped ?? []);
@@ -251,6 +259,7 @@ async function storiesFromLink(
       ...shape,
       returned: returned.length,
       kept: situations.length,
+      ...(fellBack ? { fallback: situations.length > 0 } : {}),
       ...(Object.keys(skipped).length ? { skipped } : {}),
       ...(Object.keys(notes).length ? { fitted: notes } : {}),
     })

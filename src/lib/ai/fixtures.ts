@@ -300,34 +300,39 @@ export function registerFixtures(fake: FakeGenerator): void {
   // One situation per paragraph of 20 characters or more, about the first
   // capitalised word after its first, so a test can send a note and see which
   // paragraphs became stories and that the name was kept.
-  fake.register(situationsPrompt, ({ vars }) => ({
-    situations: vars.text
+  // When none is long enough, the first short one naming someone is the
+  // fallback, as the prompt asks.
+  const nameIn = (about: string) =>
+    about
+      .split(/\s+/)
+      .slice(1)
+      .find((word) => /^[A-Z][a-z]+$/.test(word));
+  const asSituation = (about: string) => ({
+    about,
+    people: [{ name: nameIn(about) ?? 'Sam', relationship: 'friend', details: '' }],
+    you: null,
+  });
+  fake.register(situationsPrompt, ({ vars }) => {
+    const paragraphs = vars.text
       .split(/\n\s*\n/)
       .map((paragraph) => paragraph.trim())
+      .filter((paragraph) => paragraph.length > 0);
+    const situations = paragraphs
       .filter((paragraph) => paragraph.length >= 20)
       .slice(0, MAX_LINK_SITUATIONS)
-      .map((about) => ({
-        about,
-        people: [
-          {
-            name:
-              about
-                .split(/\s+/)
-                .slice(1)
-                .find((word) => /^[A-Z][a-z]+$/.test(word)) ?? 'Sam',
-            relationship: 'friend',
-            details: '',
-          },
-        ],
-        you: null,
-      })),
-    // A short paragraph is too thin to keep, and says so.
-    skipped: vars.text
-      .split(/\n\s*\n/)
-      .map((paragraph) => paragraph.trim())
-      .filter((paragraph) => paragraph.length > 0 && paragraph.length < 20)
-      .map(() => 'too_thin' as const),
-  }));
+      .map(asSituation);
+    const thin = paragraphs.find((paragraph) => paragraph.length < 20 && nameIn(paragraph));
+    return {
+      situations,
+      fallback: situations.length === 0 && thin ? asSituation(thin) : null,
+      // A short paragraph is too thin to keep, and says so.
+      skipped: vars.text
+        .split(/\n\s*\n/)
+        .map((paragraph) => paragraph.trim())
+        .filter((paragraph) => paragraph.length > 0 && paragraph.length < 20)
+        .map(() => 'too_thin' as const),
+    };
+  });
 
   // A seed premise retitled, so each one written is its own.
   fake.register(duetWritePrompt, ({ vars, seed }) => {

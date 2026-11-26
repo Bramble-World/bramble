@@ -24,6 +24,17 @@ export function routeOf(url: string): string {
     .join('/');
 }
 
+/**
+ * The path of a request no route matched, for the log: anything could be in
+ * it, so only short lowercase words are kept (`/api/v1/invites`) and any other
+ * part is `:x` (an invite code, an id, a typo), at most eight parts.
+ */
+export function unmatchedRouteOf(url: string): string {
+  const parts = new URL(url).pathname.split('/').filter(Boolean);
+  const kept = parts.slice(0, 8).map((part) => (/^[a-z][a-z0-9-]{0,31}$/.test(part) ? part : ':x'));
+  return `/${kept.join('/')}${parts.length > 8 ? '/…' : ''}`;
+}
+
 export type RequestLogLine = {
   event: 'request';
   requestId: string;
@@ -47,7 +58,8 @@ const writeLine: Log = (line) => console.log(JSON.stringify(line));
  */
 export function withRequestLog<Args extends [Request, ...unknown[]]>(
   handler: (...args: Args) => Promise<Response>,
-  log: Log = writeLine
+  log: Log = writeLine,
+  route: (url: string) => string = routeOf
 ): (...args: Args) => Promise<Response> {
   return async (...args: Args) => {
     const [request] = args;
@@ -61,7 +73,7 @@ export function withRequestLog<Args extends [Request, ...unknown[]]>(
       event: 'request',
       requestId,
       method: request.method,
-      route: routeOf(request.url),
+      route: route(request.url),
       status,
       ...(code ? { code } : {}),
       ms: Math.round(performance.now() - started),
