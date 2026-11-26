@@ -1,3 +1,4 @@
+import { linkKey, linkStore, once, type LinkStore } from './link-once';
 import { fitSituation, type FitNote } from '@/lib/chatgpt/fit';
 import { and, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { env } from '@/env';
@@ -189,8 +190,32 @@ export async function requestStoriesFromLink(
   {
     generator = getGenerator(),
     signal,
+    links = linkStore(),
     ...deps
-  }: Omit<RequestDeps, 'via'> & { generator?: Generator; signal?: AbortSignal } = {}
+  }: Omit<RequestDeps, 'via'> & {
+    generator?: Generator;
+    signal?: AbortSignal;
+    /** Where a link is remembered, so one sent twice is written once (link-once.ts). */
+    links?: LinkStore | null;
+  } = {}
+): Promise<LinkRequest> {
+  return once(
+    links,
+    linkKey(userId, note),
+    () => storiesFromLink(userId, note, generator, signal, deps),
+    {
+      // The day's limit is checked again on a repeat: it's cheap, and it moves.
+      keep: (answer) => answer.outcome !== 'limited',
+    }
+  );
+}
+
+async function storiesFromLink(
+  userId: string,
+  note: string,
+  generator: Generator,
+  signal: AbortSignal | undefined,
+  deps: Omit<RequestDeps, 'via'>
 ): Promise<LinkRequest> {
   const via = 'link' as const;
   const now = deps.now ?? new Date();

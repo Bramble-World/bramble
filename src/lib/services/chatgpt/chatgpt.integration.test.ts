@@ -6,6 +6,7 @@ import { createFakeGenerator, FakeGenerator } from '@/lib/ai';
 import { registerFixtures } from '@/lib/ai/fixtures';
 import type { ChatGPTContext } from '@/lib/chatgpt/context';
 import { SEED_STORIES } from '@/lib/pool/seeds';
+import { memoryLinks } from './link-once.memory';
 import { advanceSession, commitChoice } from '../generation/turns.service';
 import * as sessions from '../sessions/sessions.service';
 import { claimNextTemplate } from '../pool/pool.writer';
@@ -287,6 +288,24 @@ describe('stories from a link', () => {
     const [kept] = await contextsOf(player);
     expect(kept.content.people).toHaveLength(3);
     expect(kept.content.people[0].relationship.length).toBeLessThanOrEqual(40);
+  });
+
+  it('writes a link sent twice once, and answers the repeat the same', async () => {
+    const player = await newUser('player');
+    const links = memoryLinks();
+    const first = await requestStoriesFromLink(player, NOTE, {
+      generator: fake,
+      safety: pass,
+      links,
+    });
+    const again = await requestStoriesFromLink(player, NOTE, {
+      generator: fake,
+      safety: pass,
+      links,
+    });
+    expect(again).toEqual(first);
+    expect(await contextsOf(player)).toHaveLength(3);
+    expect(fake.calls.filter((c) => c.promptName === 'chatgpt.situations')).toHaveLength(1);
   });
 
   it('writes nothing from a note with no situation in it', async () => {

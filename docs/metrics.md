@@ -115,7 +115,9 @@ link also logs `{"event":"chatgpt_situations","returned":n,"kept":k,"fitted":{â€
 counts, and which limits were trimmed (`people`, `relationship`, `details`, â€¦),
 never the text. Before 2026-11-26 a situation over any limit was dropped whole,
 and a link the app left mid-request was lost; the fix trims instead and lets
-the request finish. A story from ChatGPT that's started shows as
+the request finish. The same link from the same account within 30 minutes is
+answered from Redis (`link-once.ts`: a SHA-256 of the account and note, and the
+answer), so a repeat records no second `chatgpt_story_requested`. A story from ChatGPT that's started shows as
 `next_story_started` with `origin: chatgpt`.
 
 ## Story reports
