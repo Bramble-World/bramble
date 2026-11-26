@@ -171,6 +171,11 @@ export type AnalyticsEvent =
         stories: number;
         /** A link that came to nothing: how many situations the model found in it before fitting (fit.ts). */
         situations_returned?: number;
+        /** The note's size band (under 200 characters, up to 1000, more) and paragraph count: never its text. */
+        note_size?: 'short' | 'medium' | 'long';
+        paragraphs?: number;
+        /** Why the model left situations out, as codes (situations.prompt.ts `SKIP_REASONS`). */
+        skipped?: string[];
       };
     }
   | {
