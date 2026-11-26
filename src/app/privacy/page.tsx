@@ -185,7 +185,10 @@ export default function Privacy() {
         other details that identify someone, school or work logistics, anything sexual, and anything
         too thin to make a story, whatever ChatGPT put in the link. We keep only the situations it
         picked, never the rest of what the link held, and each one then goes the way a story asked
-        for in ChatGPT does, below. You can make up to five stories a day, however you ask.
+        for in ChatGPT does, below. So that a link the app sends twice (if it lost the first answer)
+        makes its stories only once, we keep a one-way fingerprint of the link and your account,
+        which can&rsquo;t be turned back into what the link said, and what we answered, both for 30
+        minutes. You can make up to five stories a day, however you ask.
       </p>
       <p>
         We first send it to OpenAI&rsquo;s moderation service; if it talks about self-harm, abuse or
