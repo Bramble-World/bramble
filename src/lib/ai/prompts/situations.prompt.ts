@@ -45,36 +45,45 @@ export type SkipReason = (typeof SKIP_REASONS)[number];
  * `chatgptContextSchema`, and a situation that doesn't fit is dropped, rather
  * than failing every situation in the link over one long paragraph.
  */
-export const situationsOutputSchema = z.object({
-  situations: z
+const situationSchema = z.object({
+  about: z
+    .string()
+    .describe(
+      'The situation in one to three short paragraphs, in your own words: what happened, what is at stake, what is still unresolved.'
+    ),
+  people: z
     .array(
       z.object({
-        about: z
+        name: z.string().describe('Their first name, as given.'),
+        relationship: z
           .string()
-          .describe(
-            'The situation in one to three short paragraphs, in your own words: what happened, what is at stake, what is still unresolved.'
-          ),
-        people: z
-          .array(
-            z.object({
-              name: z.string().describe('Their first name, as given.'),
-              relationship: z
-                .string()
-                .describe('Who they are to the user, in a few words: "ex", "best friend".'),
-              details: z
-                .string()
-                .describe('What the story needs to know about them, in a sentence or two.'),
-            })
-          )
-          .describe('The one to three people the situation is about.'),
-        you: z
+          .describe('Who they are to the user, in a few words: "ex", "best friend".'),
+        details: z
           .string()
-          .nullable()
-          .describe('Who the user is, in a sentence, if the text says. Null otherwise.'),
+          .describe('What the story needs to know about them, in a sentence or two.'),
       })
     )
+    .describe('The one to three people the situation is about.'),
+  you: z
+    .string()
+    .nullable()
+    .describe('Who the user is, in a sentence, if the text says. Null otherwise.'),
+});
+
+export const situationsOutputSchema = z.object({
+  situations: z
+    .array(situationSchema)
     .describe(
       `The situations to write stories from, at most ${MAX_LINK_SITUATIONS}, best first. Empty when none is worth a story.`
+    ),
+  // Only when nothing was kept: the one the user can still have. A player who
+  // sent a link asked for a story, so "nothing there" is the last answer, not
+  // the first (the user's call, 2026-11-26: 43% of links made nothing, almost
+  // all of them over `too_thin`).
+  fallback: situationSchema
+    .nullable()
+    .describe(
+      'Only when situations is empty: the strongest situation in the note that has a named person and nothing from the Drop list, written up the same way, however thin. Null when situations has any, or when the note has none like that.'
     ),
   // After the situations, so what's kept is written first. Codes only.
   skipped: z
@@ -115,8 +124,7 @@ export const situationsPrompt: PromptSpec<{ text: string }, SituationsOutput> = 
       '  deadlines, schedules, applications, tasks;',
       '- anything sexual, and anything at all sexual involving a minor;',
       '- religion and sexuality, unless the note makes clear the user wants them in;',
-      '- anything too thin to play: a topic, a mood or a single fact with no',
-      '  situation behind it.',
+      '- anything too thin to play: a topic or a mood with no one named in it.',
       'If a situation is worth keeping but carries one of these, keep it only if',
       'the story stands without that detail, and leave the detail out.',
       '',
@@ -125,9 +133,18 @@ export const situationsPrompt: PromptSpec<{ text: string }, SituationsOutput> = 
       '  Never invent a name; a situation with no one named is too thin.',
       '- Say only what the note says about them. Never add anything they did.',
       '',
+      'They asked for these stories, so keep a situation whenever you can. A named',
+      'person and something between them and the user is enough, even in a',
+      'sentence: the story is written by someone else, who fills in the setting',
+      'and the rest. When in doubt, keep it.',
+      '',
       'Write in your own words, plainly, about "the user". Keep each situation',
       'separate: one per entry, and never the same one twice. Return an empty list',
-      'when nothing is worth a story.',
+      'only when nothing is worth a story.',
+      '',
+      'When you keep none, put in fallback the strongest situation the note has',
+      'with a named person in it and nothing from the Drop list, however thin,',
+      'written up the same way. Otherwise fallback is null.',
       '',
       'For every situation in the note you leave out, add one code to skipped saying',
       'why: health, mental_health, money_or_legal, identifying, logistics, sexual,',
