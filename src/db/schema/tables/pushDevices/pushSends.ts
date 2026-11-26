@@ -43,7 +43,7 @@ export const pushSends = pgTable(
     index('idx_push_sends_user').on(table.userId, table.sentAt),
     check(
       'chk_push_sends_kind',
-      sql`${table.kind} IN ('battery_back', 'story_waiting', 'reply_arrived')`
+      sql`${table.kind} IN ('battery_back', 'story_waiting', 'reply_arrived', 'duet_moved')`
     ),
   ]
 );

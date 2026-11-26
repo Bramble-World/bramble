@@ -15,6 +15,13 @@ export type ConsequenceVars = {
    * prompt cache is cut before that point (see `stableBeats`).
    */
   playheadOrder: number;
+  /**
+   * On one side of a story for two only: the character who is the other
+   * player. Each beat then says whether they would know it happened, and what
+   * they would know crosses into their side (crossings). Absent everywhere
+   * else, and the prompt is then exactly the usual one.
+   */
+  partnerCharacterId?: string;
   /** What the user was shown, and what they picked. */
   decision: {
     headline: string | null;
@@ -26,6 +33,22 @@ export type ConsequenceVars = {
     rejectedLabels: string[];
   };
 };
+
+/** One beat a decision caused. Shared with the duet version, which adds one field. */
+const consequenceEventSchema = z.object({
+  title: z.string().min(1).describe('A short label for the beat, under 60 characters.'),
+  description: z.string().min(1).describe('What now happens, 1-3 sentences.'),
+  stakes: z.string().nullable().describe('What is at risk. Null if nothing new is.'),
+  participantCharacterIds: z
+    .array(z.string())
+    .describe('Character ids from the cast who are involved. May be empty.'),
+  actorCharacterId: z
+    .string()
+    .nullable()
+    .describe(
+      'The one character who set this beat in motion, if a single person did. Null when it is something that happened to them rather than something someone did.'
+    ),
+});
 
 /**
  * What a decision changed about the story.
@@ -44,22 +67,7 @@ export type ConsequenceVars = {
  */
 export const consequenceOutputSchema = z.object({
   events: z
-    .array(
-      z.object({
-        title: z.string().min(1).describe('A short label for the beat, under 60 characters.'),
-        description: z.string().min(1).describe('What now happens, 1-3 sentences.'),
-        stakes: z.string().nullable().describe('What is at risk. Null if nothing new is.'),
-        participantCharacterIds: z
-          .array(z.string())
-          .describe('Character ids from the cast who are involved. May be empty.'),
-        actorCharacterId: z
-          .string()
-          .nullable()
-          .describe(
-            'The one character who set this beat in motion, if a single person did. Null when it is something that happened to them rather than something someone did.'
-          ),
-      })
-    )
+    .array(consequenceEventSchema)
     .max(2)
     .describe(
       'At most two new beats recording what happened, whoever caused it — the reader acting, or another character replying, refusing, or doing something of their own. Empty only when the choice changed nothing at all.'
@@ -92,12 +100,43 @@ export const consequenceOutputSchema = z.object({
 
 export type ConsequenceOutput = z.infer<typeof consequenceOutputSchema>;
 
+/**
+ * The duet version: each beat also says whether the other player's character
+ * would know it happened. Only those cross into their side.
+ */
+export const duetConsequenceOutputSchema = consequenceOutputSchema.extend({
+  events: z
+    .array(
+      consequenceEventSchema.extend({
+        partnerKnows: z
+          .boolean()
+          .describe(
+            'True only if the other player would know this happened: they were told, texted, shown, or were there. False for anything private to the reader.'
+          ),
+      })
+    )
+    .max(2)
+    .describe(consequenceOutputSchema.shape.events.description ?? ''),
+});
+
+export type DuetConsequenceOutput = z.infer<typeof duetConsequenceOutputSchema>;
+
+/** The rules a story for two adds: who the other player is, and what they'd know. */
+const PARTNER_RULES = [
+  '',
+  'This story is shared: one other character is played by another real person, in',
+  'their own version of it. For each beat, say whether that character would know',
+  'it happened (partnerKnows): only when they were told, texted, shown, or there.',
+  'Anything the reader keeps to themselves is false. Never decide what that',
+  'character does next; only record what the reader did that reaches them.',
+];
+
 export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> = {
   name: 'consequence.commit',
   stage: 'consequence',
   schema: consequenceOutputSchema,
 
-  render: ({ storyline, decision, playheadOrder }) => ({
+  render: ({ storyline, decision, playheadOrder, partnerCharacterId }) => ({
     system: [
       "You decide what a reader's choice changed about a story, and record it.",
       '',
@@ -131,6 +170,7 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
       '  nobody else ever does anything, and the story stops moving. When the other',
       '  person is the one who moved the scene, the beat is theirs.',
       '- Only reference character and relationship ids that appear below.',
+      ...(partnerCharacterId ? PARTNER_RULES : []),
     ].join('\n'),
 
     ...joinLines([
@@ -172,6 +212,12 @@ export const consequencePrompt: PromptSpec<ConsequenceVars, ConsequenceOutput> =
         ? `They passed over: ${decision.rejectedLabels.join('; ')}`
         : null,
       '',
+      ...(partnerCharacterId
+        ? [
+            `The other player is ${shortId(partnerCharacterId)} (${nameOf(storyline, partnerCharacterId)}).`,
+            '',
+          ]
+        : []),
       'Record what changed.',
     ] satisfies PromptLine[]),
   }),
@@ -187,6 +233,13 @@ function stableBeats(storyline: StorylineContext, playheadOrder: number): number
   const reached = ahead === -1 ? storyline.timeline.length : ahead;
   return Math.min(reached, storyline.timeline.length - STAKES_WINDOW);
 }
+
+/** The consequence step on one side of a story for two (`partnerCharacterId` set). */
+export const duetConsequencePrompt: PromptSpec<ConsequenceVars, DuetConsequenceOutput> = {
+  ...(consequencePrompt as unknown as PromptSpec<ConsequenceVars, DuetConsequenceOutput>),
+  name: 'consequence.duet',
+  schema: duetConsequenceOutputSchema,
+};
 
 function nameOf(storyline: StorylineContext, characterId: string): string {
   return storyline.characters.find((c) => c.id === characterId)?.name ?? 'someone';

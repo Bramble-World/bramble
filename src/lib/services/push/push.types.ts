@@ -9,7 +9,12 @@ export type PushEnvironment = (typeof PUSH_ENVIRONMENTS)[number];
  * (pauses.ts), and is kept in `push_sends`, which is also what keeps "story
  * waiting" at least 20 hours behind it.
  */
-export type PushKind = 'battery_back' | 'story_waiting' | 'story_ready' | 'reply_arrived';
+export type PushKind =
+  | 'battery_back'
+  | 'story_waiting'
+  | 'story_ready'
+  | 'reply_arrived'
+  | 'duet_moved';
 
 /**
  * What a notification says. Apple carries this text, and a lock screen shows it

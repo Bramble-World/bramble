@@ -205,6 +205,20 @@ services:
     # a handful.
     timeoutSeconds: 1800
 
+  - name: duet-premise-sweep
+    type: job
+    run: node dist/sweeps/duet-premise-sweep.js
+    # Hourly, off the hour. Keeps ten premises for stories for two ready (the
+    # hand-written seeds count), writing at most three a run and none once the
+    # stock is full. Each is written, checked and moderated; only a pass is kept.
+    cron: '20 * * * *'
+    cpuCores: 0.25
+    ramMegabytes: 512
+    allowConcurrent: false
+    # At most three premises, each two model calls on flex (up to 3 min, then
+    # the normal tier). Usually none.
+    timeoutSeconds: 1800
+
 # Build-time values that are public by definition, so they belong in version
 # control rather than in a dashboard.
 #

@@ -125,6 +125,25 @@ answered from Redis (`link-once.ts`: a SHA-256 of the account and note, and the
 answer), so a repeat records no second `chatgpt_story_requested`. A story from ChatGPT that's started shows as
 `next_story_started` with `origin: chatgpt`.
 
+## Stories for two
+
+`invite_created` (a player made an invite), `invite_accepted` (someone accepted
+one: both sides are written) and `duet_started` with `side` (`a` the inviter's,
+`b` the invitee's) when a player starts their side. No codes, names or ids
+beyond the player's own. A side's beats are `beat_played` with `origin: duet`.
+Acceptance rate: `invite_accepted` / `invite_created`. Both playing:
+duets with `duet_started` for both sides. The premise stock is in the logs, not
+analytics: `duet-premise-sweep` logs `stock`, `written`, `rejected` and `failed`
+each run, and a high `rejected` means the writer prompt needs work.
+
+Crossings (what one side does that the other's character would know):
+`duet_crossed` on the receiving player, with `from_side`, `held` (their side
+hadn't started) and `count`, when the consequence step queues one; and
+`duet_crossing_delivered` when it opens their beat. Delivered / crossed is how
+often one actually lands. `push_sent` with `kind: duet_moved` is "your story for
+two just moved", sent at most once per latest turn to a player away 30 minutes
+with a crossing waiting.
+
 ## Story reports
 
 Players reporting a story (`POST .../report`). Each report also raises its own

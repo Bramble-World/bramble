@@ -2,6 +2,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/index';
 import { users } from '@/db/schema/tables';
 import { NewUser, PublicUser, UserPatch } from './users.types';
+import { forgetDuetPartner } from '../duets/duets.service';
 
 /**
  * Derives `email_verified_at` from the incoming address and its verified flag.
@@ -143,8 +144,16 @@ export async function updatePreferencesById(
 export async function purgeUsersByEmail(
   email: string
 ): Promise<{ id: string; clerkId: string | null }[]> {
-  return db
-    .delete(users)
-    .where(eq(users.email, email.trim().toLowerCase()))
-    .returning({ id: users.id, clerkId: users.clerkId });
+  return db.transaction(async (tx) => {
+    const found = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email.trim().toLowerCase()));
+    // A story for two carries on for the other player, without this one's name.
+    for (const { id } of found) await forgetDuetPartner(tx, id);
+    return tx
+      .delete(users)
+      .where(eq(users.email, email.trim().toLowerCase()))
+      .returning({ id: users.id, clerkId: users.clerkId });
+  });
 }

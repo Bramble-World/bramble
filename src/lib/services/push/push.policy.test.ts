@@ -123,6 +123,8 @@ describe('every notification', () => {
       'made from your life. it’s on your desk.',
       'your story’s waiting on your choice.',
       'pick up where you left off.',
+      'your story for two just moved.',
+      'something happened. see what’s waiting.',
     ]);
   });
 });

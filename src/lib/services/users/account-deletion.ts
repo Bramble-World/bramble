@@ -8,6 +8,7 @@ import { deleteAnalyticsPerson } from '@/lib/analytics/person-deletion';
 import { PublicUser } from './users.types';
 import { getUserByClerkIdIncludingDeleted } from './users.reader';
 import { ReverificationRequiredError } from '@/lib/utils/errors';
+import { forgetDuetPartner } from '../duets/duets.service';
 
 /**
  * Deletes a player's account from inside the app, straight away.
@@ -76,6 +77,8 @@ export async function deleteAccount(user: PublicUser, proof: DeletionProof): Pro
     await deleteAnalyticsPerson(user.id);
 
     await db.transaction(async (tx) => {
+      // A story for two carries on for the other player, without this one's name.
+      await forgetDuetPartner(tx, user.id);
       await tx.delete(users).where(eq(users.id, user.id));
       try {
         await clerkBackend.users.deleteUser(clerkId);
@@ -128,7 +131,10 @@ export async function deleteAccountRemovedFromClerk(clerkId: string): Promise<bo
 
   try {
     await deleteAnalyticsPerson(user.id);
-    await db.delete(users).where(eq(users.id, user.id));
+    await db.transaction(async (tx) => {
+      await forgetDuetPartner(tx, user.id);
+      await tx.delete(users).where(eq(users.id, user.id));
+    });
   } catch (error) {
     Sentry.captureException(error, {
       tags: { flow: 'account_deletion_from_clerk' },

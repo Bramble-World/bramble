@@ -148,6 +148,7 @@ confidence rather than left in place forever because nobody is sure.
 | `PAUSES_ROLLOUT`            | web, worker | set by hand                 | Who gets stories that pause for a reply in real time: `admins` (the default), `test` (half of players and every admin) or `off`. Public.                                                                                                                                                               |
 | `CLERK_JWT_KEY`             | web         | Clerk prod                  | PEM public key. Verifies session JWTs in-process instead of fetching JWKS per request. A latency optimisation, not a requirement.                                                                                                                                                                      |
 | `IOS_TESTFLIGHT_URL`        | web         | App Store Connect           | The iPhone beta's TestFlight public link (`https://testflight.apple.com/join/…`, from the external testing group). Setting it **publishes the iPhone beta**: "get the iPhone beta" appears on the landing page. Read per request.                                                                      |
+| `IOS_APP_STORE_URL`         | web         | App Store Connect           | Bramble's App Store page (`https://apps.apple.com/…`). Shown on an invite link's page (`/invite/<code>`) as "get bramble on the app store"; unset hides the button. Public, read per request.                                                                                                          |
 | `CHATGPT_OAUTH_CLIENT_ID`   | web         | Clerk dashboard             | Bramble in ChatGPT: the client id of the Clerk OAuth application made for ChatGPT (Configure › OAuth applications, public client with PKCE, ChatGPT's redirect URL). Unset means `/api/mcp` refuses everyone. Not a secret. Also needs `POOL_WORKER_CONCURRENCY` ≥ 1, which writes these stories too.  |
 | `OPENAI_APPS_CHALLENGE`     | web         | OpenAI plugin portal        | Bramble in ChatGPT: the domain verification token the portal shows on submission, served as plain text at `/.well-known/openai-apps-challenge` on api.brambleworld.com. Unset means a 404. Not a secret. The package uploaded to the portal is built from `chatgpt-plugin/` by `pnpm chatgpt:package`. |
 
@@ -417,6 +418,24 @@ job with its schedule in Porter. To run it by hand:
 
 ```bash
 porter app run bramble -- node dist/sweeps/reply-sweep.js
+```
+
+## The duet premise sweep
+
+`duet-premise-sweep` (`node dist/sweeps/duet-premise-sweep.js`, cron
+`20 * * * *`) keeps premises for stories for two ready: ten in all, the
+hand-written seeds (`src/lib/duets/seeds`) counting. Each run writes at most
+three, and none once the stock is full. Each one is written (`duet.write`),
+held to the rules the schema can't hold (`premiseProblem`: never a couple), checked
+(`duet.check`, a 4 or 5 to pass) and moderated, all on the `pool` stage (flex
+first). Only a pass is kept, in `duet_premises`; a rejection writes nothing. It
+logs one `duet-premise-sweep` line of counts per run (`stock`, `written`,
+`rejected`, `failed`). It needs `OPENAI_API_KEY` and `BRAMBLE_AI_MODE`. To retire
+a premise, set its `status` to `retired`: the duets that used it keep it, and no
+new pair gets it. To run it by hand:
+
+```bash
+porter app run bramble -- node dist/sweeps/duet-premise-sweep.js
 ```
 
 ## Health checks
