@@ -86,6 +86,12 @@ export const env = createEnv({
      */
     IOS_TESTFLIGHT_URL: z.url().optional(),
     /**
+     * Bramble's App Store page (`https://apps.apple.com/…`), shown on an invite
+     * link's page (`/invite/<code>`) as "get bramble on the app store". Public,
+     * read per request like `IOS_TESTFLIGHT_URL`; unset hides the button.
+     */
+    IOS_APP_STORE_URL: z.url().optional(),
+    /**
      * Bramble in ChatGPT (`/api/mcp`): the Clerk OAuth application's client id
      * that ChatGPT signs in with, made once in Clerk's dashboard with ChatGPT's
      * redirect URL. An OAuth token from any other client is refused, which is
@@ -228,6 +234,7 @@ export const env = createEnv({
     IMPORT_WORKER_CONCURRENCY: process.env.IMPORT_WORKER_CONCURRENCY,
     POOL_WORKER_CONCURRENCY: process.env.POOL_WORKER_CONCURRENCY,
     IOS_TESTFLIGHT_URL: process.env.IOS_TESTFLIGHT_URL,
+    IOS_APP_STORE_URL: process.env.IOS_APP_STORE_URL,
     CHATGPT_OAUTH_CLIENT_ID: process.env.CHATGPT_OAUTH_CLIENT_ID,
     OPENAI_APPS_CHALLENGE: process.env.OPENAI_APPS_CHALLENGE,
     POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,
