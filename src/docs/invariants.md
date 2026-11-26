@@ -155,6 +155,15 @@ from what that player's ChatGPT sent, and keeps real names, so `choose()`
 offers it to that player only (`ownFromChatGPT`) and the pool query excludes
 the origin outright. `chatgpt.integration.test.ts` holds this.
 
+**A side of a story for two is one player's, too.** A `duet` template is
+written for its `user_id` with the other player cast by the first name they
+gave; it is offered to that player only and excluded from the pool like
+`chatgpt`. The two sides share nothing but the `duets` row: neither player's
+rows are ever read to write or show the other's side. Before an account is
+deleted, `forgetDuetPartner` renames them on the other side, everywhere in it,
+so no deleted player's name stays in anyone else's account.
+`invites.integration.test.ts` holds this.
+
 ---
 
 ## 4. Conditional columns — nullable, but required in some states

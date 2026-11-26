@@ -1,0 +1,128 @@
+{
+  "a": {
+    "title": "the screenshot",
+    "hook": "you screenshotted the group chat for {partner}. now it's on someone's story.",
+    "openingLines": [
+      "it's 7:41 on a tuesday.",
+      "your phone won't stop buzzing.",
+      "someone posted the screenshot."
+    ],
+    "setting": "A high school in suburban Texas, senior year, a Tuesday evening in February. You're at the kitchen table pretending to do homework.",
+    "tone": "tense and funny: the specific panic of something private going public",
+    "self": {
+      "description": "Seventeen, the one who keeps receipts, loyal to a fault.",
+      "want": "To find out who posted it before anyone blames you.",
+      "avoids": "Admitting you sent it to anyone at all."
+    },
+    "cast": [
+      {
+        "name": "{partner}",
+        "pronouns": "they",
+        "relationshipType": "your best friend",
+        "role": "supporting",
+        "description": "The only person you sent the screenshot to, and the only one who knows why you sent it.",
+        "want": "To not be the reason this blew up.",
+        "avoids": "Saying who they showed it to.",
+        "voiceTone": null,
+        "closeness": "you send each other everything",
+        "tension": "you're not sure they deleted it like they said"
+      },
+      {
+        "name": "Marcus",
+        "pronouns": "he",
+        "relationshipType": "the guy in the screenshot",
+        "role": "antagonist",
+        "description": "Student council president, charming in public, the one whose messages are in the screenshot.",
+        "want": "To find out who leaked it and make them pay socially.",
+        "avoids": "Anyone reading what he actually wrote too closely.",
+        "voiceTone": "polished, a little too calm",
+        "closeness": null,
+        "tension": "he's already asking around"
+      }
+    ],
+    "opening": [
+      {
+        "title": "The chat",
+        "description": "Marcus said something cruel about a girl in your grade in a group chat you're barely in.",
+        "engagementScore": 6
+      },
+      {
+        "title": "The send",
+        "description": "You screenshotted it and sent it to {partner} with 'are you seeing this'.",
+        "engagementScore": 7
+      },
+      {
+        "title": "The post",
+        "description": "At 7:41 the screenshot is on a junior's story, with your phone's battery icon still in the corner.",
+        "engagementScore": 9
+      }
+    ],
+    "background": [
+      "Your phone's lock-screen wallpaper is visible at the top edge of the screenshot.",
+      "{partner} showed it to one person, and has been trying to decide whether to tell you."
+    ]
+  },
+  "b": {
+    "title": "the screenshot",
+    "hook": "{partner} sent you a screenshot. you showed one person. now it's everywhere.",
+    "openingLines": [
+      "it's 7:41 on a tuesday.",
+      "your stomach drops.",
+      "you only showed one person."
+    ],
+    "setting": "A high school in suburban Texas, senior year, a Tuesday evening in February. You're in your car in the grocery store parking lot.",
+    "tone": "tense and funny: the specific panic of something private going public",
+    "self": {
+      "description": "Seventeen, easygoing, the one who tells people things because you trust them too fast.",
+      "want": "To fix this before {partner} finds out it was you.",
+      "avoids": "Lying to {partner} outright."
+    },
+    "cast": [
+      {
+        "name": "{partner}",
+        "pronouns": "they",
+        "relationshipType": "your best friend",
+        "role": "supporting",
+        "description": "The one who screenshotted the chat and sent it only to you.",
+        "want": "To find out who posted it before anyone blames them.",
+        "avoids": "Admitting they sent it to anyone at all.",
+        "voiceTone": null,
+        "closeness": "you send each other everything",
+        "tension": "they trusted you with this one"
+      },
+      {
+        "name": "Priya",
+        "pronouns": "she",
+        "relationshipType": "your lab partner",
+        "role": "supporting",
+        "description": "The one person you showed it to, who swore she wouldn't share it.",
+        "want": "For the girl Marcus wrote about to know the truth.",
+        "avoids": "Taking the blame for posting it.",
+        "voiceTone": "earnest, full sentences, never lowercase",
+        "closeness": "friendly, not close",
+        "tension": "she thinks posting it was the right thing to do"
+      }
+    ],
+    "opening": [
+      {
+        "title": "The send",
+        "description": "{partner} sent you a screenshot of Marcus being cruel in a group chat.",
+        "engagementScore": 6
+      },
+      {
+        "title": "The show",
+        "description": "In chem you showed it to Priya, who went very quiet.",
+        "engagementScore": 7
+      },
+      {
+        "title": "The post",
+        "description": "At 7:41 it's on a junior's story, and {partner} is calling you.",
+        "engagementScore": 9
+      }
+    ],
+    "background": [
+      "Priya knows the girl Marcus wrote about.",
+      "Marcus has already figured out whose phone the screenshot came from."
+    ]
+  }
+}

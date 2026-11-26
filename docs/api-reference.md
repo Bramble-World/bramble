@@ -1065,7 +1065,8 @@ story is going):
     "a stranger sits down beside you."
   ],
   "fromPool": false,
-  "fromChatGPT": false
+  "fromChatGPT": false,
+  "withPartner": null
 }
 ```
 
@@ -1078,6 +1079,10 @@ story is going):
   someone else's past." when true; seed stories are the team's and say nothing.
 - **`fromChatGPT`** — written for this reader from what they shared in ChatGPT.
   Show "made with chatgpt." when true. Never true with `fromPool`.
+- **`withPartner`** — this reader's side of a story for two (see "Stories for
+  two" below): the other player's first name, as they gave it. Null for every
+  other story. A story for two is offered before anything else, like one from
+  ChatGPT.
 
 Pool stories are already written, so `next` is ready as soon as the story ends
 whenever the pool has one for the reader; `preparing` only ever means a story
@@ -1226,6 +1231,54 @@ either — the transcript lives encrypted in Redis for at most 30 minutes and in
 the memory of the worker reading it, and nowhere else.
 
 ---
+
+## Stories for two
+
+One player invites another; both get the same premise from opposite sides,
+each as their own story, offered as their next one. What crosses between the
+two sides comes later; for now the other player is a character on each side,
+by the first name they gave. All three routes speak first names only, never an
+account's email or id.
+
+### `POST /api/v1/invites`
+
+Accounts only (a guest gets 403 `SIGNUP_REQUIRED`). Body: `{ "firstName": "Maya" }`:
+how the inviter wants to be known in the other player's story, 1–16 letters
+(spaces, hyphens and apostrophes allowed). **201**:
+
+```json
+{
+  "invite": {
+    "code": "KXMPRT",
+    "url": "https://www.brambleworld.com/invite/KXMPRT",
+    "expiresAt": "2026-12-03T04:12:00.000Z"
+  }
+}
+```
+
+Codes are 6 letters from `ABCDEFGHJKMNPQRSTUVWXYZ` (no I, L or O). An invite
+lasts 7 days. At most 5 open at once and 10 made in 24 hours: past either, 429
+`RATE_LIMITED` with `Retry-After`.
+
+### `GET /api/v1/invites/{code}`
+
+Accounts and guests, so the app can say who's inviting before asking to sign
+up. The code in any case, spaces ignored. **200**:
+
+```json
+{ "invite": { "inviterFirstName": "Maya", "expiresAt": "…", "state": "open" } }
+```
+
+`state` is `open`, `accepted` or `expired`. An unknown code is 404 `NOT_FOUND`.
+
+### `POST /api/v1/invites/{code}/accept`
+
+Accounts only (403 `SIGNUP_REQUIRED` for a guest). Body: `{ "firstName": "Sam" }`,
+as above. **201** `{ "duet": { "id": "…" } }`: both sides are written at once,
+and each becomes that player's next story (`next.withPartner` is the other's
+first name). Once only: the same player accepting again gets the same duet;
+anyone else gets 409 `INVITE_USED`. 409 `OWN_INVITE` for your own, 410
+`INVITE_EXPIRED` after 7 days, 404 for an unknown code.
 
 ## Bramble in ChatGPT
 

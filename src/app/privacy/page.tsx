@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 25, 2026">
+    <LegalPage title="Privacy Policy" effective="November 26, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -202,6 +202,21 @@ export default function Privacy() {
         added from your account, and disconnect Bramble in ChatGPT&rsquo;s settings; a story made
         from a link is deleted with your account, or when you email us to delete it. What ChatGPT
         itself keeps is covered by OpenAI&rsquo;s own privacy policy, not this one.
+      </p>
+
+      <h3>Stories for two (iPhone)</h3>
+      <p>
+        You can invite someone to play a story with you. When you make an invite we store a
+        six-letter code, the first name you typed for yourself, when you made it and when it expires
+        (after 7 days). Anyone who opens the code, in the app or at our invite link, sees that first
+        name and nothing else about you. When someone with an account accepts, we record who
+        accepted and when, and they give the first name they want you to know them by. You each get
+        your own side of the same story, in your own account: the other person is a character in it
+        by the first name they gave. Neither of you can see the other&rsquo;s side, any of the
+        other&rsquo;s other stories, or anything else in the other&rsquo;s account. If one of you
+        deletes their account, the other&rsquo;s side stays theirs and carries on, with the
+        character who was the person who left renamed to a made-up first name everywhere in it, so
+        nothing in it is linked to them any more.
       </p>
 
       <h3>Reporting a story</h3>

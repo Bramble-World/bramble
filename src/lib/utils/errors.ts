@@ -238,3 +238,24 @@ export class ClientTooOldError extends AppError {
     super('This version of Bramble is too old. Please update.', 'CLIENT_TOO_OLD', 426);
   }
 }
+
+/** An invite past its 7 days (`invites`). The inviter can send a new one. */
+export class InviteExpiredError extends AppError {
+  constructor() {
+    super('This invite has expired', 'INVITE_EXPIRED', 410);
+  }
+}
+
+/** An invite someone has already accepted: each is good for one story for two. */
+export class InviteUsedError extends AppError {
+  constructor() {
+    super('This invite has already been used', 'INVITE_USED', 409);
+  }
+}
+
+/** Accepting your own invite. */
+export class OwnInviteError extends AppError {
+  constructor() {
+    super("You can't accept your own invite", 'OWN_INVITE', 409);
+  }
+}

@@ -125,6 +125,15 @@ answered from Redis (`link-once.ts`: a SHA-256 of the account and note, and the
 answer), so a repeat records no second `chatgpt_story_requested`. A story from ChatGPT that's started shows as
 `next_story_started` with `origin: chatgpt`.
 
+## Stories for two
+
+`invite_created` (a player made an invite), `invite_accepted` (someone accepted
+one: both sides are written) and `duet_started` with `side` (`a` the inviter's,
+`b` the invitee's) when a player starts their side. No codes, names or ids
+beyond the player's own. A side's beats are `beat_played` with `origin: duet`.
+Acceptance rate: `invite_accepted` / `invite_created`. Both playing:
+duets with `duet_started` for both sides.
+
 ## Story reports
 
 Players reporting a story (`POST .../report`). Each report also raises its own

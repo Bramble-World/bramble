@@ -19,6 +19,7 @@ import { GUEST_SELF_NAME } from '../guests/guests.service';
 import * as sessions from '../sessions/sessions.service';
 import * as sessionWriter from '../sessions/sessions.writer';
 import { Executor } from '../executor';
+import { linkDuetSide, partnerNameFor } from '../duets/duets.service';
 
 /**
  * The next story, Netflix-style: chosen when one ends, started when the reader
@@ -33,7 +34,7 @@ import { Executor } from '../executor';
 
 export type NextStory = {
   templateId: string;
-  origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt';
+  origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'duet';
   title: string;
   hook: string;
   openingLines: string[];
@@ -41,6 +42,11 @@ export type NextStory = {
   fromPool: boolean;
   /** Written for this reader from what they shared in ChatGPT. */
   fromChatGPT: boolean;
+  /**
+   * One side of a story for two (`duets`): the other player's first name, as
+   * they gave it. Null for every other story.
+   */
+  withPartner: string | null;
 };
 
 /**
@@ -60,8 +66,9 @@ export const NEXT_STORY_HOW = ['countdown', 'begin_now', 'later'] as const;
 export type NextStoryHow = (typeof NEXT_STORY_HOW)[number];
 
 /**
- * The oldest story written for this reader from ChatGPT that they haven't
- * started yet. It goes before anything from the pool: they asked for it.
+ * The oldest story written for this reader that they haven't started yet:
+ * from ChatGPT, or their side of a story for two. It goes before anything from
+ * the pool: they asked for it, or a friend is waiting on it.
  */
 async function ownFromChatGPT(tx: Executor, userId: string) {
   const [row] = await tx
@@ -69,7 +76,7 @@ async function ownFromChatGPT(tx: Executor, userId: string) {
     .from(storyTemplates)
     .where(
       sql`"story_templates"."status" = 'ready'
-        and "story_templates"."origin" = 'chatgpt'
+        and "story_templates"."origin" in ('chatgpt', 'duet')
         and "story_templates"."user_id" = ${userId}
         and not exists (
           select 1 from "storylines" "played"
@@ -102,7 +109,7 @@ async function choose(tx: Executor, userId: string, lastAuthor: string | null) {
     .from(storyTemplates)
     .where(
       sql`"story_templates"."status" = 'ready'
-        and "story_templates"."origin" <> 'chatgpt'
+        and "story_templates"."origin" not in ('chatgpt', 'duet')
         and ("story_templates"."user_id" is null or "story_templates"."user_id" <> ${userId})
         and (${lastAuthor}::uuid is null or "story_templates"."user_id" is null
              or "story_templates"."user_id" <> ${lastAuthor}::uuid)
@@ -183,7 +190,12 @@ export async function nextStoryFor(userId: string, sessionId: string): Promise<N
   let template = row?.next ? await templateIfReady(db, row.next) : null;
   // A story they asked ChatGPT for, written since the card was chosen, takes
   // its place: it's the one they're waiting for.
-  if (template && template.origin !== 'chatgpt' && (await ownFromChatGPT(db, userId))) {
+  if (
+    template &&
+    template.origin !== 'chatgpt' &&
+    template.origin !== 'duet' &&
+    (await ownFromChatGPT(db, userId))
+  ) {
     template = null;
   }
   if (!template) {
@@ -205,6 +217,7 @@ export async function nextStoryFor(userId: string, sessionId: string): Promise<N
     openingLines: template.content.openingLines,
     fromPool: template.origin === 'reborn' || template.origin === 'reddit',
     fromChatGPT: template.origin === 'chatgpt',
+    withPartner: template.origin === 'duet' ? await partnerNameFor(template.id) : null,
   };
 }
 
@@ -238,7 +251,12 @@ export async function startNextStory(
     const template = await templateIfReady(tx, offered.templateId);
     if (!template) throw new NotFoundError('Next story', sessionId);
 
-    const next = await instantiateTemplate(tx, userId, template.id, template.content);
+    const copied = await copyTemplate(tx, userId, template.id, template.content);
+    // Their side of a story for two: say which storyline and character is whose.
+    if (template.origin === 'duet') {
+      await linkDuetSide(tx, userId, template.id, copied.storylineId, copied.castCharacterIds);
+    }
+    const next = copied.sessionId;
     await tx
       .update(storylineSessions)
       .set({ nextSessionId: next })
@@ -271,6 +289,16 @@ export async function instantiateTemplate(
   templateId: string,
   template: StoryTemplate
 ): Promise<string> {
+  return (await copyTemplate(tx, userId, templateId, template)).sessionId;
+}
+
+/** `instantiateTemplate`, also saying what it made: the storyline, and the cast's characters in order. */
+async function copyTemplate(
+  tx: Executor,
+  userId: string,
+  templateId: string,
+  template: StoryTemplate
+): Promise<{ sessionId: string; storylineId: string; castCharacterIds: string[] }> {
   const self =
     (
       await tx
@@ -379,5 +407,5 @@ export async function instantiateTemplate(
 
   const session = await sessionWriter.insertSession(tx, userId, storyline.id, last.id);
   await sessionWriter.raisePlayheadTo(tx, session.id, last.narrativeOrder);
-  return session.id;
+  return { sessionId: session.id, storylineId: storyline.id, castCharacterIds: castIds };
 }

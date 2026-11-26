@@ -2,6 +2,7 @@ import { pgTable, uuid, text, timestamp, index, pgEnum, integer } from 'drizzle-
 import { timestamps } from '../../../util/timestamps';
 import { users } from '../users';
 import { storyTemplates } from '../storyTemplates';
+import { duets } from '../duets';
 import { type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const storylineStatusEnum = pgEnum('storyline_status', [
@@ -64,6 +65,9 @@ export const storylines = pgTable(
     templateId: uuid('template_id').references((): AnyPgColumn => storyTemplates.id, {
       onDelete: 'set null',
     }),
+
+    /** One side of a story for two (`duets`), when it is one. Null otherwise. */
+    duetId: uuid('duet_id').references((): AnyPgColumn => duets.id, { onDelete: 'set null' }),
 
     ...timestamps,
   },
