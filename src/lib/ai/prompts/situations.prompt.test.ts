@@ -34,6 +34,12 @@ describe('chatgpt.situations', () => {
     }
   });
 
+  it('keeps a situation whenever it can: they asked for these stories', () => {
+    expect(system).toContain('keep a situation whenever you can');
+    expect(system).toContain('When in doubt, keep it.');
+    expect(system).toContain('When you keep none, put in fallback the strongest situation');
+  });
+
   it('keeps real names as given and never invents one', () => {
     expect(system).toContain('Keep their first names');
     expect(system).toContain('Never invent a name');
@@ -48,23 +54,38 @@ describe('situationsOutputSchema', () => {
   };
 
   it('takes an empty list: nothing worth a story', () => {
-    expect(situationsOutputSchema.parse({ situations: [], skipped: [] })).toEqual({
+    expect(situationsOutputSchema.parse({ situations: [], fallback: null, skipped: [] })).toEqual({
       situations: [],
+      fallback: null,
       skipped: [],
     });
   });
 
   it('takes a situation that is also what write_my_story takes', () => {
-    const { situations } = situationsOutputSchema.parse({ situations: [situation], skipped: [] });
+    const { situations } = situationsOutputSchema.parse({
+      situations: [situation],
+      fallback: null,
+      skipped: [],
+    });
     expect(chatgptContextSchema.safeParse(situations[0]).success).toBe(true);
   });
 
   it("leaves lengths to write_my_story's schema, which a situation with no one in it fails", () => {
     const { situations } = situationsOutputSchema.parse({
       skipped: [],
+      fallback: null,
       situations: [{ ...situation, people: [] }],
     });
     expect(chatgptContextSchema.safeParse(situations[0]).success).toBe(false);
+  });
+
+  it('takes a fallback, when nothing else was kept', () => {
+    const { fallback } = situationsOutputSchema.parse({
+      situations: [],
+      fallback: situation,
+      skipped: ['too_thin'],
+    });
+    expect(chatgptContextSchema.safeParse(fallback).success).toBe(true);
   });
 
   it('requires every field', () => {

@@ -316,6 +316,18 @@ describe('stories from a link', () => {
     expect(await contextsOf(player)).toHaveLength(0);
   });
 
+  it('writes the strongest thin one rather than nothing, when that is all there is', async () => {
+    const player = await newUser('player');
+    const answer = await requestStoriesFromLink(player, 'idk\n\nmy ex Jordan', {
+      generator: fake,
+      safety: pass,
+    });
+    expect(answer).toMatchObject({ outcome: 'queued', stories: 1 });
+    const contexts = await contextsOf(player);
+    expect(contexts).toHaveLength(1);
+    expect(JSON.stringify(contexts[0])).toContain('Jordan');
+  });
+
   it('keeps nothing when moderation flags every situation', async () => {
     const player = await newUser('player');
     expect(await requestStoriesFromLink(player, NOTE, { generator: fake, safety: flag })).toEqual({
