@@ -136,6 +136,14 @@ duets with `duet_started` for both sides. The premise stock is in the logs, not
 analytics: `duet-premise-sweep` logs `stock`, `written`, `rejected` and `failed`
 each run, and a high `rejected` means the writer prompt needs work.
 
+Crossings (what one side does that the other's character would know):
+`duet_crossed` on the receiving player, with `from_side`, `held` (their side
+hadn't started) and `count`, when the consequence step queues one; and
+`duet_crossing_delivered` when it opens their beat. Delivered / crossed is how
+often one actually lands. `push_sent` with `kind: duet_moved` is "your story for
+two just moved", sent at most once per latest turn to a player away 30 minutes
+with a crossing waiting.
+
 ## Story reports
 
 Players reporting a story (`POST .../report`). Each report also raises its own

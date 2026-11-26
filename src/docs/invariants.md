@@ -164,6 +164,19 @@ deleted, `forgetDuetPartner` renames them on the other side, everywhere in it,
 so no deleted player's name stays in anyone else's account.
 `invites.integration.test.ts` holds this.
 
+**Only what the other character would know crosses, and only as a beat.**
+On a duet side the consequence step says, per beat, whether the other
+player's character would know it (`partnerKnows`); those are queued for the
+other side (`duet_crossings`, owned by the receiving player) and reach it
+only as that side's next beat, written by its own turn prompt to open with
+texts from the crossing player's character. Never the source beat's text, a
+choice, or anything typed; never into an ending; one per beat, at most three
+waiting (the oldest dropped), none to a side that has ended or been quiet
+three days. A side not started holds them and opens with the newest. When a
+player leaves, everything queued from their side is deleted. Every other
+story's prompts are unchanged byte for byte. `crossings.integration.test.ts`
+holds this.
+
 ---
 
 ## 4. Conditional columns — nullable, but required in some states

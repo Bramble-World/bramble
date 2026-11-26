@@ -240,7 +240,10 @@ Honoured by the server, which is what sends them. On until turned off.
 A notification's payload carries `kind` (`battery_back`, `story_waiting`,
 `story_ready` when a story asked for in ChatGPT has been written, or
 `reply_arrived` when a reply someone in a story owed has been written; see
-"Replies later"), so the app can tell which was opened. It never carries a name or a line of story.
+"Replies later"; or `duet_moved` when, in a story for two, the other player did
+something this player's side will open with), so the app can tell which was
+opened. A `duet_moved` tap should open the desk like any other; the next beat
+of that story is the one that opens with the other player's texts. It never carries a name or a line of story.
 
 ### `DELETE /api/v1/me`
 

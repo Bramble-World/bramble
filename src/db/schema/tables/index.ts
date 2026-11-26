@@ -22,6 +22,7 @@ export {
 } from './storyTemplates';
 export { storyReports, storyReportReasonEnum, storyReportStatusEnum } from './storyReports';
 export { duets } from './duets';
+export { duetCrossings } from './duetCrossings';
 export { duetPremises } from './duetPremises';
 export { invites } from './invites';
 export { imports, importStatusEnum, importStageEnum } from './imports';
