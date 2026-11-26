@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { routeOf, withRequestLog, type RequestLogLine } from './request-log';
+import { routeOf, unmatchedRouteOf, withRequestLog, type RequestLogLine } from './request-log';
 
 const SESSION = '1f2e3d4c-5b6a-4789-8abc-def012345678';
 
@@ -105,5 +105,23 @@ describe('withRequestLog', () => {
     await withRequestLog(async () => new Response('ok'))(new Request('https://api.test/api/me'));
     expect(JSON.parse(out.mock.calls[0][0] as string)).toMatchObject({ event: 'request' });
     out.mockRestore();
+  });
+});
+
+describe('unmatchedRouteOf', () => {
+  it('keeps the words of a path and nothing else', () => {
+    expect(unmatchedRouteOf('https://api.example.com/api/v1/invites')).toBe('/api/v1/invites');
+    expect(unmatchedRouteOf('https://api.example.com/api/v1/invites/ABCDEF/accept?x=1')).toBe(
+      '/api/v1/invites/:x/accept'
+    );
+    expect(unmatchedRouteOf('https://api.example.com/api/v1/Jordan%20is%20my%20ex')).toBe(
+      '/api/v1/:x'
+    );
+  });
+
+  it('stops at eight parts', () => {
+    expect(unmatchedRouteOf('https://api.example.com/a/b/c/d/e/f/g/h/i/j')).toBe(
+      '/a/b/c/d/e/f/g/h/…'
+    );
   });
 });
