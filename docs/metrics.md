@@ -108,7 +108,14 @@ and `chatgpt_story_requested`, once per request, with `outcome` (`queued`,
 when a link had nothing to make a story from), `via` (`mcp` for
 `write_my_story`, `link` for a link ChatGPT wrote, sent by the iPhone app) and
 `stories` (how many were queued: at most 1 from `mcp`, up to 5 from a link).
-Never what was sent. A story from ChatGPT that's started shows as
+A link's `not_written` also carries `situations_returned`, how many situations
+the model found before they were fitted to a story's limits (`fit.ts`), so
+"nothing there" can be told from "nothing fitted". Never what was sent. Each
+link also logs `{"event":"chatgpt_situations","returned":n,"kept":k,"fitted":{…}}`:
+counts, and which limits were trimmed (`people`, `relationship`, `details`, …),
+never the text. Before 2026-11-26 a situation over any limit was dropped whole,
+and a link the app left mid-request was lost; the fix trims instead and lets
+the request finish. A story from ChatGPT that's started shows as
 `next_story_started` with `origin: chatgpt`.
 
 ## Story reports
