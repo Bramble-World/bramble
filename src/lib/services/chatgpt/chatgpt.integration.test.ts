@@ -259,6 +259,36 @@ describe('stories from a link', () => {
     expect(fake.calls).toEqual([]);
   });
 
+  // A model's situation with a fourth person and a long relationship used to be
+  // dropped whole; now it's trimmed and written.
+  it('writes a situation that runs over the limits, trimmed', async () => {
+    const player = await newUser('player');
+    const long = {
+      ...fake,
+      run: async () => ({
+        value: {
+          situations: [
+            {
+              about: 'The group chat went quiet after the party, and nobody will say why.',
+              people: ['Maya', 'Priya', 'Sam', 'Leo'].map((name) => ({
+                name,
+                relationship: 'a friend from the same dorm floor freshman year',
+                details: 'Was at the party.',
+              })),
+              you: null,
+            },
+          ],
+        },
+        meta: {} as never,
+      }),
+    } as unknown as FakeGenerator;
+    const result = await requestStoriesFromLink(player, NOTE, { generator: long, safety: pass });
+    expect(result).toMatchObject({ outcome: 'queued', stories: 1 });
+    const [kept] = await contextsOf(player);
+    expect(kept.content.people).toHaveLength(3);
+    expect(kept.content.people[0].relationship.length).toBeLessThanOrEqual(40);
+  });
+
   it('writes nothing from a note with no situation in it', async () => {
     const player = await newUser('player');
     expect(

@@ -169,6 +169,8 @@ export type AnalyticsEvent =
         via: 'mcp' | 'link';
         /** How many stories were queued: one at most from `write_my_story`, up to five from a link. */
         stories: number;
+        /** A link that came to nothing: how many situations the model found in it before fitting (fit.ts). */
+        situations_returned?: number;
       };
     }
   | {
