@@ -1280,6 +1280,25 @@ first name). Once only: the same player accepting again gets the same duet;
 anyone else gets 409 `INVITE_USED`. 409 `OWN_INVITE` for your own, 410
 `INVITE_EXPIRED` after 7 days, 404 for an unknown code.
 
+### The invite link, `https://www.brambleworld.com/invite/{code}`
+
+What `url` points at. **With Bramble installed, iOS opens it in the app**
+(`/.well-known/apple-app-site-association` lists `/invite/*`), which reads the
+code from the path. Without it, the website's page shows:
+
+- `open`: "{name} invited you to a story together.", the code in large letters
+  with "copy code", "open bramble and tap "got an invite code?"", and "get
+  bramble on the app store" when `IOS_APP_STORE_URL` is set;
+- `accepted` or `expired`: a line saying so, without the code;
+- an unknown code, or anything that can't be one: a 404 page.
+
+The code in the URL is read as the routes read it (any case, spaces ignored),
+and any other spelling redirects to the uppercase one. The page is `noindex`,
+sends no analytics, and its link preview (title and image) never names the
+inviter: a preview is seen by anyone the link reaches. iOS can't carry a link
+through a fresh install, and nothing here tries to (no fingerprinting): the
+code is what survives it.
+
 ## Bramble in ChatGPT
 
 ### `POST /api/mcp`
