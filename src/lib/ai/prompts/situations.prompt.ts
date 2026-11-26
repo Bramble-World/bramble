@@ -22,6 +22,25 @@ import { PromptSpec } from '../prompt';
 export const MAX_LINK_SITUATIONS = 5;
 
 /**
+ * Why a situation in the note wasn't kept, as a code: logged and counted, so
+ * links that make nothing can be told apart (the user's call, 2026-11-26),
+ * never anything from the note itself.
+ */
+export const SKIP_REASONS = [
+  'health',
+  'mental_health',
+  'money_or_legal',
+  'identifying',
+  'logistics',
+  'sexual',
+  'religion_or_sexuality',
+  'too_thin',
+  'repeat',
+  'other',
+] as const;
+export type SkipReason = (typeof SKIP_REASONS)[number];
+
+/**
  * Loose on purpose: lengths are checked after the call against
  * `chatgptContextSchema`, and a situation that doesn't fit is dropped, rather
  * than failing every situation in the link over one long paragraph.
@@ -56,6 +75,12 @@ export const situationsOutputSchema = z.object({
     )
     .describe(
       `The situations to write stories from, at most ${MAX_LINK_SITUATIONS}, best first. Empty when none is worth a story.`
+    ),
+  // After the situations, so what's kept is written first. Codes only.
+  skipped: z
+    .array(z.enum(SKIP_REASONS))
+    .describe(
+      'One code for each situation in the note that you did not keep, saying why. Empty when you kept them all.'
     ),
 });
 
@@ -103,6 +128,10 @@ export const situationsPrompt: PromptSpec<{ text: string }, SituationsOutput> = 
       'Write in your own words, plainly, about "the user". Keep each situation',
       'separate: one per entry, and never the same one twice. Return an empty list',
       'when nothing is worth a story.',
+      '',
+      'For every situation in the note you leave out, add one code to skipped saying',
+      'why: health, mental_health, money_or_legal, identifying, logistics, sexual,',
+      'religion_or_sexuality, too_thin, repeat (the same as one kept) or other.',
     ].join('\n'),
     prompt: ['The note, between the lines:', '---', text, '---'].join('\n'),
   }),

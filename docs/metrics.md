@@ -110,7 +110,12 @@ when a link had nothing to make a story from), `via` (`mcp` for
 `stories` (how many were queued: at most 1 from `mcp`, up to 5 from a link).
 A link's `not_written` also carries `situations_returned`, how many situations
 the model found before they were fitted to a story's limits (`fit.ts`), so
-"nothing there" can be told from "nothing fitted". Never what was sent. Each
+"nothing there" can be told from "nothing fitted"; `note_size` (`short` under
+200 characters, `medium` to 1000, `long`) and `paragraphs`, so a one-line note
+can be told from a full one; and `skipped`, the codes the model gave for each
+situation it left out (`health`, `mental_health`, `money_or_legal`,
+`identifying`, `logistics`, `sexual`, `religion_or_sexuality`, `too_thin`,
+`repeat`, `other`), so a strict filter can be told from thin notes. Never what was sent. Each
 link also logs `{"event":"chatgpt_situations","returned":n,"kept":k,"fitted":{…}}`:
 counts, and which limits were trimmed (`people`, `relationship`, `details`, …),
 never the text. Before 2026-11-26 a situation over any limit was dropped whole,
