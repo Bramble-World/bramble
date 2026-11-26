@@ -38,9 +38,10 @@ const CLERK = 'user_crossings_';
 const SEED_SLUG = 'crossings-test-seed';
 const fake = createFakeGenerator();
 registerFixtures(fake);
-// One beat per decision, always, so each test controls what crosses: keeping
-// quiet ("Say nothing yet") stays on its side, anything else crosses.
-fake.register(duetConsequencePrompt, ({ vars }) => ({
+// One beat per decision, always, so each test controls what crosses: with
+// `crossing` false the beat stays on its side.
+let crossing = true;
+fake.register(duetConsequencePrompt, () => ({
   events: [
     {
       title: 'Told them',
@@ -48,7 +49,7 @@ fake.register(duetConsequencePrompt, ({ vars }) => ({
       stakes: null,
       participantCharacterIds: [],
       actorCharacterId: null,
-      partnerKnows: !vars.decision.chosenLabel.startsWith('Say nothing'),
+      partnerKnows: crossing,
     },
   ],
   contextEntries: [],
@@ -96,16 +97,17 @@ async function pair(start: { maya?: boolean; sam?: boolean } = { maya: true, sam
   return { maya, sam, duetId, mayaSession, samSession };
 }
 
-/** One choice on a side: the beat, the choice by label, and its consequences settled. */
-async function choose(userId: string, sessionId: string, label: (l: string) => boolean) {
+/** One choice on a side, and its consequences settled; `crosses` says whether it reaches the other. */
+async function choose(userId: string, sessionId: string, crosses: boolean) {
+  crossing = crosses;
   const turn = await advanceSession(userId, sessionId, { generator: fake });
-  const choice = turn.choices.find((c) => label(c.label)) ?? turn.choices[0];
-  await commitChoice(userId, turn.id, choice.id);
+  await commitChoice(userId, turn.id, turn.choices[0].id);
   await generateConsequences(userId, turn.id, { generator: fake });
+  crossing = true;
   return turn;
 }
-const crosses = (label: string) => label.startsWith('Say the true');
-const keepsQuiet = (label: string) => label.startsWith('Say nothing');
+const crosses = true;
+const keepsQuiet = false;
 
 const crossingsTo = (userId: string) =>
   db.select().from(duetCrossings).where(eq(duetCrossings.toUserId, userId));
@@ -127,6 +129,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await db.delete(users).where(like(users.clerkId, `${CLERK}%`));
   fake.calls.length = 0;
+  crossing = true;
 });
 
 afterAll(async () => {

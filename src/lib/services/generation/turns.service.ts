@@ -238,7 +238,10 @@ export async function generateTurn(
       (n) => n.senderCharacterId === crossing.partner.id
     );
 
-  return sessions.openTurn(
+  // Set when this call wrote the turn; acted on once it's saved, since
+  // `onCreated` runs inside the transaction that writes it.
+  let wrote: { id: string; isEnding: boolean } | null = null;
+  const turn = await sessions.openTurn(
     userId,
     sessionId,
     {
@@ -295,11 +298,7 @@ export async function generateTurn(
         if (guestBeat !== null) {
           await track(userId, { name: 'guest_beat_played', properties: { n: guestBeat } });
         }
-        if (crossing && crossingLanded) {
-          await crossings.markDelivered(userId, crossing.pending.id, written.id);
-        }
-        // This side has ended: nothing more crosses to it.
-        if (written.isEnding && duet) await crossings.dropCrossingsTo(session.storylineId);
+        wrote = { id: written.id, isEnding: written.isEnding };
         if (written.isEnding && phase !== 'open') {
           await track(userId, {
             name: 'story_ended',
@@ -309,6 +308,15 @@ export async function generateTurn(
       },
     }
   );
+  if (wrote !== null) {
+    const written: { id: string; isEnding: boolean } = wrote;
+    if (crossing && crossingLanded) {
+      await crossings.markDelivered(userId, crossing.pending.id, written.id);
+    }
+    // This side has ended: nothing more crosses to it.
+    if (written.isEnding && duet) await crossings.dropCrossingsTo(session.storylineId);
+  }
+  return turn;
 }
 
 /**
