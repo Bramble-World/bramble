@@ -1,0 +1,124 @@
+{
+  "a": {
+    "title": "the surprise",
+    "hook": "you're throwing jada a surprise party. she just told {partner} she hates surprises.",
+    "openingLines": [
+      "it's thursday, 10:14 pm.",
+      "the balloons are in your closet.",
+      "and {partner} just texted you."
+    ],
+    "setting": "A college town in early spring, two days before Jada's twentieth birthday. You're in your dorm room with a closet full of party supplies.",
+    "tone": "warm, chaotic, funny: two friends trying to do something nice and getting it wrong",
+    "self": {
+      "description": "Nineteen, the planner of the group, already paid the deposit on the back room at the taco place.",
+      "want": "To pull off one perfect night for Jada.",
+      "avoids": "Admitting the party is a little bit for you too."
+    },
+    "cast": [
+      {
+        "name": "{partner}",
+        "pronouns": "they",
+        "relationshipType": "your best friend",
+        "role": "supporting",
+        "description": "Your partner in the plan, the one who's closest to Jada, and the worst liar you know.",
+        "want": "For Jada to have a good birthday, whatever that turns out to be.",
+        "avoids": "Being the one who ruins the surprise, or the one who keeps it.",
+        "voiceTone": null,
+        "closeness": "you've done everything together since orientation",
+        "tension": "they think you never ask what anyone else wants"
+      },
+      {
+        "name": "Jada",
+        "pronouns": "she",
+        "relationshipType": "the birthday girl",
+        "role": "supporting",
+        "description": "Your friend since freshman year, loves a plan as long as she's the one making it.",
+        "want": "A quiet birthday with the people she loves.",
+        "avoids": "Telling you no to your face.",
+        "voiceTone": "dry, all lowercase, too many ellipses",
+        "closeness": "close, but she tells {partner} things first",
+        "tension": "she's been weird since you mentioned 'saturday plans'"
+      }
+    ],
+    "opening": [
+      {
+        "title": "The plan",
+        "description": "Three weeks of planning, a group chat Jada isn't in, and a deposit you can't get back.",
+        "engagementScore": 6
+      },
+      {
+        "title": "The slip",
+        "description": "Jada asked you what you're doing Saturday, and you said 'nothing' too fast.",
+        "engagementScore": 7
+      },
+      {
+        "title": "The text",
+        "description": "{partner} texts you at 10:14: 'we need to talk about saturday. she told me something.'",
+        "engagementScore": 9
+      }
+    ],
+    "background": [
+      "Jada had a surprise party at sixteen that ended with her crying in a bathroom.",
+      "{partner} has known about that party for a year and never told you."
+    ]
+  },
+  "b": {
+    "title": "the surprise",
+    "hook": "jada just told you she hates surprises. {partner} is throwing her one saturday.",
+    "openingLines": ["it's thursday, 10:02 pm.", "jada's still on the phone.", "she has no idea."],
+    "setting": "A college town in early spring, two days before Jada's twentieth birthday. You're on the floor of your room, phone hot against your ear.",
+    "tone": "warm, chaotic, funny: two friends trying to do something nice and getting it wrong",
+    "self": {
+      "description": "Nineteen, the one everyone tells things to, and terrible at keeping a straight face.",
+      "want": "For Jada to have a birthday she actually likes.",
+      "avoids": "Choosing between your two best friends."
+    },
+    "cast": [
+      {
+        "name": "{partner}",
+        "pronouns": "they",
+        "relationshipType": "your best friend",
+        "role": "supporting",
+        "description": "The planner, three weeks deep in a surprise party for Jada, already paid the deposit.",
+        "want": "To pull off one perfect night for Jada.",
+        "avoids": "Hearing that the plan is wrong.",
+        "voiceTone": null,
+        "closeness": "you've done everything together since orientation",
+        "tension": "they never ask what anyone else wants"
+      },
+      {
+        "name": "Jada",
+        "pronouns": "she",
+        "relationshipType": "your other best friend",
+        "role": "supporting",
+        "description": "Your friend since freshman year, who just told you, quietly, that surprise parties make her feel sick.",
+        "want": "A quiet birthday with the people she loves.",
+        "avoids": "Telling {partner} no to their face.",
+        "voiceTone": "dry, all lowercase, too many ellipses",
+        "closeness": "she tells you things first",
+        "tension": "she can tell you're hiding something"
+      }
+    ],
+    "opening": [
+      {
+        "title": "The group chat",
+        "description": "You're in a group chat Jada isn't in, full of party plans.",
+        "engagementScore": 6
+      },
+      {
+        "title": "The call",
+        "description": "Jada calls to vent and says, out of nowhere, 'if anyone ever throws me a surprise party i'll move away.'",
+        "engagementScore": 8
+      },
+      {
+        "title": "The text",
+        "description": "At 10:14 you text {partner}: 'we need to talk about saturday. she told me something.'",
+        "engagementScore": 9
+      }
+    ],
+    "background": [
+      "Jada had a surprise party at sixteen that ended with her crying in a bathroom.",
+      "You've known about that party for a year and never told {partner}."
+    ]
+  }
+}

@@ -16,6 +16,7 @@ import { users } from '../users';
 import { rebornAnswers } from '../rebornAnswers';
 import { chatgptContexts } from '../chatgptContexts';
 import type { StoryTemplate } from '@/lib/pool/template';
+import { duets } from '../duets';
 
 /**
  * Where a story came from. `reddit` is reserved for the later source.
@@ -23,12 +24,17 @@ import type { StoryTemplate } from '@/lib/pool/template';
  * `chatgpt` is not a pool story: it was written for its `user_id` from what
  * ChatGPT sent, keeps the names it was given, and is only ever that player's
  * (invariants.md §3). `choose()` never offers one to anyone else.
+ *
+ * `duet` is one side of a story for two (`duets`): written for its `user_id`
+ * from a duet premise, with the other player cast by the first name they gave.
+ * Like `chatgpt`, only ever that player's, and offered before the pool.
  */
 export const storyTemplateOriginEnum = pgEnum('story_template_origin', [
   'seed',
   'reborn',
   'reddit',
   'chatgpt',
+  'duet',
 ]);
 
 /**
@@ -137,6 +143,9 @@ export const storyTemplates = pgTable(
      * from an answer and serves nothing.
      */
     content: jsonb().$type<StoryTemplate>(),
+
+    /** For a `duet` template, the story for two it is one side of. */
+    duetId: uuid('duet_id').references((): AnyPgColumn => duets.id, { onDelete: 'set null' }),
 
     attempts: integer().notNull().default(0),
     /** Not claimable before this. Also the settle delay after an answer is saved. */

@@ -1,0 +1,128 @@
+{
+  "a": {
+    "title": "spring break",
+    "hook": "you and {partner} planned the road trip for months. tonight your mom said no.",
+    "openingLines": [
+      "it's 9:30, sunday night.",
+      "the car is packed for friday.",
+      "your mom just said no."
+    ],
+    "setting": "A small town in North Carolina, the week before spring break, junior year of college. You're home for the weekend.",
+    "tone": "bittersweet and funny: growing up, one argument at a time",
+    "self": {
+      "description": "Twenty, the responsible one, and tired of being treated like you're twelve.",
+      "want": "To go on the trip without blowing up your family.",
+      "avoids": "Telling {partner} it might not happen."
+    },
+    "cast": [
+      {
+        "name": "{partner}",
+        "pronouns": "they",
+        "relationshipType": "your best friend since middle school",
+        "role": "supporting",
+        "description": "The co-planner, who already booked the beach house on their card.",
+        "want": "The trip they've been promising themselves all year.",
+        "avoids": "Losing the money, or losing you to it.",
+        "voiceTone": null,
+        "closeness": "you've been each other's person since seventh grade",
+        "tension": "they've covered for your family before and they're tired of it"
+      },
+      {
+        "name": "Mom",
+        "pronouns": "she",
+        "relationshipType": "your mom",
+        "role": "antagonist",
+        "description": "Loving, anxious, convinced the drive is dangerous since a cousin's accident last year.",
+        "want": "You safe, at home, for one more spring.",
+        "avoids": "Saying the real reason she's scared.",
+        "voiceTone": "short texts, then a long one",
+        "closeness": "close, until you push",
+        "tension": "she said no without listening"
+      }
+    ],
+    "opening": [
+      {
+        "title": "The plan",
+        "description": "Six months of a shared playlist and a spreadsheet called 'BEACH'.",
+        "engagementScore": 6
+      },
+      {
+        "title": "The no",
+        "description": "At dinner your mom said you're not driving eight hours, and left the table.",
+        "engagementScore": 8
+      },
+      {
+        "title": "The text",
+        "description": "{partner} texts: 'packed list done. you good for friday?'",
+        "engagementScore": 9
+      }
+    ],
+    "background": [
+      "Your mom has been reading about car accidents since your cousin's.",
+      "{partner} can't get a refund on the house after Wednesday."
+    ]
+  },
+  "b": {
+    "title": "spring break",
+    "hook": "the beach house is booked on your card. {partner} has gone quiet.",
+    "openingLines": [
+      "it's 9:30, sunday night.",
+      "the house is booked.",
+      "{partner} hasn't answered."
+    ],
+    "setting": "A college town in North Carolina, the week before spring break, junior year. You're in your apartment, the confirmation email still open.",
+    "tone": "bittersweet and funny: growing up, one argument at a time",
+    "self": {
+      "description": "Twenty, spontaneous, the one who makes plans real by paying first.",
+      "want": "The trip you've been promising yourself all year.",
+      "avoids": "Being the friend who makes it about money."
+    },
+    "cast": [
+      {
+        "name": "{partner}",
+        "pronouns": "they",
+        "relationshipType": "your best friend since middle school",
+        "role": "supporting",
+        "description": "Your co-planner, home for the weekend, suddenly slow to answer.",
+        "want": "To go without blowing up their family.",
+        "avoids": "Telling you it might not happen.",
+        "voiceTone": null,
+        "closeness": "you've been each other's person since seventh grade",
+        "tension": "you've covered for their family before"
+      },
+      {
+        "name": "Theo",
+        "pronouns": "he",
+        "relationshipType": "your roommate",
+        "role": "supporting",
+        "description": "Offered, half-joking, to come instead if anyone drops out.",
+        "want": "A free week at the beach.",
+        "avoids": "Taking sides.",
+        "voiceTone": "lazy, all caps when excited",
+        "closeness": "easy",
+        "tension": "he's already packed, just in case"
+      }
+    ],
+    "opening": [
+      {
+        "title": "The plan",
+        "description": "Six months of a shared playlist and a spreadsheet called 'BEACH'.",
+        "engagementScore": 6
+      },
+      {
+        "title": "The booking",
+        "description": "You booked the house on your card: no refund after Wednesday.",
+        "engagementScore": 7
+      },
+      {
+        "title": "The silence",
+        "description": "You texted {partner} 'packed list done. you good for friday?' an hour ago. Read, no reply.",
+        "engagementScore": 9
+      }
+    ],
+    "background": [
+      "{partner}'s mom said no at dinner tonight.",
+      "Theo would genuinely love to come."
+    ]
+  }
+}

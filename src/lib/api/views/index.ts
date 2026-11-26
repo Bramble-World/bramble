@@ -312,6 +312,7 @@ export function sessionView(input: {
           openingLines: input.next.openingLines,
           fromPool: input.next.fromPool,
           fromChatGPT: input.next.fromChatGPT,
+          withPartner: input.next.withPartner,
         }
       : null,
     nextStatus: input.nextStatus ?? null,

@@ -324,6 +324,8 @@ export type NextStoryView = {
   fromPool: boolean;
   /** Written for this reader from what they shared in ChatGPT; shows "made with chatgpt." */
   fromChatGPT: boolean;
+  /** This reader's side of a story for two: the other player's first name, as they gave it. Null otherwise. */
+  withPartner: string | null;
 };
 
 export type EndingStatusView = 'ready' | 'writing' | 'unavailable';

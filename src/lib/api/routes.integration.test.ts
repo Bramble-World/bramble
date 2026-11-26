@@ -1288,6 +1288,7 @@ describe('endings and the next story', () => {
       // A seed: written by the team, not from someone else's past.
       fromPool: false,
       fromChatGPT: false,
+      withPartner: null,
     });
   });
 
