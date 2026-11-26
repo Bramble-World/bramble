@@ -37,10 +37,10 @@ const fake = createFakeGenerator();
 registerFixtures(fake);
 let seedId: string;
 
-async function newUser(name: string, isGuest = false) {
+async function newUser(name: string) {
   const [user] = await db
     .insert(users)
-    .values({ clerkId: `${CLERK}${name}`, email: `${name}@invites.local`, isGuest })
+    .values({ clerkId: `${CLERK}${name}`, email: `${name}@invites.local` })
     .returning({ id: users.id });
   await db.insert(persons).values({ userId: user.id, name: 'You', isSelf: true });
   return user.id;
@@ -107,8 +107,8 @@ describe('the invite routes', () => {
     expect(invite.code).toMatch(/^[A-Z]{6}$/);
     expect(invite.url).toBe(`https://www.brambleworld.com/invite/${invite.code}`);
 
-    const guest = await newUser('guest', true);
-    as(guest, true);
+    // A guest, as the app's auth reports one: the route only reads `isGuest`.
+    as(await newUser('guest'), true);
     const refused = await createRoute.POST(
       post('/api/v1/invites', { firstName: 'Sam' }),
       undefined as never
