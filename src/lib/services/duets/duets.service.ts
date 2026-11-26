@@ -7,6 +7,7 @@ import { castPartner, partnerIndex } from '@/lib/duets/premise';
 import { storyTemplateSchema, type StoryTemplate } from '@/lib/pool/template';
 import { NotFoundError } from '@/lib/utils/errors';
 import type { Executor } from '../executor';
+import { attachHeldCrossings, forgetCrossingsFrom } from './crossings.service';
 
 /**
  * A story for two (`duets`): made when an invite is accepted, one side per
@@ -131,6 +132,8 @@ export async function linkDuetSide(
         : { sideBStorylineId: storylineId, sideBPartnerCharacterId: partnerCharacterId }
     )
     .where(eq(duets.id, duet.duets.id));
+  // What crossed while this side waited: its first beat opens with the newest.
+  await attachHeldCrossings(tx, duet.duets.id, userId, storylineId);
   await track(userId, { name: 'duet_started', properties: { side } });
 }
 
@@ -181,6 +184,10 @@ export async function forgetDuetPartner(tx: Executor, userId: string): Promise<v
     if (otherStorylineId) {
       await renameInStoryline(tx, otherStorylineId, otherPartnerId, leavingName, neutral);
     }
+
+    // Nothing waits on the other side that came from them; what already
+    // reached it is story text there, renamed above.
+    await forgetCrossingsFrom(tx, duet.id, leaving);
 
     await tx
       .update(duets)

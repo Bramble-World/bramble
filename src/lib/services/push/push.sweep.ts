@@ -21,6 +21,7 @@ import {
   type PushFacts,
 } from './push.policy';
 import { sendToUser } from './push.service';
+import { crossingWaitingFor } from '../duets/crossings.service';
 import type { PushKind } from './push.types';
 
 /** The facts `decidePush` needs for one player, or null with no story. */
@@ -88,6 +89,7 @@ async function factsFor(
       lastSentAt: sends[0]?.sentAt ?? null,
       unlimitedEnergy,
       replyOwed: owed !== undefined,
+      crossingWaiting: await crossingWaitingFor(db, userId, device.lastSeenAt),
     },
   };
 }

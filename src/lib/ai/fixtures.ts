@@ -2,7 +2,11 @@ import { duetCheckPrompt, duetWritePrompt } from './prompts/duet.prompt';
 import { DUET_PREMISES } from '@/lib/duets/seeds';
 import { FakeGenerator } from './generator.fake';
 import { turnPrompt } from './prompts/turn.prompt';
-import { consequencePrompt } from './prompts/consequence.prompt';
+import {
+  consequencePrompt,
+  duetConsequencePrompt,
+  type ConsequenceVars,
+} from './prompts/consequence.prompt';
 import { shortId } from './prompts/short-ids';
 import { extractionPrompt } from './prompts/extraction.prompt';
 import { arcPrompt } from './prompts/arc.prompt';
@@ -39,8 +43,12 @@ export function registerFixtures(fake: FakeGenerator): void {
 
     // Every other turn arrives as texts, from a met character other than you,
     // so the surface path is exercised end to end. No one to text you, no phone.
-    const texter = others[seed % Math.max(others.length, 1)];
-    const onPhone = texter !== undefined && seed % 2 === 0;
+    // A story for two's crossing opens the beat with the other player's texts.
+    const partner = vars.crossing
+      ? vars.storyline.characters.find((c) => c.id === vars.crossing!.partnerCharacterId)
+      : undefined;
+    const texter = partner ?? others[seed % Math.max(others.length, 1)];
+    const onPhone = texter !== undefined && (partner !== undefined || seed % 2 === 0);
 
     // Ends as soon as it may, so a test reaches an ending in the fewest beats
     // the closing window allows.
@@ -82,7 +90,15 @@ export function registerFixtures(fake: FakeGenerator): void {
     };
   });
 
-  fake.register(consequencePrompt, ({ vars, seed }) => {
+  fake.register(consequencePrompt, (args) => consequenceFixture(args));
+  // A story for two: everything crosses except keeping quiet.
+  fake.register(duetConsequencePrompt, (args) => {
+    const value = consequenceFixture(args);
+    const crosses = !args.vars.decision.chosenLabel.startsWith('Say nothing');
+    return { ...value, events: value.events.map((event) => ({ ...event, partnerKnows: crosses })) };
+  });
+
+  function consequenceFixture({ vars, seed }: { vars: ConsequenceVars; seed: number }) {
     // Every third decision changes nothing permanent, which is the realistic
     // shape and the one most likely to be handled wrongly.
     const changesCanon = seed % 3 !== 0;
@@ -125,7 +141,7 @@ export function registerFixtures(fake: FakeGenerator): void {
           ]
         : [],
     };
-  });
+  }
 
   fake.register(extractionPrompt, ({ vars }) => {
     // Names and handles are read off the transcript rather than invented, so the

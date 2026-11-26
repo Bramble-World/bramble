@@ -194,6 +194,19 @@ export type AnalyticsEvent =
       properties: { side: 'a' | 'b' };
     }
   | {
+      /**
+       * Something one side did that the other's character would know, queued
+       * for the other side (recorded against its player). Counts and codes only.
+       */
+      name: 'duet_crossed';
+      properties: { from_side: 'a' | 'b'; held: boolean; count: number };
+    }
+  | {
+      /** A crossing reached the other player's beat. */
+      name: 'duet_crossing_delivered';
+      properties: Record<string, never>;
+    }
+  | {
       name: 'story_reported';
       properties: {
         /** The reason the reader picked: a code, never their words or the story's. */
@@ -206,7 +219,7 @@ export type AnalyticsEvent =
       name: 'push_sent';
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
-        kind: 'battery_back' | 'story_waiting' | 'story_ready' | 'reply_arrived';
+        kind: 'battery_back' | 'story_waiting' | 'story_ready' | 'reply_arrived' | 'duet_moved';
         /** For story_waiting: which wording went (push.policy.ts). Never the words or a count. */
         copy?: 'today' | 'texts' | 'choice';
       };

@@ -36,6 +36,13 @@ export type TurnVars = {
    * scripts) needn't say; absent is false.
    */
   pausesAllowed?: boolean;
+  /**
+   * In a story for two only: something the other player did that this
+   * reader would hear about, which this beat opens with, as texts from their
+   * character (crossings.service.ts). Absent everywhere else, and the prompt is
+   * then exactly the usual one.
+   */
+  crossing?: { partnerCharacterId: string; title: string; description: string };
 };
 
 /**
@@ -147,7 +154,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
   stage: 'turn',
   schema: turnOutputSchema,
 
-  render: ({ storyline, session, beyondScript, phase, beatsToEnding, pausesAllowed }) => {
+  render: ({ storyline, session, beyondScript, phase, beatsToEnding, pausesAllowed, crossing }) => {
     const stage = onStage(storyline);
 
     return {
@@ -350,6 +357,7 @@ export const turnPrompt: PromptSpec<TurnVars, TurnOutput> = {
           : []),
         ...(pausesAllowed ? PAUSE_RULES : ['- replyLater is none.']),
         '',
+        ...(crossing ? crossingLines(storyline, crossing) : []),
         phase === 'must_end'
           ? 'Write the ending of this story, following on from the choice just made.'
           : session.turns.length
@@ -451,4 +459,28 @@ function onStage(storyline: StorylineContext): Set<string> {
 
 function nameOf(storyline: StorylineContext, characterId: string): string {
   return storyline.characters.find((c) => c.id === characterId)?.name ?? 'someone';
+}
+
+/**
+ * What a story for two adds when the other player has just done something
+ * this reader would hear about: this beat opens with their texts about it.
+ * Told what happened, not how they put it: the texts are written for this side.
+ */
+function crossingLines(
+  storyline: StorylineContext,
+  crossing: NonNullable<TurnVars['crossing']>
+): string[] {
+  const partner = storyline.characters.find((c) => c.id === crossing.partnerCharacterId);
+  const name = partner?.name ?? 'they';
+  return [
+    `## What ${name} just did`,
+    `${name} [${shortId(crossing.partnerCharacterId)}] is played by another person in their own version of`,
+    'this story, and has just done something the reader would hear about:',
+    `${crossing.title}: ${crossing.description}`,
+    `Open this beat with texts from ${name} about it, as they would tell the reader, in`,
+    `their own voice: surfaceKind imessage_notifications, with ${name}'s text the newest.`,
+    'Say only what they would say to the reader, nothing they would keep to themselves,',
+    `and never decide for ${name} what they do next.`,
+    '',
+  ];
 }

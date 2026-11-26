@@ -213,10 +213,20 @@ export default function Privacy() {
         accepted and when, and they give the first name they want you to know them by. You each get
         your own side of the same story, in your own account: the other person is a character in it
         by the first name they gave. Neither of you can see the other&rsquo;s side, any of the
-        other&rsquo;s other stories, or anything else in the other&rsquo;s account. If one of you
+        other&rsquo;s other stories, or anything else in the other&rsquo;s account. Some of what you
+        do in your side reaches theirs: when one of your choices is something their character would
+        know about (you told them, texted them, showed them, or they were there), a short note of
+        what happened is kept with their side, and their next beat opens with texts from your
+        character about it, written by our story model (OpenAI) for their side. They see only that
+        beat, never your words, your choices themselves or the rest of your side; what you keep to
+        yourself stays in your side. Nothing you type crosses, and you can&rsquo;t message each
+        other. If you haven&rsquo;t played your side for 3 days, nothing new reaches it until you
+        do. When something reaches their side while they&rsquo;re away, we may send them one
+        notification saying their story for two moved, which never says who or what. If one of you
         deletes their account, the other&rsquo;s side stays theirs and carries on, with the
         character who was the person who left renamed to a made-up first name everywhere in it, so
-        nothing in it is linked to them any more.
+        nothing in it is linked to them any more; anything of theirs that hadn&rsquo;t yet reached
+        it is deleted.
       </p>
 
       <h3>Reporting a story</h3>

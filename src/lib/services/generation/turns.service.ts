@@ -3,7 +3,8 @@ import { NotFoundError, ReplyPendingError, ValidationError } from '@/lib/utils/e
 import { Generator, getGenerator } from '@/lib/ai';
 import { turnIsUsable, turnPrompt, type TurnOutput } from '@/lib/ai/prompts/turn.prompt';
 import { beatsToEnding, endingBounds, storyPhase } from './story-phase';
-import { consequencePrompt } from '@/lib/ai/prompts/consequence.prompt';
+import { consequencePrompt, duetConsequencePrompt } from '@/lib/ai/prompts/consequence.prompt';
+import * as crossings from '../duets/crossings.service';
 import * as sessions from '../sessions/sessions.service';
 import * as sessionReader from '../sessions/sessions.reader';
 import * as timeline from '../timeline/timeline.service';
@@ -155,13 +156,39 @@ export async function generateTurn(
   // for a guest in practice: their story is the first one.
   const mayPause =
     deps.pauses === true && pausesAllowed(await pauseFactsFor(userId, storyline.storyline, phase));
+  // A story for two: something the other player did that this side's reader
+  // would hear about opens this beat, as texts from their character. One per
+  // beat, oldest first; never on an ending (crossings.service.ts).
+  const duet = await crossings.duetSideOf(db, session.storylineId);
+  const pending =
+    duet?.partnerCharacterId && duet.otherUserId && phase !== 'must_end'
+      ? await crossings.nextCrossing(session.storylineId)
+      : null;
+  const partner = pending
+    ? storyline.characters.find((c) => c.id === duet!.partnerCharacterId)
+    : undefined;
+  const crossing = pending && partner ? { pending, partner } : null;
+  // Their character can text even before this side has met them on the page.
+  const cast =
+    crossing && !visible.characters.some((c) => c.id === crossing.partner.id)
+      ? { ...visible, characters: [...visible.characters, crossing.partner] }
+      : visible;
   const vars = {
-    storyline: visible,
+    storyline: cast,
     session: sessionContext,
     beyondScript,
     phase,
     beatsToEnding: deps.endings === false ? null : beatsToEnding(beat, bounds),
     pausesAllowed: mayPause,
+    ...(crossing
+      ? {
+          crossing: {
+            partnerCharacterId: crossing.partner.id,
+            title: crossing.pending.title,
+            description: crossing.pending.description,
+          },
+        }
+      : {}),
   };
 
   // One more try when the model breaks a rule the schema cannot express (an
@@ -169,7 +196,7 @@ export async function generateTurn(
   // generation costs the reader nothing, so the retry is ours to pay.
   const options = { signal: deps.signal, cacheKey: `turn:${sessionId}` };
   // The model names senders by the short handle it was shown (short-ids.ts).
-  const sender = idResolver(visible.characters.map((c) => c.id));
+  const sender = idResolver(cast.characters.map((c) => c.id));
   let sent = '';
   let firstDraftAt: number | null = null;
   const write = () => {
@@ -182,7 +209,7 @@ export async function generateTurn(
     return generator.stream(turnPrompt, vars, {
       ...options,
       onPartial: (partial) => {
-        const draft = beatDraft(withSenders(partial, sender), visible.characters);
+        const draft = beatDraft(withSenders(partial, sender), cast.characters);
         const key = JSON.stringify(draft);
         if (isEmptyDraft(draft) || key === sent) return;
         sent = key;
@@ -202,7 +229,14 @@ export async function generateTurn(
 
   // Senders are checked against the same cut the model was shown, so a text can
   // only come from someone the reader has already met.
-  const surfaces = surfacesFromModel(withSenders(value, sender), visible.characters);
+  const surfaces = surfacesFromModel(withSenders(value, sender), cast.characters);
+  // Reached them only if the beat really opens with that character's texts;
+  // otherwise it waits for the next beat.
+  const crossingLanded =
+    crossing !== null &&
+    withSenders(value, sender).notifications.some(
+      (n) => n.senderCharacterId === crossing.partner.id
+    );
 
   return sessions.openTurn(
     userId,
@@ -261,6 +295,11 @@ export async function generateTurn(
         if (guestBeat !== null) {
           await track(userId, { name: 'guest_beat_played', properties: { n: guestBeat } });
         }
+        if (crossing && crossingLanded) {
+          await crossings.markDelivered(userId, crossing.pending.id, written.id);
+        }
+        // This side has ended: nothing more crosses to it.
+        if (written.isEnding && duet) await crossings.dropCrossingsTo(session.storylineId);
         if (written.isEnding && phase !== 'open') {
           await track(userId, {
             name: 'story_ended',
@@ -388,14 +427,21 @@ async function workOutConsequences(
   const chosen = turn.choices.find((choice) => choice.id === turn.selectedChoiceId);
   if (!chosen) throw new ValidationError('The recorded choice is not one this turn offered');
 
+  // One side of a story for two: each beat also says whether the other
+  // player's character would know it (crossings.service.ts). Every other story
+  // gets exactly the usual prompt.
+  const duet = await crossings.duetSideOf(db, session.storylineId);
+  const partnerCharacterId = duet?.otherUserId ? (duet.partnerCharacterId ?? undefined) : undefined;
+
   const generator = deps.generator ?? getGenerator();
   const { value } = await runOnceMore(
     () =>
       generator.run(
-        consequencePrompt,
+        partnerCharacterId ? duetConsequencePrompt : consequencePrompt,
         {
           storyline,
           playheadOrder: session.playheadOrder,
+          ...(partnerCharacterId ? { partnerCharacterId } : {}),
           decision: {
             headline: turn.headline,
             narrativeContent: turn.narrativeContent,
@@ -483,6 +529,18 @@ async function workOutConsequences(
         );
         states += 1;
       }
+    }
+
+    // What the other player's character would know crosses to their side.
+    if (duet && partnerCharacterId) {
+      const crossed = value.events.filter(
+        (event) => 'partnerKnows' in event && event.partnerKnows === true
+      );
+      await crossings.queueCrossings(
+        tx,
+        duet,
+        crossed.map((event) => ({ title: event.title, description: event.description }))
+      );
     }
 
     // The reader has to be able to see what their own choice caused, so the
