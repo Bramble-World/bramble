@@ -1,3 +1,4 @@
+import { fitSituation, type FitNote } from '@/lib/chatgpt/fit';
 import { and, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { env } from '@/env';
 import { db } from '@/index';
@@ -7,7 +8,7 @@ import { withIosClient } from '@/lib/analytics/client-context';
 import { getGenerator, type Generator } from '@/lib/ai';
 import { TURN_DEADLINE_MS, withDeadline } from '@/lib/ai/deadline';
 import { MAX_LINK_SITUATIONS, situationsPrompt } from '@/lib/ai/prompts/situations.prompt';
-import { chatgptContextSchema, contextText, type ChatGPTContext } from '@/lib/chatgpt/context';
+import { contextText, type ChatGPTContext } from '@/lib/chatgpt/context';
 import { getSafetyCheck, type SafetyCheck } from '@/lib/onboarding/safety';
 import { enqueueForContext } from '../pool/pool.writer';
 import { apnsConfigured } from '../push/apns';
@@ -207,15 +208,28 @@ export async function requestStoriesFromLink(
     TURN_DEADLINE_MS,
     signal
   );
-  // A situation that doesn't fit what `write_my_story` takes is dropped, not fixed.
-  const situations = value.situations.slice(0, MAX_LINK_SITUATIONS).flatMap((situation) => {
-    const parsed = chatgptContextSchema.safeParse(situation);
-    return parsed.success ? [parsed.data] : [];
+  // Made to fit what `write_my_story` takes: trimmed, and only dropped with
+  // nothing to write from (fit.ts).
+  const returned = value.situations.slice(0, MAX_LINK_SITUATIONS);
+  const notes: Partial<Record<FitNote, number>> = {};
+  const situations = returned.flatMap((situation) => {
+    const fitted = fitSituation(situation);
+    for (const note of fitted.notes) notes[note] = (notes[note] ?? 0) + 1;
+    return fitted.context ? [fitted.context] : [];
   });
+  // Counts and field names only: never the note or anything in it.
+  console.info(
+    JSON.stringify({
+      event: 'chatgpt_situations',
+      returned: returned.length,
+      kept: situations.length,
+      ...(Object.keys(notes).length ? { fitted: notes } : {}),
+    })
+  );
   if (situations.length === 0) {
     await track(userId, {
       name: 'chatgpt_story_requested',
-      properties: { outcome: 'not_written', via, stories: 0 },
+      properties: { outcome: 'not_written', via, stories: 0, situations_returned: returned.length },
     });
     return { outcome: 'not_written', reason: 'not_a_story' };
   }

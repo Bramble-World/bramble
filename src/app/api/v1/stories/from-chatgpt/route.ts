@@ -33,7 +33,11 @@ const bodySchema = z.object({
 export const POST = withAccount(async (user, request) => {
   const { context } = await parseBody(request, bodySchema);
 
-  const result = await requestStoriesFromLink(user.id, context, { signal: request.signal });
+  // Not tied to the request: the app often leaves as soon as the link is
+  // tapped (back to ChatGPT, or locked), and the link is sent once and never
+  // retried, so stopping then lost the stories. Finished, they're queued and
+  // "your story's ready." tells the player, whether or not the app heard.
+  const result = await requestStoriesFromLink(user.id, context);
 
   switch (result.outcome) {
     case 'queued':
