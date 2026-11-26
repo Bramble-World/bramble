@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 25, 2026">
+    <LegalPage title="Privacy Policy" effective="November 26, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -202,6 +202,31 @@ export default function Privacy() {
         added from your account, and disconnect Bramble in ChatGPT&rsquo;s settings; a story made
         from a link is deleted with your account, or when you email us to delete it. What ChatGPT
         itself keeps is covered by OpenAI&rsquo;s own privacy policy, not this one.
+      </p>
+
+      <h3>Stories for two (iPhone)</h3>
+      <p>
+        You can invite someone to play a story with you. When you make an invite we store a
+        six-letter code, the first name you typed for yourself, when you made it and when it expires
+        (after 7 days). Anyone who opens the code, in the app or at our invite link, sees that first
+        name and nothing else about you. When someone with an account accepts, we record who
+        accepted and when, and they give the first name they want you to know them by. You each get
+        your own side of the same story, in your own account: the other person is a character in it
+        by the first name they gave. Neither of you can see the other&rsquo;s side, any of the
+        other&rsquo;s other stories, or anything else in the other&rsquo;s account. Some of what you
+        do in your side reaches theirs: when one of your choices is something their character would
+        know about (you told them, texted them, showed them, or they were there), a short note of
+        what happened is kept with their side, and their next beat opens with texts from your
+        character about it, written by our story model (OpenAI) for their side. They see only that
+        beat, never your words, your choices themselves or the rest of your side; what you keep to
+        yourself stays in your side. Nothing you type crosses, and you can&rsquo;t message each
+        other. If you haven&rsquo;t played your side for 3 days, nothing new reaches it until you
+        do. When something reaches their side while they&rsquo;re away, we may send them one
+        notification saying their story for two moved, which never says who or what. If one of you
+        deletes their account, the other&rsquo;s side stays theirs and carries on, with the
+        character who was the person who left renamed to a made-up first name everywhere in it, so
+        nothing in it is linked to them any more; anything of theirs that hadn&rsquo;t yet reached
+        it is deleted.
       </p>
 
       <h3>Reporting a story</h3>

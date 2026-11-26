@@ -43,7 +43,7 @@ export type AnalyticsEvent =
          */
         first_part_ms?: number;
         /** Where the story came from; `none` for one not from the pool (a guest's opening, a Mac import). Never which one. */
-        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
+        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'duet' | 'none';
         /** On the first story only: its length in the 5-or-10 test (story-phase.ts). */
         first_story_beats?: number;
         /** While the pauses test runs, which half this player is in (pauses.ts). */
@@ -137,7 +137,7 @@ export type AnalyticsEvent =
         /** Whether the model chose to end it, or the length cap made it. */
         phase: 'closing' | 'must_end';
         /** Where the story came from; `none` for one not from the pool. Never which one. */
-        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
+        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'duet' | 'none';
         /** On the first story only: its length in the 5-or-10 test (story-phase.ts). */
         first_story_beats?: number;
       };
@@ -146,7 +146,7 @@ export type AnalyticsEvent =
       name: 'next_story_started';
       properties: {
         /** Where the pool story came from. Never which one, and never its author. */
-        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt';
+        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'duet';
         /** The countdown ran out, the reader tapped "begin now", or began it later from the notebook. */
         how: 'countdown' | 'begin_now' | 'later';
       };
@@ -179,19 +179,47 @@ export type AnalyticsEvent =
       };
     }
   | {
+      /** A player made an invite to a story for two. No code, no name. */
+      name: 'invite_created';
+      properties: Record<string, never>;
+    }
+  | {
+      /** Someone accepted an invite: a story for two was made, for both. */
+      name: 'invite_accepted';
+      properties: Record<string, never>;
+    }
+  | {
+      /** A player started their side of a story for two: `a` the inviter's, `b` the invitee's. */
+      name: 'duet_started';
+      properties: { side: 'a' | 'b' };
+    }
+  | {
+      /**
+       * Something one side did that the other's character would know, queued
+       * for the other side (recorded against its player). Counts and codes only.
+       */
+      name: 'duet_crossed';
+      properties: { from_side: 'a' | 'b'; held: boolean; count: number };
+    }
+  | {
+      /** A crossing reached the other player's beat. */
+      name: 'duet_crossing_delivered';
+      properties: Record<string, never>;
+    }
+  | {
       name: 'story_reported';
       properties: {
         /** The reason the reader picked: a code, never their words or the story's. */
         reason: 'harmful' | 'sexual' | 'hateful' | 'self_harm' | 'real_person' | 'other';
         /** Where the story came from; `none` for a story that is not from the pool. Never which one. */
-        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'none';
+        origin: 'seed' | 'reborn' | 'reddit' | 'chatgpt' | 'duet' | 'none';
       };
     }
   | {
       name: 'push_sent';
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
-        kind: 'battery_back' | 'story_waiting' | 'story_ready' | 'reply_arrived';
+        kind: 'battery_back' | 'story_waiting' | 'story_ready' | 'reply_arrived' | 'duet_moved';
         /** For story_waiting: which wording went (push.policy.ts). Never the words or a count. */
         copy?: 'today' | 'texts' | 'choice';
       };

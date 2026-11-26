@@ -38,7 +38,16 @@ export const MESSAGES: Record<PushKind, PushMessage> = {
     title: 'your story’s waiting on your choice.',
     body: 'pick up where you left off.',
   },
+  // A story for two: the other player did something this side will hear about
+  // (crossings.service.ts). Never who, or what.
+  duet_moved: {
+    title: 'your story for two just moved.',
+    body: 'something happened. see what’s waiting.',
+  },
 };
+
+/** Away this long before "your story for two just moved". */
+const CROSSING_AWAY_MS = 30 * 60 * 1000;
 
 /**
  * The "story waiting" wording, tested 50/50 (the user's call, 2026-11-25).
@@ -97,6 +106,11 @@ export type PushFacts = {
    * notification is coming, so no "story waiting" meanwhile.
    */
   replyOwed?: boolean;
+  /**
+   * In a story for two, the other player did something this player's side
+   * will open with, since they were last here (crossings.service.ts).
+   */
+  crossingWaiting?: boolean;
 };
 
 export type PushDecision = { kind: PushKind; ordinal: number };
@@ -126,6 +140,14 @@ export function decidePush(facts: PushFacts, now: Date): PushDecision | null {
     if (!facts.sends.some((send) => send.kind === 'battery_back')) {
       return { kind: 'battery_back', ordinal: 0 };
     }
+  }
+
+  if (
+    facts.crossingWaiting &&
+    at - away >= CROSSING_AWAY_MS &&
+    !facts.sends.some((send) => send.kind === 'duet_moved')
+  ) {
+    return { kind: 'duet_moved', ordinal: 0 };
   }
 
   if (facts.replyOwed) return null;
