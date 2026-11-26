@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { castPartner, PARTNER, partnerIndex } from './premise';
+import { castPartner, PARTNER, partnerIndex, premiseProblem, withPartnerAsThey } from './premise';
 import { DUET_PREMISES } from './seeds';
 import { templateText } from '@/lib/pool/template';
 
@@ -28,5 +28,45 @@ describe('duet premises', () => {
   it('give both sides the same title, so the two players know it is one story', () => {
     for (const premise of Object.values(DUET_PREMISES))
       expect(premise.a.title).toBe(premise.b.title);
+  });
+});
+
+describe('the rules a written premise must keep', () => {
+  const seed = Object.values(DUET_PREMISES)[0];
+  const withPartner = (change: object) => ({
+    ...seed,
+    a: {
+      ...seed.a,
+      cast: seed.a.cast.map((member, i) =>
+        i === partnerIndex(seed.a) ? { ...member, ...change } : member
+      ),
+    },
+  });
+
+  it('passes every seed', () => {
+    for (const premise of Object.values(DUET_PREMISES)) expect(premiseProblem(premise)).toBeNull();
+  });
+
+  // The two players could be any two friends: never a couple.
+  it.each(['your ex', 'your crush', 'your girlfriend', 'someone you are dating', 'your partner'])(
+    'refuses a partner who is %s',
+    (relationshipType) => {
+      expect(premiseProblem(withPartner({ relationshipType }))).toBe('romance');
+    }
+  );
+
+  it('keeps friends, siblings and roommates', () => {
+    for (const relationshipType of [
+      'your best friend',
+      'your older sister',
+      'your roommate',
+      'your lab partner',
+    ])
+      expect(premiseProblem(withPartner({ relationshipType }))).toBeNull();
+  });
+
+  it('makes the other player they, whatever was written', () => {
+    const premise = withPartnerAsThey(withPartner({ pronouns: 'she' }));
+    expect(premise.a.cast[partnerIndex(premise.a)].pronouns).toBe('they');
   });
 });

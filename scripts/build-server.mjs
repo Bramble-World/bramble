@@ -26,6 +26,7 @@ const ENTRIES = {
   'src/sweeps/push-sweep.ts': `${OUT}/sweeps/push-sweep.js`,
   'src/sweeps/ending-sweep.ts': `${OUT}/sweeps/ending-sweep.js`,
   'src/sweeps/reply-sweep.ts': `${OUT}/sweeps/reply-sweep.js`,
+  'src/sweeps/duet-premise-sweep.ts': `${OUT}/sweeps/duet-premise-sweep.js`,
   'src/db/migrate.ts': `${OUT}/db/migrate.js`,
   'src/scripts/delete-account.ts': `${OUT}/scripts/delete-account.js`,
   'src/scripts/send-test-push.ts': `${OUT}/scripts/send-test-push.js`,

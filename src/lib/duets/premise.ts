@@ -12,7 +12,8 @@ import { storyTemplateSchema, type StoryTemplate } from '@/lib/pool/template';
  * text of that side too. The two players could be any two friends, so a
  * premise never makes them romantic, and every other person is invented.
  *
- * PR 2 generates these; for now `seeds/` holds hand-written ones.
+ * The model writes more (`duet.write`, kept in `duet_premises`); `seeds/`
+ * holds the hand-written ones.
  */
 export const PARTNER = '{partner}';
 
@@ -58,4 +59,37 @@ export function castPartner(side: StoryTemplate, name: string): StoryTemplate {
     hook: fill(lower)(side.hook),
     openingLines: fill(lower)(side.openingLines),
   });
+}
+
+/** Words that make the two players a couple, which a premise never may. */
+const ROMANTIC =
+  /\b(ex|exes|crush|date|dating|girlfriend|boyfriend|lover|fianc[eé]e?|husband|wife|situationship|hook ?up|kiss)\b|(?<!lab |project |business |dance |study )\bpartner\b/i;
+
+export type PremiseProblem = 'romance' | 'partner_named';
+
+/**
+ * What a written premise breaks that the schema can't say, or null. The check
+ * model reads for the rest; these are the rules worth not leaving to it.
+ */
+export function premiseProblem(premise: DuetPremise): PremiseProblem | null {
+  for (const side of [premise.a, premise.b]) {
+    const partner = side.cast[partnerIndex(side)];
+    if (ROMANTIC.test(partner.relationshipType)) return 'romance';
+    // Another cast member given the other player's placeholder as part of a name.
+    if (side.cast.some((member, i) => i !== partnerIndex(side) && member.name.includes(PARTNER))) {
+      return 'partner_named';
+    }
+  }
+  return null;
+}
+
+/** The other player is always "they", whatever the writer chose. */
+export function withPartnerAsThey(premise: DuetPremise): DuetPremise {
+  const side = (template: StoryTemplate): StoryTemplate => ({
+    ...template,
+    cast: template.cast.map((member) =>
+      member.name === PARTNER ? { ...member, pronouns: 'they' as const } : member
+    ),
+  });
+  return { a: side(premise.a), b: side(premise.b) };
 }

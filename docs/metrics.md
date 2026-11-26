@@ -132,7 +132,9 @@ one: both sides are written) and `duet_started` with `side` (`a` the inviter's,
 `b` the invitee's) when a player starts their side. No codes, names or ids
 beyond the player's own. A side's beats are `beat_played` with `origin: duet`.
 Acceptance rate: `invite_accepted` / `invite_created`. Both playing:
-duets with `duet_started` for both sides.
+duets with `duet_started` for both sides. The premise stock is in the logs, not
+analytics: `duet-premise-sweep` logs `stock`, `written`, `rejected` and `failed`
+each run, and a high `rejected` means the writer prompt needs work.
 
 ## Story reports
 

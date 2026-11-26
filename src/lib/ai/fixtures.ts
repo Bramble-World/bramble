@@ -1,3 +1,5 @@
+import { duetCheckPrompt, duetWritePrompt } from './prompts/duet.prompt';
+import { DUET_PREMISES } from '@/lib/duets/seeds';
 import { FakeGenerator } from './generator.fake';
 import { turnPrompt } from './prompts/turn.prompt';
 import { consequencePrompt } from './prompts/consequence.prompt';
@@ -309,6 +311,20 @@ export function registerFixtures(fake: FakeGenerator): void {
       .map((paragraph) => paragraph.trim())
       .filter((paragraph) => paragraph.length > 0 && paragraph.length < 20)
       .map(() => 'too_thin' as const),
+  }));
+
+  // A seed premise retitled, so each one written is its own.
+  fake.register(duetWritePrompt, ({ vars, seed }) => {
+    const seeds = Object.values(DUET_PREMISES);
+    const base = seeds[seed % seeds.length];
+    const title = `${base.a.title} ${vars.existing.length + 1}`.slice(0, 60);
+    return { a: { ...base.a, title }, b: { ...base.b, title } };
+  });
+
+  fake.register(duetCheckPrompt, () => ({
+    verdict: 'pass' as const,
+    rejectCode: null,
+    qualityScore: 4,
   }));
 
   fake.register(personalCheckPrompt, () => ({
