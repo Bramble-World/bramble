@@ -14,7 +14,8 @@ describe('InviteCard', () => {
     expect(screen.getByText('maya invited you to a story together.')).toBeInTheDocument();
     expect(screen.getByText('ABCDEF')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'copy code' })).toBeInTheDocument();
-    expect(screen.getByText(/open bramble and tap/)).toBeInTheDocument();
+    expect(screen.getByText(/new to bramble\? open it and tap/)).toBeInTheDocument();
+    expect(screen.getByText(/already playing\? go to settings/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'get bramble on the app store' })).toHaveAttribute(
       'href',
       base.appStoreUrl
