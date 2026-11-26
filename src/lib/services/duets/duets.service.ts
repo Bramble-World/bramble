@@ -2,7 +2,7 @@ import { eq, inArray, or, sql } from 'drizzle-orm';
 import { db } from '@/index';
 import { characters, duets, persons, storyTemplates, storylines } from '@/db/schema/tables';
 import { track } from '@/lib/analytics/analytics';
-import { DUET_PREMISES } from '@/lib/duets/seeds';
+import { loadPremise, premiseSlugs } from './premises.store';
 import { castPartner, partnerIndex } from '@/lib/duets/premise';
 import { storyTemplateSchema, type StoryTemplate } from '@/lib/pool/template';
 import { NotFoundError } from '@/lib/utils/errors';
@@ -25,7 +25,7 @@ export type DuetPlayer = { userId: string; name: string };
  * haven't had together; any, least-played, once they've had them all.
  */
 export async function pickPremise(tx: Executor, a: string, b: string): Promise<string> {
-  const slugs = Object.keys(DUET_PREMISES);
+  const slugs = await premiseSlugs(tx);
   const rows = await tx
     .select({
       premise: duets.premise,
@@ -55,7 +55,7 @@ export async function createDuet(
   sideA: DuetPlayer,
   sideB: DuetPlayer
 ): Promise<string> {
-  const premise = DUET_PREMISES[premiseSlug];
+  const premise = await loadPremise(tx, premiseSlug);
   if (!premise) throw new NotFoundError('Duet premise', premiseSlug);
 
   const [duet] = await tx
@@ -171,7 +171,7 @@ export async function forgetDuetPartner(tx: Executor, userId: string): Promise<v
     const otherPartnerId =
       leaving === 'a' ? duet.sideBPartnerCharacterId : duet.sideAPartnerCharacterId;
 
-    const premise = DUET_PREMISES[duet.premise];
+    const premise = await loadPremise(tx, duet.premise);
     const premiseNames = premise
       ? [...premise.a.cast, ...premise.b.cast].map((member) => member.name)
       : [];

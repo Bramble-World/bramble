@@ -60,12 +60,13 @@ A copy is linked back by `storylines.templateId`, `on delete set null`: a player
 already playing a story whose author leaves keeps it.
 
 `origin = duet` is one side of a story for two: written for its `user_id` from
-a duet premise (`src/lib/duets`), with the other player cast by first name, and
+a duet premise (a seed in `src/lib/duets/seeds` or a written one in `duet_premises`), with the other player cast by first name, and
 `duetId` set. Like `chatgpt`, only ever that player's, and offered first.
 
 ### `invites` and `duets`
 
 - **`invites`**: a 6-letter `code` (unique), the `inviterUserId` (cascades), the `inviterName` they typed, `expiresAt` (7 days), and once accepted `acceptedByUserId` (`set null`), `acceptedAt` and the `duetId` it made (`src/lib/services/invites`).
+- **`duet_premises`**: premises the model wrote (`duet.write`, checked by `duet.check`) beside the hand-written seeds: a `slug` (`gen-` and 8 hex digits, what `duets.premise` holds), `status` (`ready`, or `retired`: kept for the duets that used it, given to no new pair), the premise `content` and its `qualityScore`. About nobody, so it has no user column. Kept topped up to ten by `duet-premise-sweep` (`src/lib/services/duets/duet-premise.job.ts`).
 - **`duets`**: the `premise` slug and, per side (A the inviter, B the invitee), the player, the name they gave, their `duet` template, their storyline once started (`storylines.duetId` points back), and the character on that side who is the other player (found by `side*PartnerIndex` in the premise's cast when the side is copied). Every reference is `set null`. Before an account is deleted, `forgetDuetPartner` renames that player's character on the other side, everywhere in that storyline or the unstarted template, to a neutral first name, and the row keeps only that name for them (`src/lib/services/duets`).
 
 ### `persons`

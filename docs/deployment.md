@@ -420,6 +420,24 @@ job with its schedule in Porter. To run it by hand:
 porter app run bramble -- node dist/sweeps/reply-sweep.js
 ```
 
+## The duet premise sweep
+
+`duet-premise-sweep` (`node dist/sweeps/duet-premise-sweep.js`, cron
+`20 * * * *`) keeps premises for stories for two ready: ten in all, the
+hand-written seeds (`src/lib/duets/seeds`) counting. Each run writes at most
+three, and none once the stock is full. Each one is written (`duet.write`),
+held to the rules the schema can't hold (`premiseProblem`: never a couple), checked
+(`duet.check`, a 4 or 5 to pass) and moderated, all on the `pool` stage (flex
+first). Only a pass is kept, in `duet_premises`; a rejection writes nothing. It
+logs one `duet-premise-sweep` line of counts per run (`stock`, `written`,
+`rejected`, `failed`). It needs `OPENAI_API_KEY` and `BRAMBLE_AI_MODE`. To retire
+a premise, set its `status` to `retired`: the duets that used it keep it, and no
+new pair gets it. To run it by hand:
+
+```bash
+porter app run bramble -- node dist/sweeps/duet-premise-sweep.js
+```
+
 ## Health checks
 
 | Endpoint      | Answers                           | Checks                                                    |
