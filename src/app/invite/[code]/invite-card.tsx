@@ -28,7 +28,10 @@ export function InviteCard({
       <p className={LINE}>{`${name} invited you to a story together.`}</p>
       <CopyCode code={code} />
       <p className="max-w-sm text-center text-base text-black/70">
-        open bramble and tap &ldquo;got an invite code?&rdquo;
+        new to bramble? open it and tap &ldquo;got an invite code?&rdquo;
+      </p>
+      <p className="max-w-sm text-center text-base text-black/70">
+        already playing? go to settings, then &ldquo;got an invite code?&rdquo;
       </p>
       {appStoreUrl ? (
         <a
