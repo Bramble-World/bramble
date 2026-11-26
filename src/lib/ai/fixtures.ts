@@ -303,6 +303,12 @@ export function registerFixtures(fake: FakeGenerator): void {
         ],
         you: null,
       })),
+    // A short paragraph is too thin to keep, and says so.
+    skipped: vars.text
+      .split(/\n\s*\n/)
+      .map((paragraph) => paragraph.trim())
+      .filter((paragraph) => paragraph.length > 0 && paragraph.length < 20)
+      .map(() => 'too_thin' as const),
   }));
 
   fake.register(personalCheckPrompt, () => ({

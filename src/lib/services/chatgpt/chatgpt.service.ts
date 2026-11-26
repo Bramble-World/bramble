@@ -242,19 +242,31 @@ async function storiesFromLink(
     for (const note of fitted.notes) notes[note] = (notes[note] ?? 0) + 1;
     return fitted.context ? [fitted.context] : [];
   });
-  // Counts and field names only: never the note or anything in it.
+  // Counts, codes and the note's size only: never the note or anything in it.
+  const shape = noteShape(note);
+  const skipped = countCodes(value.skipped ?? []);
   console.info(
     JSON.stringify({
       event: 'chatgpt_situations',
+      ...shape,
       returned: returned.length,
       kept: situations.length,
+      ...(Object.keys(skipped).length ? { skipped } : {}),
       ...(Object.keys(notes).length ? { fitted: notes } : {}),
     })
   );
   if (situations.length === 0) {
     await track(userId, {
       name: 'chatgpt_story_requested',
-      properties: { outcome: 'not_written', via, stories: 0, situations_returned: returned.length },
+      properties: {
+        outcome: 'not_written',
+        via,
+        stories: 0,
+        situations_returned: returned.length,
+        note_size: shape.noteSize,
+        paragraphs: shape.paragraphs,
+        skipped: [...new Set(value.skipped ?? [])],
+      },
     });
     return { outcome: 'not_written', reason: 'not_a_story' };
   }
@@ -495,4 +507,24 @@ export async function deleteStory(userId: string, storyId: string): Promise<bool
     }
     return true;
   });
+}
+
+/**
+ * How big a link's note was, in bands, and how many paragraphs it had: enough
+ * to tell a one-line note from five situations, and nothing of what it said.
+ */
+export function noteShape(note: string): {
+  noteSize: 'short' | 'medium' | 'long';
+  paragraphs: number;
+} {
+  const chars = note.trim().length;
+  const noteSize = chars < 200 ? 'short' : chars <= 1000 ? 'medium' : 'long';
+  const paragraphs = note.split(/\n\s*\n/).filter((p) => p.trim().length > 0).length;
+  return { noteSize, paragraphs };
+}
+
+function countCodes(codes: readonly string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const code of codes) counts[code] = (counts[code] ?? 0) + 1;
+  return counts;
 }

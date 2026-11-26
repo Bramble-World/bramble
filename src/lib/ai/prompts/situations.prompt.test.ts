@@ -48,16 +48,20 @@ describe('situationsOutputSchema', () => {
   };
 
   it('takes an empty list: nothing worth a story', () => {
-    expect(situationsOutputSchema.parse({ situations: [] })).toEqual({ situations: [] });
+    expect(situationsOutputSchema.parse({ situations: [], skipped: [] })).toEqual({
+      situations: [],
+      skipped: [],
+    });
   });
 
   it('takes a situation that is also what write_my_story takes', () => {
-    const { situations } = situationsOutputSchema.parse({ situations: [situation] });
+    const { situations } = situationsOutputSchema.parse({ situations: [situation], skipped: [] });
     expect(chatgptContextSchema.safeParse(situations[0]).success).toBe(true);
   });
 
   it("leaves lengths to write_my_story's schema, which a situation with no one in it fails", () => {
     const { situations } = situationsOutputSchema.parse({
+      skipped: [],
       situations: [{ ...situation, people: [] }],
     });
     expect(chatgptContextSchema.safeParse(situations[0]).success).toBe(false);
