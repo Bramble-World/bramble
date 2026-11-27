@@ -148,7 +148,7 @@ export async function generateTurn(
   const visible = contextAsOf(storyline, session.playheadOrder);
   const beyondScript = scriptExhausted(storyline, session.playheadOrder);
   // The beat about to be written, counting a scripted first beat. The first
-  // story ends on its target (5 or 10) and every other between 16 and 24 (`endingBounds`).
+  // story ends on its target (5) and every other between 16 and 24 (`endingBounds`).
   const beat = sessionContext.turns.length + 1;
   const bounds = endingBounds(storyline.storyline);
   const phase = deps.endings === false ? 'open' : storyPhase(beat, bounds);
@@ -268,7 +268,8 @@ export async function generateTurn(
       onCreated: async (written) => {
         // Looked up only for a beat this call wrote, so a resume pays nothing.
         const origin = await storylineReader.storyOrigin(session.storylineId);
-        // Which arm of the first-story length test this beat is in (story-phase.ts).
+        // How long this first story is written to be (story-phase.ts): 5, or 10 for
+        // one written during the length test of 2026-11-25.
         const firstStory =
           storyline.storyline.openingId !== null
             ? { first_story_beats: storyline.storyline.targetBeats }

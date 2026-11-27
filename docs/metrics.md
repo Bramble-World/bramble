@@ -248,13 +248,15 @@ they happen. Live guests right now, from the database:
 select count(*) from users where is_guest and guest_expires_at > now();
 ```
 
-**The first-story length test** (from 2026-11-25): each new guest story is
-written to end on beat 5 or beat 10, half and half (`FIRST_STORY_LENGTHS` in
-`story-phase.ts`, kept as the storyline's `target_beats`). Its `beat_played` and
-`story_ended` events carry `first_story_beats` (5 or 10); a person's arm is the
-value on their first `beat_played`. Compare the two arms on stories finished
-(`story_ended` with `first_story_beats`), next stories started, and days with a
-`beat_played` after the first.
+**The first-story length test** (2026-11-25 → 2026-11-27, ended): each new
+guest story was written to end on beat 5 or beat 10, half and half. Since
+2026-11-27 every first story is 5 beats (`FIRST_STORY_BEATS` in
+`story-phase.ts`, kept as the storyline's `target_beats`): of about 410 players
+per arm, 74% finished the 5-beat story against 52% for 10, and 61% started a
+second story against 46%. Sign-ups were the same. First stories' `beat_played`
+and `story_ended` events still carry `first_story_beats` (5, or 10 for a story
+written during the test); a person's arm was the value on their first
+`beat_played`.
 
 **The "story waiting" wording test** (from 2026-11-25): each player is in one
 arm for good (`storyWaitingArm` in `push.policy.ts`, a hash of their id).
