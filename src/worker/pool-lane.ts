@@ -1,6 +1,6 @@
 import { db } from '@/index';
 import { claimNextTemplate, TEMPLATE_RECLAIM_AFTER_MS } from '@/lib/services/pool/pool.writer';
-import { runTemplate } from '@/lib/services/pool/pool.job';
+import { runTemplate, type TemplateReport } from '@/lib/services/pool/pool.job';
 
 /**
  * A worker lane that writes pool stories, beside the import lanes.
@@ -41,13 +41,21 @@ export async function poolLane(id: number, control: Control, log: Log): Promise<
     // worker may take the row.
     const signal = AbortSignal.timeout(TEMPLATE_RECLAIM_AFTER_MS - 60_000);
     try {
-      const outcome = await runTemplate(claim, { signal });
+      let report: TemplateReport | null = null;
+      const outcome = await runTemplate(claim, { signal, report: (r) => (report = r) });
+      const found = report as TemplateReport | null;
       log('template_finished', {
         lane: id,
         templateId: claim.id,
         attempt: claim.attempts,
         outcome,
         durationMs: Date.now() - startedAt,
+        // Codes, scores and durations only (TemplateReport).
+        ...(found?.reason ? { reason: found.reason } : {}),
+        ...(found?.qualityScore != null ? { qualityScore: found.qualityScore } : {}),
+        ...(found
+          ? { writeMs: found.writeMs, checkMs: found.checkMs, rewritten: found.rewritten }
+          : {}),
       });
     } catch {
       // Bookkeeping failed; the row is reclaimed once stale.

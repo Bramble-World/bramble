@@ -9,9 +9,17 @@ import { SEED_STORIES } from '@/lib/pool/seeds';
 import { memoryLinks } from './link-once.memory';
 import { advanceSession, commitChoice } from '../generation/turns.service';
 import * as sessions from '../sessions/sessions.service';
+import { personalCheckPrompt } from '@/lib/ai/prompts/personal.prompt';
 import { claimNextTemplate } from '../pool/pool.writer';
-import { runTemplate } from '../pool/pool.job';
-import { instantiateTemplate, nextStoryFor, startNextStory } from '../pool/next.service';
+import { runTemplate, type TemplateReport } from '../pool/pool.job';
+import {
+  instantiateTemplate,
+  nextStatusFor,
+  nextStoryFor,
+  OWN_STORY_WAIT_MS,
+  startNextStory,
+} from '../pool/next.service';
+import { storylineSessions } from '@/db/schema/tables';
 import {
   CHATGPT_STORIES_PER_DAY,
   chatgptStatus,
@@ -360,6 +368,161 @@ describe('stories from a link', () => {
     const [story] = await db.select().from(storyTemplates).where(eq(storyTemplates.userId, player));
     expect(story.batchId).toBeNull();
     expect(await storyReadyRecipient(story.id)).toBe(player);
+  });
+});
+
+/** The check answers these in turn, then passes. */
+function checkAnswers(...answers: { rejectCode: string | null; qualityScore: number }[]) {
+  let n = 0;
+  fake.register(personalCheckPrompt, () => {
+    const answer = answers[n++];
+    if (!answer) return { verdict: 'pass' as const, rejectCode: null, qualityScore: 4 };
+    return {
+      verdict: answer.rejectCode ? ('reject' as const) : ('pass' as const),
+      rejectCode: answer.rejectCode as never,
+      qualityScore: answer.qualityScore,
+    };
+  });
+}
+
+async function writeNextReporting() {
+  const claim = await claimNextTemplate(db);
+  if (!claim) throw new Error('nothing to claim');
+  let report: TemplateReport | null = null;
+  const outcome = await runTemplate(claim, {
+    generator: fake,
+    safety: pass,
+    report: (r) => (report = r),
+  });
+  return { outcome, report: report as TemplateReport | null };
+}
+
+describe('a second writing after the check', () => {
+  it('writes it again, told which rule, when a good story is turned down for one', async () => {
+    const player = await newUser('player');
+    await requestStory(player, CONTEXT, { safety: pass });
+    checkAnswers({ rejectCode: 'harms_real_person', qualityScore: 5 });
+
+    const { outcome, report } = await writeNextReporting();
+    expect(outcome).toBe('ready');
+    expect(report).toMatchObject({ rewritten: true, qualityScore: 4 });
+    expect(report!.reason).toBeUndefined();
+    expect(fake.calls.map((c) => c.promptName)).toEqual([
+      'personal.rewrite',
+      'personal.check',
+      'personal.rewrite',
+      'personal.check',
+    ]);
+    // The second writing is reminded of the rule, by code; the first story never reaches it.
+    expect(fake.calls[0].system).not.toContain('An earlier version');
+    expect(fake.calls[2].system).toContain('An earlier version was turned down');
+    expect((fake.calls[2].vars as { fix?: string }).fix).toBe('harms_real_person');
+    const [story] = await db.select().from(storyTemplates).where(eq(storyTemplates.userId, player));
+    expect(story).toMatchObject({ status: 'ready', reason: null });
+  });
+
+  it('keeps it out when the second writing is turned down too, with the second reason', async () => {
+    const player = await newUser('player');
+    await requestStory(player, CONTEXT, { safety: pass });
+    checkAnswers(
+      { rejectCode: 'spoils_opening', qualityScore: 4 },
+      { rejectCode: 'harms_real_person', qualityScore: 4 }
+    );
+
+    const { outcome, report } = await writeNextReporting();
+    expect(outcome).toBe('rejected');
+    expect(report).toMatchObject({ rewritten: true, reason: 'harms_real_person', qualityScore: 4 });
+    expect(fake.calls.filter((c) => c.promptName === 'personal.rewrite')).toHaveLength(2);
+    const [story] = await db.select().from(storyTemplates).where(eq(storyTemplates.userId, player));
+    expect(story).toMatchObject({ status: 'rejected', reason: 'harms_real_person', content: null });
+  });
+
+  it("doesn't write a low-scoring story again", async () => {
+    const player = await newUser('player');
+    await requestStory(player, CONTEXT, { safety: pass });
+    checkAnswers({ rejectCode: null, qualityScore: 3 });
+
+    const { outcome, report } = await writeNextReporting();
+    expect(outcome).toBe('rejected');
+    expect(report).toMatchObject({ rewritten: false, reason: 'low_quality', qualityScore: 3 });
+    expect(fake.calls.filter((c) => c.promptName === 'personal.rewrite')).toHaveLength(1);
+  });
+
+  it('reports how long the writing and the check took', async () => {
+    const player = await newUser('player');
+    await requestStory(player, CONTEXT, { safety: pass });
+    const { report } = await writeNextReporting();
+    expect(report!.writeMs).toBeGreaterThanOrEqual(0);
+    expect(report!.checkMs).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('the order stories are written in', () => {
+  it("writes another player's first story before this player's second", async () => {
+    const many = await newUser('many');
+    await requestStory(many, CONTEXT, { safety: pass });
+    await requestStory(many, { ...CONTEXT, about: `${CONTEXT.about} again` }, { safety: pass });
+    const one = await newUser('one');
+    await requestStory(one, CONTEXT, { safety: pass });
+
+    // The first player's first story is being written…
+    const first = await claimNextTemplate(db);
+    const [firstRow] = await db
+      .select()
+      .from(storyTemplates)
+      .where(eq(storyTemplates.id, first!.id));
+    expect(firstRow.userId).toBe(many);
+    // …so the other player's only story goes ahead of their second, though it was asked for later.
+    const second = await claimNextTemplate(db);
+    const [secondRow] = await db
+      .select()
+      .from(storyTemplates)
+      .where(eq(storyTemplates.id, second!.id));
+    expect(secondRow.userId).toBe(one);
+    const third = await claimNextTemplate(db);
+    const [thirdRow] = await db
+      .select()
+      .from(storyTemplates)
+      .where(eq(storyTemplates.id, third!.id));
+    expect(thirdRow.userId).toBe(many);
+  });
+});
+
+describe('waiting for their own story when one ends', () => {
+  it('waits while theirs is being written, rather than offer the pool', async () => {
+    const player = await newUser('player');
+    const ended = await finishAStory(player);
+    await requestStory(player, CONTEXT, { safety: pass });
+    // finishAStory's own read chose nothing yet: it never asked.
+    await db
+      .update(storylineSessions)
+      .set({ nextTemplateId: null })
+      .where(eq(storylineSessions.id, ended));
+
+    const next = await nextStoryFor(player, ended);
+    expect(next).toBeNull();
+    expect(await nextStatusFor(player, next)).toBe('preparing');
+
+    await writeNext();
+    expect((await nextStoryFor(player, ended))?.origin).toBe('chatgpt');
+  });
+
+  it('offers the pool once the wait is over', async () => {
+    const player = await newUser('player');
+    const ended = await finishAStory(player);
+    await requestStory(player, CONTEXT, { safety: pass });
+    await db
+      .update(storylineSessions)
+      .set({ nextTemplateId: null, endedAt: new Date(Date.now() - OWN_STORY_WAIT_MS - 1_000) })
+      .where(eq(storylineSessions.id, ended));
+
+    expect((await nextStoryFor(player, ended))?.origin).toBe('seed');
+  });
+
+  it("doesn't wait when nothing of theirs is being written", async () => {
+    const player = await newUser('player');
+    const ended = await finishAStory(player);
+    expect((await nextStoryFor(player, ended))?.origin).toBe('seed');
   });
 });
 
