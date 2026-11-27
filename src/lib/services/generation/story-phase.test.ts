@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beatsToEnding, endingBounds, pickFirstStoryLength, storyPhase } from './story-phase';
+import { beatsToEnding, endingBounds, FIRST_STORY_BEATS, storyPhase } from './story-phase';
 
 const pooled = endingBounds({ targetBeats: 20, openingId: null });
 const first = endingBounds({ targetBeats: 10, openingId: 'are_you_up' });
@@ -30,11 +30,8 @@ describe('the first story', () => {
     });
   });
 
-  it('is 5 or 10 beats, half and half', () => {
-    expect(pickFirstStoryLength(() => 0)).toBe(5);
-    expect(pickFirstStoryLength(() => 0.49)).toBe(5);
-    expect(pickFirstStoryLength(() => 0.5)).toBe(10);
-    expect(pickFirstStoryLength(() => 0.99)).toBe(10);
+  it('is 5 beats for everyone', () => {
+    expect(FIRST_STORY_BEATS).toBe(5);
   });
 
   it('at 5, ends on the first beat after the call, counting down from beat 1', () => {
