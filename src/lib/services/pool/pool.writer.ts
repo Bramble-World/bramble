@@ -99,6 +99,14 @@ export type ClaimedTemplate = {
  * whose worker died on its last attempt is still seen — and then failed by the
  * runner rather than left `generating` forever. Raw qualifiers inside the
  * subquery, for the reason given on `claimable` in imports.writer.ts.
+ *
+ * **Everyone's first story before anyone's second.** A link queues up to five
+ * stories at once, and oldest-first made the next player wait behind all five
+ * (2026-11-26: fifteen in a row at the evening peak, while players whose first
+ * story had just ended were given a pool story instead). So a template whose
+ * player already has one of their own being written, or written and not yet
+ * played, waits behind every template whose player has none; oldest first
+ * within each.
  */
 export async function claimNextTemplate(tx: Executor): Promise<ClaimedTemplate | null> {
   const staleBefore = new Date(Date.now() - TEMPLATE_RECLAIM_AFTER_MS);
@@ -121,7 +129,18 @@ export async function claimNextTemplate(tx: Executor): Promise<ClaimedTemplate |
           )
           or ("t"."status" = 'generating' and "t"."started_at" < ${staleBefore})
         )
-        order by "t"."created_at"
+        order by exists (
+          select 1 from "story_templates" "o"
+          where "o"."user_id" = "t"."user_id" and "o"."id" <> "t"."id"
+            and "o"."origin" in ('chatgpt', 'duet')
+            and (
+              "o"."status" = 'generating'
+              or ("o"."status" = 'ready' and not exists (
+                select 1 from "storylines" "played"
+                where "played"."user_id" = "o"."user_id" and "played"."template_id" = "o"."id"
+              ))
+            )
+        ), "t"."created_at"
         for update skip locked
         limit 1
       )`

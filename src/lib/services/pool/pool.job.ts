@@ -8,7 +8,12 @@ import {
   rewritePrompt,
   type PoolAnswer,
 } from '@/lib/ai/prompts/pool.prompt';
-import { personalCheckPrompt, personalRewritePrompt } from '@/lib/ai/prompts/personal.prompt';
+import {
+  FIXABLE_REJECTIONS,
+  personalCheckPrompt,
+  personalRewritePrompt,
+  type FixableRejection,
+} from '@/lib/ai/prompts/personal.prompt';
 import { chatgptContextSchema } from '@/lib/chatgpt/context';
 import { getSafetyCheck, type SafetyCheck } from '@/lib/onboarding/safety';
 import { announceStoryReady } from '@/lib/services/chatgpt/chatgpt.service';
@@ -30,7 +35,26 @@ import {
 /** The length a pool story is written for. Matches the storylines default. */
 export const POOL_TARGET_BEATS = 20;
 
-export type PoolDeps = { generator?: Generator; safety?: SafetyCheck; signal?: AbortSignal };
+/**
+ * What a run found, for the worker's log line: codes, scores and durations,
+ * never anything written. `writeMs` and `checkMs` add up every writing and every
+ * check (the check and moderation run side by side, so `checkMs` is the longer).
+ */
+export type TemplateReport = {
+  reason?: Reason;
+  qualityScore?: number;
+  writeMs: number;
+  checkMs: number;
+  /** Written a second time after the check turned down the first. */
+  rewritten: boolean;
+};
+
+export type PoolDeps = {
+  generator?: Generator;
+  safety?: SafetyCheck;
+  signal?: AbortSignal;
+  report?: (report: TemplateReport) => void;
+};
 
 export type TemplateOutcome = 'ready' | 'declined' | 'rejected' | 'retrying' | 'failed' | 'gone';
 
@@ -38,11 +62,17 @@ type Reason = Parameters<typeof markRefused>[3];
 
 /**
  * One story's way through the models, whatever it is written from: the writer
- * (which may decline), the check (which may reject, and scores it), then the
- * same moderation an answer gets, on everything that would be played.
+ * (which may decline), then the check (which may reject, and scores it) beside
+ * the same moderation an answer gets, on everything that would be played.
+ *
+ * `fixable` lists the rejections worth one more writing, and `rewrite` is told
+ * which one it is fixing; a pool story from an answer has none.
  */
 type Writing = {
-  rewrite: (signal?: AbortSignal) => Promise<{
+  rewrite: (
+    signal?: AbortSignal,
+    fix?: FixableRejection
+  ) => Promise<{
     verdict: 'story' | 'declined';
     declineCode: Reason | null;
     story: unknown;
@@ -52,48 +82,86 @@ type Writing = {
     story: StoryTemplate,
     signal?: AbortSignal
   ) => Promise<{ verdict: 'pass' | 'reject'; rejectCode: Reason | null; qualityScore: number }>;
+  fixable: readonly Reason[];
 };
+
+type Verdict =
+  | { kind: 'declined'; reason: Reason }
+  | { kind: 'rejected'; reason: Reason; qualityScore: number }
+  | { kind: 'ready'; story: StoryTemplate; qualityScore: number };
 
 async function write(
   claim: ClaimedTemplate,
   writing: Writing,
   safety: SafetyCheck,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  report?: (report: TemplateReport) => void
 ): Promise<TemplateOutcome> {
-  try {
-    const written = await writing.rewrite(signal);
+  const timing = { writeMs: 0, checkMs: 0 };
+  const timed = async <T>(key: keyof typeof timing, run: () => Promise<T>): Promise<T> => {
+    const startedAt = Date.now();
+    try {
+      return await run();
+    } finally {
+      timing[key] += Date.now() - startedAt;
+    }
+  };
+
+  const once = async (fix?: FixableRejection): Promise<Verdict> => {
+    const written = await timed('writeMs', () => writing.rewrite(signal, fix));
     if (written.verdict === 'declined' || !written.story) {
-      await markRefused(db, claim, 'declined', written.declineCode ?? 'not_a_story');
-      return 'declined';
+      return { kind: 'declined', reason: written.declineCode ?? 'not_a_story' };
     }
     // Parsed again on its own: the union around it is loose by necessity.
     const story = writing.parse(written.story);
 
-    const checked = await writing.check(story, signal);
+    // Moderation beside the check rather than after it: it's quick and free,
+    // and the player is waiting on the slower of the two, not the sum.
+    const [checked, { flagged }] = await timed('checkMs', () =>
+      Promise.all([writing.check(story, signal), safety(templateText(story))])
+    );
     if (checked.verdict === 'reject') {
-      await markRefused(
-        db,
-        claim,
-        'rejected',
-        checked.rejectCode ?? 'identifier',
-        checked.qualityScore
-      );
-      return 'rejected';
+      return {
+        kind: 'rejected',
+        reason: checked.rejectCode ?? 'identifier',
+        qualityScore: checked.qualityScore,
+      };
     }
     if (checked.qualityScore < QUALITY_BAR) {
-      await markRefused(db, claim, 'rejected', 'low_quality', checked.qualityScore);
-      return 'rejected';
+      return { kind: 'rejected', reason: 'low_quality', qualityScore: checked.qualityScore };
+    }
+    if (flagged)
+      return { kind: 'rejected', reason: 'moderation', qualityScore: checked.qualityScore };
+    return { kind: 'ready', story, qualityScore: checked.qualityScore };
+  };
+
+  try {
+    let verdict = await once();
+    let rewritten = false;
+    // A good story turned down for a rule a second writing can keep is worth
+    // that writing: the player asked for it. Once only, and checked again.
+    if (verdict.kind === 'rejected' && writing.fixable.includes(verdict.reason)) {
+      rewritten = true;
+      verdict = await once(verdict.reason as FixableRejection);
     }
 
-    const { flagged } = await safety(templateText(story));
-    if (flagged) {
-      await markRefused(db, claim, 'rejected', 'moderation', checked.qualityScore);
-      return 'rejected';
+    const done = (outcome: TemplateOutcome, reason?: Reason, qualityScore?: number) => {
+      report?.({ ...timing, rewritten, reason, qualityScore });
+      return outcome;
+    };
+    switch (verdict.kind) {
+      case 'declined':
+        await markRefused(db, claim, 'declined', verdict.reason);
+        return done('declined', verdict.reason);
+      case 'rejected':
+        await markRefused(db, claim, 'rejected', verdict.reason, verdict.qualityScore);
+        return done('rejected', verdict.reason, verdict.qualityScore);
+      case 'ready':
+        await markReady(db, claim, verdict.story, verdict.qualityScore);
+        return done('ready', undefined, verdict.qualityScore);
     }
-
-    await markReady(db, claim, story, checked.qualityScore);
-    return 'ready';
   } catch {
+    report?.({ ...timing, rewritten: false });
     await markFailedAttempt(db, claim);
     return claim.attempts >= MAX_TEMPLATE_ATTEMPTS ? 'failed' : 'retrying';
   }
@@ -107,10 +175,11 @@ async function write(
  * Outcomes are statuses and codes. A thrown error is not logged by the caller
  * either, because its cause chain can carry the prompt.
  *
- * Refusals are final and cost nothing more: a declined source, a rejected
- * story and a low score are each written once and never retried. Only a
- * failure — the model or moderation unreachable, output that would not parse —
- * goes back in the queue.
+ * Refusals are final: a declined source, a rejected story and a low score are
+ * never queued again. One exception inside the run: a player's own story turned
+ * down for a rule a second writing can keep (`FIXABLE_REJECTIONS`) is written
+ * once more, told which rule, and checked again. Only a failure — the model or
+ * moderation unreachable, output that would not parse — goes back in the queue.
  */
 export async function runTemplate(
   claim: ClaimedTemplate,
@@ -139,20 +208,22 @@ export async function runTemplate(
     const outcome = await write(
       claim,
       {
-        rewrite: async (signal) =>
+        rewrite: async (signal, fix) =>
           (
             await generator.run(
               personalRewritePrompt,
-              { context, targetBeats: POOL_TARGET_BEATS },
+              { context, targetBeats: POOL_TARGET_BEATS, ...(fix ? { fix } : {}) },
               { signal }
             )
           ).value,
         parse: (story) => personalTemplateSchema.parse(story),
         check: async (story, signal) =>
           (await generator.run(personalCheckPrompt, { context, story }, { signal })).value,
+        fixable: FIXABLE_REJECTIONS,
       },
       safety,
-      deps.signal
+      deps.signal,
+      deps.report
     );
     // Finished either way: the story, if there is one, is the only copy now.
     if (outcome !== 'retrying') await forgetContext(db, contextId);
@@ -193,8 +264,10 @@ export async function runTemplate(
       parse: (story) => storyTemplateSchema.parse(story),
       check: async (story, signal) =>
         (await generator.run(checkPrompt, { answer, story }, { signal })).value,
+      fixable: [],
     },
     safety,
-    deps.signal
+    deps.signal,
+    deps.report
   );
 }

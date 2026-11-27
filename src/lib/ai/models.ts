@@ -27,7 +27,15 @@ export const DEFAULT_MODEL = 'gpt-6-astra';
  */
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
-export type StageName = 'turn' | 'consequence' | 'extraction' | 'arc' | 'pool' | 'situations';
+export type StageName =
+  | 'turn'
+  | 'consequence'
+  | 'extraction'
+  | 'arc'
+  | 'pool'
+  | 'personal'
+  | 'personalCheck'
+  | 'situations';
 
 export type StageModel = {
   model: string;
@@ -66,6 +74,14 @@ export const STAGE_MODELS: Record<StageName, StageModel> = {
   // Writing and checking pool stories. Off the request path, so there is no
   // header timeout to fit inside, and these decide what every other player gets.
   pool: { model: DEFAULT_MODEL, reasoningEffort: 'high', flex: { withinMs: 180_000 } },
+  // A player's own story from ChatGPT: they asked for it and are waiting on it,
+  // often with their first story about to end, so it's asked at the normal
+  // tier, never flex (2026-11-26: at flex a story took 46 s and players
+  // started a pool story instead). The writer keeps the pool's effort, since it
+  // decides what the story is; the check only judges and scores, so it thinks
+  // less.
+  personal: { model: DEFAULT_MODEL, reasoningEffort: 'high' },
+  personalCheck: { model: DEFAULT_MODEL, reasoningEffort: 'low' },
   // Sorting a link from ChatGPT into situations to write. On the request path,
   // and it decides what is too sensitive to keep, so not the lowest.
   situations: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
