@@ -1089,7 +1089,10 @@ story is going):
 
 Pool stories are already written, so `next` is ready as soon as the story ends
 whenever the pool has one for the reader; `preparing` only ever means a story
-from ChatGPT.
+from ChatGPT. While one the reader asked for is still being written, `next`
+waits for it for up to 60 seconds after the story ends (`preparing`, even when
+the pool has a story for them), then falls back to the pool; it still replaces
+the pool story if it's written before that one is started.
 
 It's the same story every time you ask for this session, so the card shown and
 the story started match. Pool stories are written by other players (from their
