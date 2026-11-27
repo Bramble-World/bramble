@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import { db } from '@/index';
 import {
   characterRelationships,
@@ -124,12 +124,14 @@ async function choose(tx: Executor, userId: string, lastAuthor: string | null) {
 }
 
 /**
- * How long after a story ends its next one waits for a story the reader asked
- * ChatGPT for that is still being written, before a pool story is chosen
- * instead. A story takes about 45 s to write; the card says "finding your next
- * story…" meanwhile (`nextStatus: preparing`).
+ * How long after a reader asks ChatGPT for a story the next story waits for it
+ * while it is being written, before a pool story goes ahead instead. Counted
+ * from the request, not the end of the story: the reader asks from ChatGPT,
+ * usually about a minute after their first story ends, and a story takes about
+ * 30 s to write, up to about 75 s with a second writing. The card says "finding
+ * your next story…" meanwhile (`nextStatus: preparing`).
  */
-export const OWN_STORY_WAIT_MS = 60_000;
+export const OWN_STORY_WAIT_MS = 90_000;
 
 /** Whether a story this reader asked ChatGPT for is still being written. */
 async function ownFromChatGPTInProgress(userId: string): Promise<boolean> {
@@ -141,6 +143,23 @@ async function ownFromChatGPTInProgress(userId: string): Promise<boolean> {
         eq(storyTemplates.userId, userId),
         eq(storyTemplates.origin, 'chatgpt'),
         inArray(storyTemplates.status, ['pending', 'generating'])
+      )
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+/** Whether a story this reader asked ChatGPT for is being written and was asked for within `OWN_STORY_WAIT_MS`. */
+async function ownFromChatGPTWorthWaitingFor(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: storyTemplates.id })
+    .from(storyTemplates)
+    .where(
+      and(
+        eq(storyTemplates.userId, userId),
+        eq(storyTemplates.origin, 'chatgpt'),
+        inArray(storyTemplates.status, ['pending', 'generating']),
+        gt(storyTemplates.createdAt, new Date(Date.now() - OWN_STORY_WAIT_MS))
       )
     )
     .limit(1);
@@ -179,14 +198,32 @@ async function authorOf(tx: Executor, storylineId: string): Promise<string | nul
 }
 
 /**
- * The story offered after this session, or null while it is going or when the
- * pool has nothing for this reader.
+ * The story offered after this session, or null while it is going, while the
+ * reader's own story is being written (see below), or when the pool has nothing
+ * for this reader.
  *
  * Chosen once and remembered on the session, so the card the reader saw and the
  * story they get are the same one. If it has left the pool since, another is
  * chosen.
  */
 export async function nextStoryFor(userId: string, sessionId: string): Promise<NextStory | null> {
+  return offeredAfter(userId, sessionId, { waitForOwn: true });
+}
+
+/**
+ * `waitForOwn`: while a story the reader asked ChatGPT for is being written,
+ * asked for within `OWN_STORY_WAIT_MS`, offer nothing (`preparing`) rather than
+ * a stranger's story, which would put theirs off for a whole story. That holds
+ * even when a pool story was already chosen (the app first asks while the
+ * reader is still in ChatGPT, before anything is being written): it is held
+ * back, not forgotten, and goes ahead if theirs isn't ready in time. Off when
+ * starting, so a card the reader already saw and tapped always starts.
+ */
+async function offeredAfter(
+  userId: string,
+  sessionId: string,
+  { waitForOwn }: { waitForOwn: boolean }
+): Promise<NextStory | null> {
   const session = await sessions.getSession(userId, sessionId);
   if (!session.endedAt) return null;
 
@@ -196,28 +233,15 @@ export async function nextStoryFor(userId: string, sessionId: string): Promise<N
     .where(eq(storylineSessions.id, sessionId));
 
   let template = row?.next ? await templateIfReady(db, row.next) : null;
-  // A story they asked ChatGPT for, written since the card was chosen, takes
-  // its place: it's the one they're waiting for.
-  if (
-    template &&
-    template.origin !== 'chatgpt' &&
-    template.origin !== 'duet' &&
-    (await ownFromChatGPT(db, userId))
-  ) {
-    template = null;
+  const theirsChosen = template?.origin === 'chatgpt' || template?.origin === 'duet';
+  if (!theirsChosen) {
+    const ownReady = await ownFromChatGPT(db, userId);
+    // A story they asked ChatGPT for, written since the card was chosen, takes
+    // its place: it's the one they're waiting for.
+    if (template && ownReady) template = null;
+    if (waitForOwn && !ownReady && (await ownFromChatGPTWorthWaitingFor(userId))) return null;
   }
   if (!template) {
-    // Their own story is nearly written: wait for it rather than hand them a
-    // stranger's, which would put theirs off for a whole story. Nothing is
-    // remembered meanwhile, so the next read chooses afresh.
-    const waiting = Date.now() - session.endedAt.getTime() < OWN_STORY_WAIT_MS;
-    if (
-      waiting &&
-      !(await ownFromChatGPT(db, userId)) &&
-      (await ownFromChatGPTInProgress(userId))
-    ) {
-      return null;
-    }
     const chosen = await choose(db, userId, await authorOf(db, session.storylineId));
     if (!chosen) return null;
     await db
@@ -255,7 +279,7 @@ export async function startNextStory(
   const session = await sessions.getSession(userId, sessionId);
   if (!session.endedAt) throw new ConflictError('This story has not ended');
 
-  const offered = await nextStoryFor(userId, sessionId);
+  const offered = await offeredAfter(userId, sessionId, { waitForOwn: false });
 
   const started = await db.transaction(async (tx) => {
     // Locks the ended session, so two requests cannot both find no next session.

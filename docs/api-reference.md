@@ -1091,12 +1091,17 @@ story is going):
 Pool stories are already written, so `next` is ready as soon as the story ends
 whenever the pool has one for the reader; `preparing` only ever means a story
 from ChatGPT. While one the reader asked for is still being written, `next`
-waits for it for up to 60 seconds after the story ends (`preparing`, even when
-the pool has a story for them), then falls back to the pool; it still replaces
-the pool story if it's written before that one is started.
+waits for it for up to 90 seconds **from when they asked** (`preparing`), then
+falls back to the pool. That holds even when a pool story was already shown for
+this session: it's held back while theirs is written and comes back if theirs
+isn't ready in time, so **keep reading the session while a pool story's card is
+showing**, or a story written meanwhile won't reach the card. Theirs still
+replaces the pool story if it's written before that one is started. Starting
+(`POST /api/v1/sessions/{sessionId}/next`) always starts the story whose card was last shown, so a tap on a
+card never fails because the wait began.
 
-It's the same story every time you ask for this session, so the card shown and
-the story started match. Pool stories are written by other players (from their
+Otherwise it's the same story every time you ask for this session, so the card
+shown and the story started match. Pool stories are written by other players (from their
 answers to the reborn questions, rewritten so they can't identify anyone) or by
 the team. A reader is never offered their own story, one they've already played,
 or two by the same author in a row.
