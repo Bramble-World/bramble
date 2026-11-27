@@ -80,8 +80,8 @@ export const STAGE_MODELS: Record<StageName, StageModel> = {
   // started a pool story instead). The check only judges and scores, so it
   // thinks least. The writer was at 'high' too: at the normal tier it still
   // took about 50 s of a story's 55, so it was lowered to 'medium' the same
-  // night, to fit a second writing inside the next-story card's 60 s wait
-  // (OWN_STORY_WAIT_MS). Watch `qualityScore` and `reason` in the worker's
+  // night, so a story, even with a second writing, is ready inside the
+  // next-story card's wait (OWN_STORY_WAIT_MS). Watch `qualityScore` and `reason` in the worker's
   // `template_finished` lines before lowering it further.
   personal: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
   personalCheck: { model: DEFAULT_MODEL, reasoningEffort: 'low' },

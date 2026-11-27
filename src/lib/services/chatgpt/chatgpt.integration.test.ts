@@ -489,6 +489,14 @@ describe('the order stories are written in', () => {
 });
 
 describe('waiting for their own story when one ends', () => {
+  /** When the reader asked ChatGPT, moved back by `ms`. */
+  async function askedAgo(player: string, ms: number) {
+    await db
+      .update(storyTemplates)
+      .set({ createdAt: new Date(Date.now() - ms) })
+      .where(eq(storyTemplates.userId, player));
+  }
+
   it('waits while theirs is being written, rather than offer the pool', async () => {
     const player = await newUser('player');
     const ended = await finishAStory(player);
@@ -507,16 +515,83 @@ describe('waiting for their own story when one ends', () => {
     expect((await nextStoryFor(player, ended))?.origin).toBe('chatgpt');
   });
 
-  it('offers the pool once the wait is over', async () => {
+  it('counts the wait from when they asked, not from when the story ended', async () => {
     const player = await newUser('player');
     const ended = await finishAStory(player);
-    await requestStory(player, CONTEXT, { safety: pass });
+    // They asked from ChatGPT well after the story ended.
     await db
       .update(storylineSessions)
-      .set({ nextTemplateId: null, endedAt: new Date(Date.now() - OWN_STORY_WAIT_MS - 1_000) })
+      .set({ nextTemplateId: null, endedAt: new Date(Date.now() - 5 * 60_000) })
       .where(eq(storylineSessions.id, ended));
+    await requestStory(player, CONTEXT, { safety: pass });
+
+    expect(await nextStoryFor(player, ended)).toBeNull();
+  });
+
+  it('holds back a pool story already chosen while theirs is being written', async () => {
+    const player = await newUser('player');
+    // Chosen while they were still in ChatGPT, before they asked.
+    const ended = await finishAStory(player);
+    const pool = await nextStoryFor(player, ended);
+    expect(pool?.origin).toBe('seed');
+    await requestStory(player, CONTEXT, { safety: pass });
+
+    expect(await nextStoryFor(player, ended)).toBeNull();
+    // Held back, not forgotten: still the one remembered for this session.
+    const [row] = await db
+      .select({ next: storylineSessions.nextTemplateId })
+      .from(storylineSessions)
+      .where(eq(storylineSessions.id, ended));
+    expect(row.next).toBe(pool!.templateId);
+
+    await writeNext();
+    expect((await nextStoryFor(player, ended))?.origin).toBe('chatgpt');
+  });
+
+  it('lets the pool story go ahead once the wait is over', async () => {
+    const player = await newUser('player');
+    const ended = await finishAStory(player);
+    const pool = await nextStoryFor(player, ended);
+    await requestStory(player, CONTEXT, { safety: pass });
+    await askedAgo(player, OWN_STORY_WAIT_MS + 1_000);
+
+    expect((await nextStoryFor(player, ended))?.templateId).toBe(pool!.templateId);
+  });
+
+  it('offers the pool once the wait is over, when nothing was chosen', async () => {
+    const player = await newUser('player');
+    const ended = await finishAStory(player);
+    await db
+      .update(storylineSessions)
+      .set({ nextTemplateId: null })
+      .where(eq(storylineSessions.id, ended));
+    await requestStory(player, CONTEXT, { safety: pass });
+    await askedAgo(player, OWN_STORY_WAIT_MS + 1_000);
 
     expect((await nextStoryFor(player, ended))?.origin).toBe('seed');
+  });
+
+  it('lets the pool story go ahead when theirs is turned down', async () => {
+    const player = await newUser('player');
+    const ended = await finishAStory(player);
+    const pool = await nextStoryFor(player, ended);
+    await requestStory(player, CONTEXT, { safety: pass });
+    checkAnswers({ rejectCode: null, qualityScore: 2 });
+    expect(await writeNext()).toBe('rejected');
+
+    expect((await nextStoryFor(player, ended))?.templateId).toBe(pool!.templateId);
+  });
+
+  it('starts the card they saw, even while theirs is being written', async () => {
+    const player = await newUser('player');
+    const ended = await finishAStory(player);
+    const pool = await nextStoryFor(player, ended);
+    await requestStory(player, CONTEXT, { safety: pass });
+
+    const { sessionId } = await startNextStory(player, ended, { how: 'begin_now' });
+    const session = await sessions.getSession(player, sessionId);
+    const [copy] = await db.select().from(storylines).where(eq(storylines.id, session.storylineId));
+    expect(copy.templateId).toBe(pool!.templateId);
   });
 
   it("doesn't wait when nothing of theirs is being written", async () => {
