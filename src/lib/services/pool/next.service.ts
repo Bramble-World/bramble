@@ -123,6 +123,14 @@ async function choose(tx: Executor, userId: string, lastAuthor: string | null) {
   return row?.id ?? null;
 }
 
+/**
+ * How long after a story ends its next one waits for a story the reader asked
+ * ChatGPT for that is still being written, before a pool story is chosen
+ * instead. A story takes about 45 s to write; the card says "finding your next
+ * story…" meanwhile (`nextStatus: preparing`).
+ */
+export const OWN_STORY_WAIT_MS = 60_000;
+
 /** Whether a story this reader asked ChatGPT for is still being written. */
 async function ownFromChatGPTInProgress(userId: string): Promise<boolean> {
   const [row] = await db
@@ -199,6 +207,17 @@ export async function nextStoryFor(userId: string, sessionId: string): Promise<N
     template = null;
   }
   if (!template) {
+    // Their own story is nearly written: wait for it rather than hand them a
+    // stranger's, which would put theirs off for a whole story. Nothing is
+    // remembered meanwhile, so the next read chooses afresh.
+    const waiting = Date.now() - session.endedAt.getTime() < OWN_STORY_WAIT_MS;
+    if (
+      waiting &&
+      !(await ownFromChatGPT(db, userId)) &&
+      (await ownFromChatGPTInProgress(userId))
+    ) {
+      return null;
+    }
     const chosen = await choose(db, userId, await authorOf(db, session.storylineId));
     if (!chosen) return null;
     await db

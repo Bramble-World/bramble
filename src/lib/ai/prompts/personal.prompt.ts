@@ -48,15 +48,30 @@ export const personalRewriteOutputSchema = z.object({
 
 export type PersonalRewriteOutput = z.infer<typeof personalRewriteOutputSchema>;
 
+/**
+ * The rules a story can be rejected for that a second writing can fix, and how
+ * the writer is reminded of the one an earlier version broke. Only the code
+ * reaches the writer, never the rejected story.
+ */
+export const FIXABLE_REJECTIONS = ['harms_real_person', 'spoils_opening'] as const;
+export type FixableRejection = (typeof FIXABLE_REJECTIONS)[number];
+
+const FIX_REMINDERS: Record<FixableRejection, string> = {
+  harms_real_person:
+    'An earlier version was turned down because it had a named person do something sexual, criminal, violent or humiliating, or made up something private or damaging about them, that the player did not say. Keep every named person to what the player said, and to ordinary filled-in detail.',
+  spoils_opening:
+    'An earlier version was turned down because its hook or opening lines gave too much away. The hook names the setting and the situation, nothing that happens; the opening lines reveal nothing past the moment the story begins.',
+};
+
 export const personalRewritePrompt: PromptSpec<
-  { context: ChatGPTContext; targetBeats: number },
+  { context: ChatGPTContext; targetBeats: number; fix?: FixableRejection },
   PersonalRewriteOutput
 > = {
   name: 'personal.rewrite',
-  stage: 'pool',
+  stage: 'personal',
   schema: personalRewriteOutputSchema,
 
-  render: ({ context, targetBeats }) => ({
+  render: ({ context, targetBeats, fix }) => ({
     system: [
       "You turn a real, unresolved situation in someone's life into the premise of",
       'an interactive story that they will play themselves, as a way to live it',
@@ -77,7 +92,9 @@ export const personalRewritePrompt: PromptSpec<
       '- Keep the situation and the feeling. Do not quote what they shared; write',
       '  it in your own words.',
       '- Never have a named person do anything sexual, criminal, violent or',
-      '  humiliating, or reveal anything about them, that the player did not say.',
+      '  humiliating that the player did not say, and never make up anything',
+      '  private or damaging about them (a secret, their health, cheating, a',
+      '  crime). Ordinary detail you fill in is fine.',
       '  The tension comes from what is unsaid and undecided, not from inventing',
       '  worse things about real people.',
       '',
@@ -112,6 +129,7 @@ export const personalRewritePrompt: PromptSpec<
       '  lines reveal, and the lines must reveal nothing past that moment.',
       '',
       ENGAGEMENT_RUBRIC,
+      ...(fix ? ['', FIX_REMINDERS[fix]] : []),
     ].join('\n'),
     prompt: contextBlock(context).join('\n'),
   }),
@@ -149,7 +167,7 @@ export const personalCheckPrompt: PromptSpec<
   PersonalCheckOutput
 > = {
   name: 'personal.check',
-  stage: 'pool',
+  stage: 'personalCheck',
   schema: personalCheckOutputSchema,
 
   render: ({ context, story }) => ({
@@ -160,15 +178,18 @@ export const personalCheckPrompt: PromptSpec<
       '',
       'Reject it, with the first rule it breaks, if:',
       '- harms_real_person: a named person does anything sexual, criminal,',
-      '  violent or humiliating, or has anything revealed about them, that the',
-      '  player did not say.',
+      '  violent or humiliating that the player did not say, or the story makes',
+      '  up something private or damaging about them (a secret, their health,',
+      '  cheating, a crime).',
       '- quotes_answer: it copies sentences from what they shared.',
       '- minors: a minor is in danger, or in anything sexual.',
       '- abuse: it is about abuse.',
       '- self_harm: it is about self-harm or suicide.',
       '- spoils_opening: the hook gives away what the opening lines reveal, or',
       '  the opening lines give away anything past the moment the story begins.',
-      'Otherwise pass it. Keeping the real names is expected, not a fault.',
+      'Otherwise pass it. Keeping the real names is expected, not a fault, and so',
+      'is ordinary detail the writer was asked to fill in: the setting, the',
+      'timeline, what someone wants or feels, where they are or are going.',
       '',
       'Then score it 1-5 as a story to play, whatever the verdict:',
       '- 5: a specific premise, a want with real stakes, people who want things',
