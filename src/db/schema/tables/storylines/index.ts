@@ -48,7 +48,7 @@ export const storylines = pgTable(
      * The scripted opening this story was written from: set on the first story,
      * the one a guest starts from the 1:47 am phone (`createGuestStory`), and
      * null on every other. It is what makes that story the short one: it ends
-     * exactly on its `targetBeats` (5 or 10, a test: `FIRST_STORY_LENGTHS`),
+     * exactly on its `targetBeats` (5: `FIRST_STORY_BEATS`),
      * where every other story ends between beats 16 and 24
      * (`endingBounds`). A column rather than a guess from the beat count or the
      * title, so nothing else can be mistaken for it.

@@ -907,9 +907,10 @@ old turn shows every option as an action.
 beats before it the model may end the story when it lands; four beats after it,
 it must. So a story is roughly 16–24 beats, and its ending is shaped by the
 choices made. **The first story** (the one begun from the 1:47 am phone) is
-shorter: **its ending is beat 10 or beat 5** (beat 1 being the scripted one),
-picked at random when the guest's story is written, with the five beats before it
-building to it. At 5, the first beat after signing up and the call is the ending. A first story already past beat 10 when this shipped ends
+shorter: **its ending is beat 5** (beat 1 being the scripted one), with the
+beats before it building to it: the first beat after signing up and the call is
+the ending. One written during the 5-or-10 test (2026-11-25 → 11-27) keeps its
+length. A first story already past beat 10 when endings shipped ends
 on its next beat. Stories already in progress when endings shipped were given at
 least their longest playthrough + 8 beats, so none ends without building to it.
 **The Mac app never gets an ending** (`X-Bramble-Client: macos/…`): it can't show

@@ -6,9 +6,9 @@
  * lands, and at the last beat it must. A soft budget rather than an outline, so
  * a story can run a few beats long when the ending is not there yet.
  *
- * The first story is the exception: it ends on its target beat exactly (5 or
- * 10, `FIRST_STORY_LENGTHS`), and the beats before it are told how far off it
- * is, so it builds to an ending rather than stopping (`beatsToEnding`).
+ * The first story is the exception: it ends on its target beat exactly
+ * (`FIRST_STORY_BEATS`), and the beats before it are told how far off it is,
+ * so it builds to an ending rather than stopping (`beatsToEnding`).
  */
 export type StoryPhase = 'open' | 'closing' | 'must_end';
 
@@ -16,17 +16,15 @@ export type StoryPhase = 'open' | 'closing' | 'must_end';
 export const CLOSING_WINDOW = 4;
 
 /**
- * The first story's last beat, one of these, picked at random when the story is
- * written and kept as its `targetBeats`. A 50/50 test (the user's call,
- * 2026-11-25): 10 since 2026-11-21, against 5, where the first beat on the desk,
- * right after signing up, is the ending. Each first story's beats carry
- * `first_story_beats` in analytics (docs/metrics.md).
+ * The first story's last beat, kept as its `targetBeats`: the first beat on the
+ * desk, right after signing up, is the ending. 5 for everyone since 2026-11-27
+ * (the user's call), ending the 5-against-10 test of 2026-11-25: 5 got more
+ * players to a second story, and the goal is getting them to the story made from
+ * their own life as soon as possible. First stories written at 10 before then
+ * keep their length. Each first story's beats still carry `first_story_beats` in
+ * analytics (docs/metrics.md).
  */
-export const FIRST_STORY_LENGTHS = [5, 10] as const;
-
-export function pickFirstStoryLength(random: () => number = Math.random): number {
-  return FIRST_STORY_LENGTHS[random() < 0.5 ? 0 : 1];
-}
+export const FIRST_STORY_BEATS = 5;
 
 /** How many beats before a fixed ending the turn prompt starts counting down to it. */
 export const BUILD_UP_BEATS = 5;
