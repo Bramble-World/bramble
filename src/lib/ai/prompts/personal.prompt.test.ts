@@ -14,6 +14,7 @@ describe('the prompts for a player’s own story', () => {
   it('are asked at the normal tier, the check thinking less than the writer', () => {
     expect(STAGE_MODELS[personalRewritePrompt.stage].flex).toBeUndefined();
     expect(STAGE_MODELS[personalCheckPrompt.stage].flex).toBeUndefined();
+    expect(STAGE_MODELS[personalRewritePrompt.stage].reasoningEffort).toBe('medium');
     expect(STAGE_MODELS[personalCheckPrompt.stage].reasoningEffort).toBe('low');
   });
 

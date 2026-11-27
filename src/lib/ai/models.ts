@@ -77,10 +77,13 @@ export const STAGE_MODELS: Record<StageName, StageModel> = {
   // A player's own story from ChatGPT: they asked for it and are waiting on it,
   // often with their first story about to end, so it's asked at the normal
   // tier, never flex (2026-11-26: at flex a story took 46 s and players
-  // started a pool story instead). The writer keeps the pool's effort, since it
-  // decides what the story is; the check only judges and scores, so it thinks
-  // less.
-  personal: { model: DEFAULT_MODEL, reasoningEffort: 'high' },
+  // started a pool story instead). The check only judges and scores, so it
+  // thinks least. The writer was at 'high' too: at the normal tier it still
+  // took about 50 s of a story's 55, so it was lowered to 'medium' the same
+  // night, to fit a second writing inside the next-story card's 60 s wait
+  // (OWN_STORY_WAIT_MS). Watch `qualityScore` and `reason` in the worker's
+  // `template_finished` lines before lowering it further.
+  personal: { model: DEFAULT_MODEL, reasoningEffort: 'medium' },
   personalCheck: { model: DEFAULT_MODEL, reasoningEffort: 'low' },
   // Sorting a link from ChatGPT into situations to write. On the request path,
   // and it decides what is too sensitive to keep, so not the lowest.
