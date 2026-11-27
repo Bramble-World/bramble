@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ARE_YOU_UP } from '@/lib/onboarding/openings';
 import { choosePremise } from '@/lib/onboarding/premises';
+import { FIRST_STORY_BEATS } from '@/lib/services/generation/story-phase';
 import { and, eq, getTableName, inArray, sql } from 'drizzle-orm';
 
 /**
@@ -440,13 +441,13 @@ describe('POST /api/v1/onboarding/story', () => {
       .where(eq(personRelationships.userId, guest.id));
     expect(relationship.relationshipType).toBe('ex');
     // Marked as the first story, which is what makes it end exactly on its
-    // target: 5 or 10, at random (the length test).
+    // target: 5 beats.
     const [storyline] = await db
       .select({ openingId: storylines.openingId, targetBeats: storylines.targetBeats })
       .from(storylines)
       .where(eq(storylines.id, story.storylineId));
     expect(storyline.openingId).toBe('are_you_up');
-    expect([5, 10]).toContain(storyline.targetBeats);
+    expect(storyline.targetBeats).toBe(FIRST_STORY_BEATS);
 
     expect(only('person_named').map((c) => c.event.properties)).toEqual([
       { relationship: 'ex', pronouns_given: 'yes', premise: premise.id },
