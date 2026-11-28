@@ -1392,12 +1392,22 @@ as the next story with `fromChatGPT: true`. Not idempotent: sending the same
 note twice makes its stories twice (and uses the allowance twice), so the app
 sends a link once.
 
+Each request logs one `chatgpt_link_request` line in the web service: its
+`outcome`, `stories`, `durationMs` (the whole request), `situationsMs` (the
+model sorting the note) and `queueMs` (moderation and queuing). Counts and
+times only, never the note.
+
 ### Opening the app from a link
 
 `https://www.brambleworld.com/open/…` is a universal link: with the iPhone app
 installed it opens on the desk (`/open/story#…` sends its note to
-`POST /api/v1/stories/from-chatgpt` first); without it, a page points to the
-app. The fragment never reaches the website.
+`POST /api/v1/stories/from-chatgpt` first). Without the app, or when the link
+was opened inside another app's browser (ChatGPT's, where universal links don't
+open apps), a page offers **open in bramble**, the app's own scheme with the same
+path and fragment (`bramble://open/story#…`, built in the browser), and the app
+for a player without it. The fragment never reaches the website. Each render of
+that page logs `open_page_viewed` with its `kind` (`story` or `desk`) and
+nothing else.
 `/.well-known/apple-app-site-association` claims `/open` and `/open/*` for
 `K555FJZF47.com.brambleworld.BrambleMobile`, and nothing else.
 

@@ -437,15 +437,26 @@ describe('a second writing after the check', () => {
     expect(story).toMatchObject({ status: 'rejected', reason: 'harms_real_person', content: null });
   });
 
-  it("doesn't write a low-scoring story again", async () => {
+  it('writes a low-scoring story once more, and keeps it when it scores well', async () => {
     const player = await newUser('player');
     await requestStory(player, CONTEXT, { safety: pass });
-    checkAnswers({ rejectCode: null, qualityScore: 3 });
+    checkAnswers({ rejectCode: null, qualityScore: 3 }, { rejectCode: null, qualityScore: 4 });
+
+    const { outcome, report } = await writeNextReporting();
+    expect(outcome).toBe('ready');
+    expect(report).toMatchObject({ rewritten: true, qualityScore: 4 });
+    expect(fake.calls.filter((c) => c.promptName === 'personal.rewrite')).toHaveLength(2);
+  });
+
+  it('turns it down when the second writing scores low too', async () => {
+    const player = await newUser('player');
+    await requestStory(player, CONTEXT, { safety: pass });
+    checkAnswers({ rejectCode: null, qualityScore: 3 }, { rejectCode: null, qualityScore: 2 });
 
     const { outcome, report } = await writeNextReporting();
     expect(outcome).toBe('rejected');
-    expect(report).toMatchObject({ rewritten: false, reason: 'low_quality', qualityScore: 3 });
-    expect(fake.calls.filter((c) => c.promptName === 'personal.rewrite')).toHaveLength(1);
+    expect(report).toMatchObject({ rewritten: true, reason: 'low_quality', qualityScore: 2 });
+    expect(fake.calls.filter((c) => c.promptName === 'personal.rewrite')).toHaveLength(2);
   });
 
   it('reports how long the writing and the check took', async () => {
@@ -576,7 +587,7 @@ describe('waiting for their own story when one ends', () => {
     const ended = await finishAStory(player);
     const pool = await nextStoryFor(player, ended);
     await requestStory(player, CONTEXT, { safety: pass });
-    checkAnswers({ rejectCode: null, qualityScore: 2 });
+    checkAnswers({ rejectCode: null, qualityScore: 2 }, { rejectCode: null, qualityScore: 2 });
     expect(await writeNext()).toBe('rejected');
 
     expect((await nextStoryFor(player, ended))?.templateId).toBe(pool!.templateId);
