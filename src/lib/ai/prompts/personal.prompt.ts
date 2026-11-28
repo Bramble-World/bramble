@@ -51,9 +51,11 @@ export type PersonalRewriteOutput = z.infer<typeof personalRewriteOutputSchema>;
 /**
  * The rules a story can be rejected for that a second writing can fix, and how
  * the writer is reminded of the one an earlier version broke. Only the code
- * reaches the writer, never the rejected story.
+ * reaches the writer, never the rejected story. `low_quality` (scored under the
+ * bar) since 2026-11-28: the most common rejection, and the player asked for
+ * that story, so it gets one more go.
  */
-export const FIXABLE_REJECTIONS = ['harms_real_person', 'spoils_opening'] as const;
+export const FIXABLE_REJECTIONS = ['harms_real_person', 'spoils_opening', 'low_quality'] as const;
 export type FixableRejection = (typeof FIXABLE_REJECTIONS)[number];
 
 const FIX_REMINDERS: Record<FixableRejection, string> = {
@@ -61,6 +63,8 @@ const FIX_REMINDERS: Record<FixableRejection, string> = {
     'An earlier version was turned down because it had a named person do something sexual, criminal, violent or humiliating, or made up something private or damaging about them, that the player did not say. Keep every named person to what the player said, and to ordinary filled-in detail.',
   spoils_opening:
     'An earlier version was turned down because its hook or opening lines gave too much away. The hook names where you are, who is there and the situation you start in, never what happens, what anyone does or decides, or a twist; the opening lines say only what has happened by the moment the story begins.',
+  low_quality:
+    'An earlier version scored low as a story to play. Make the moment more specific, give the other person a want of their own so they can start things, and raise what is at stake for you.',
 };
 
 export const personalRewritePrompt: PromptSpec<

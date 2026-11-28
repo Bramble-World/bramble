@@ -7,14 +7,17 @@ export type PushEnvironment = (typeof PUSH_ENVIRONMENTS)[number];
  * `push_sends`: a template becomes ready only once. `reply_arrived` is sent by
  * the reply sweep when a reply someone in the story owed has been written
  * (pauses.ts), and is kept in `push_sends`, which is also what keeps "story
- * waiting" at least 20 hours behind it.
+ * waiting" at least 20 hours behind it. `invite_accepted` is sent once, to the
+ * inviter, when their friend accepts (`announceInviteAccepted`), not by the
+ * sweep: an invite is accepted only once.
  */
 export type PushKind =
   | 'battery_back'
   | 'story_waiting'
   | 'story_ready'
   | 'reply_arrived'
-  | 'duet_moved';
+  | 'duet_moved'
+  | 'invite_accepted';
 
 /**
  * What a notification says. Apple carries this text, and a lock screen shows it

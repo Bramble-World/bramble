@@ -219,20 +219,38 @@ async function storiesFromLink(
 ): Promise<LinkRequest> {
   const via = 'link' as const;
   const now = deps.now ?? new Date();
+  // How long the player waited on this, and where it went: counts and times
+  // only, never the note. `chatgpt_link_request` in the web service's logs.
+  const startedAt = Date.now();
+  const timing = { situationsMs: 0, queueMs: 0 };
+  const logged = <T extends LinkRequest>(result: T, stories = 0): T => {
+    console.info(
+      JSON.stringify({
+        event: 'chatgpt_link_request',
+        outcome: result.outcome,
+        stories,
+        durationMs: Date.now() - startedAt,
+        ...timing,
+      })
+    );
+    return result;
+  };
   const { limited } = await allowance(userId, now);
   if (limited) {
     await track(userId, {
       name: 'chatgpt_story_requested',
       properties: { outcome: 'limited', via, stories: 0 },
     });
-    return limited;
+    return logged(limited);
   }
 
+  const sortStartedAt = Date.now();
   const { value } = await withDeadline(
     (deadline) => generator.run(situationsPrompt, { text: note }, { signal: deadline }),
     TURN_DEADLINE_MS,
     signal
   );
+  timing.situationsMs = Date.now() - sortStartedAt;
   // Made to fit what `write_my_story` takes: trimmed, and only dropped with
   // nothing to write from (fit.ts).
   const returned = value.situations.slice(0, MAX_LINK_SITUATIONS);
@@ -277,22 +295,28 @@ async function storiesFromLink(
         skipped: [...new Set(value.skipped ?? [])],
       },
     });
-    return { outcome: 'not_written', reason: 'not_a_story' };
+    return logged({ outcome: 'not_written', reason: 'not_a_story' });
   }
 
+  // Moderation of each situation, then the queue.
+  const queueStartedAt = Date.now();
   const result = await requestStories(userId, situations, { ...deps, now, via });
+  timing.queueMs = Date.now() - queueStartedAt;
   switch (result.outcome) {
     case 'queued':
-      return {
-        outcome: 'queued',
-        stories: result.storyIds.length,
-        left: result.left,
-        overLimit: result.overLimit,
-      };
+      return logged(
+        {
+          outcome: 'queued',
+          stories: result.storyIds.length,
+          left: result.left,
+          overLimit: result.overLimit,
+        },
+        result.storyIds.length
+      );
     case 'limited':
-      return result;
+      return logged(result);
     case 'flagged':
-      return { outcome: 'not_written', reason: 'unsafe' };
+      return logged({ outcome: 'not_written', reason: 'unsafe' });
   }
 }
 

@@ -8,13 +8,37 @@ import { and, eq, inArray, like } from 'drizzle-orm';
  */
 vi.mock('@/env', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/env')>();
-  return { env: { ...actual.env, BRAMBLE_AI_MODE: 'fake' } };
+  return { env: { ...actual.env, BRAMBLE_AI_MODE: 'fake', PUSH_ENABLED: 'true' } };
 });
 vi.mock('@/lib/services/auth/auth.service', () => ({ requireCurrentUser: vi.fn() }));
+vi.mock('../push/apns', () => ({
+  apnsConfigured: () => true,
+  sendPush: vi.fn(async () => ({ kind: 'delivered' })),
+}));
+const captured: Array<{ userId: string; event: { name: string; properties: unknown } }> = [];
+vi.mock('@/lib/analytics/analytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/analytics/analytics')>();
+  return {
+    ...actual,
+    track: async (userId: string, event: never) => {
+      captured.push({ userId, event });
+    },
+  };
+});
 
 const { db } = await import('@/index');
-const { characters, duets, events, invites, persons, storylines, storyTemplates, users } =
-  await import('@/db/schema/tables');
+const {
+  characters,
+  duets,
+  events,
+  invites,
+  persons,
+  pushDevices,
+  storylines,
+  storyTemplates,
+  users,
+} = await import('@/db/schema/tables');
+const apns = vi.mocked(await import('../push/apns'));
 const auth = vi.mocked(await import('@/lib/services/auth/auth.service'));
 const { createFakeGenerator } = await import('@/lib/ai');
 const { registerFixtures } = await import('@/lib/ai/fixtures');
@@ -176,6 +200,61 @@ describe('accepting', () => {
     expect(await readInvite(code)).toMatchObject({ state: 'accepted' });
   });
 
+  it('tells the inviter their friend said yes, once, without a name', async () => {
+    const maya = await newUser('maya');
+    const sam = await newUser('sam');
+    await db.update(users).set({ pushEnabled: true }).where(eq(users.id, maya));
+    await db.insert(pushDevices).values({
+      userId: maya,
+      token: 'cd'.repeat(32),
+      environment: 'production',
+      timeZone: 'America/New_York',
+      lastSeenAt: new Date(),
+    });
+    const { code } = await createInvite(maya, 'Maya');
+    apns.sendPush.mockClear();
+    captured.length = 0;
+
+    await acceptInvite(sam, code, 'Sam');
+    await acceptInvite(sam, code, 'Sam');
+
+    expect(apns.sendPush).toHaveBeenCalledTimes(1);
+    const [, message, kind] = apns.sendPush.mock.calls[0];
+    expect(kind).toBe('invite_accepted');
+    expect(message).toEqual({
+      title: 'your friend said yes.',
+      body: 'your story for two is next.',
+    });
+    expect(JSON.stringify(message)).not.toMatch(/sam|maya/i);
+    const names = (who: string) =>
+      captured.filter((c) => c.userId === who).map((c) => c.event.name);
+    expect(names(sam)).toEqual(['invite_accepted']);
+    expect(names(maya)).toEqual(['invite_was_accepted', 'push_sent']);
+  });
+
+  it("doesn't notify an inviter with notifications off, but still records it", async () => {
+    const maya = await newUser('maya');
+    const sam = await newUser('sam');
+    await db.update(users).set({ pushEnabled: false }).where(eq(users.id, maya));
+    await db.insert(pushDevices).values({
+      userId: maya,
+      token: 'ef'.repeat(32),
+      environment: 'production',
+      timeZone: 'America/New_York',
+      lastSeenAt: new Date(),
+    });
+    const { code } = await createInvite(maya, 'Maya');
+    apns.sendPush.mockClear();
+    captured.length = 0;
+
+    await acceptInvite(sam, code, 'Sam');
+
+    expect(apns.sendPush).not.toHaveBeenCalled();
+    expect(captured.filter((c) => c.userId === maya).map((c) => c.event.name)).toEqual([
+      'invite_was_accepted',
+    ]);
+  });
+
   it('is once only: the same player gets the same story, anyone else is told it is used', async () => {
     const maya = await newUser('maya');
     const sam = await newUser('sam');
@@ -277,6 +356,22 @@ describe('on the desk', () => {
       .innerJoin(persons, eq(persons.id, characters.personId))
       .where(eq(characters.id, duet.sideAPartnerCharacterId!));
     expect(samInMayas.name).toBe('Sam');
+  });
+
+  it('tells the other player, in their own record, that their partner started', async () => {
+    const maya = await newUser('maya');
+    const sam = await newUser('sam');
+    const { code } = await createInvite(maya, 'Maya');
+    await acceptInvite(sam, code, 'Sam');
+    const ended = await finishAStory(sam);
+    captured.length = 0;
+
+    await startNextStory(sam, ended, { how: 'begin_now' });
+
+    expect(captured.filter((c) => c.event.name.startsWith('duet_'))).toEqual([
+      { userId: sam, event: { name: 'duet_started', properties: { side: 'b' } } },
+      { userId: maya, event: { name: 'duet_partner_started', properties: { side: 'b' } } },
+    ]);
   });
 
   it('is never offered to anyone else', async () => {

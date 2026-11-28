@@ -135,6 +135,9 @@ export async function linkDuetSide(
   // What crossed while this side waited: its first beat opens with the newest.
   await attachHeldCrossings(tx, duet.duets.id, userId, storylineId);
   await track(userId, { name: 'duet_started', properties: { side } });
+  // For the other player's funnel: their partner has started (invite_was_accepted).
+  const partner = side === 'a' ? duet.duets.sideBUserId : duet.duets.sideAUserId;
+  if (partner) await track(partner, { name: 'duet_partner_started', properties: { side } });
 }
 
 /** First names a departed partner's character takes: plain, and none of the premises'. */

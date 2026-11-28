@@ -241,8 +241,9 @@ A notification's payload carries `kind` (`battery_back`, `story_waiting`,
 `story_ready` when a story asked for in ChatGPT has been written, or
 `reply_arrived` when a reply someone in a story owed has been written; see
 "Replies later"; or `duet_moved` when, in a story for two, the other player did
-something this player's side will open with), so the app can tell which was
-opened. A `duet_moved` tap should open the desk like any other; the next beat
+something this player's side will open with; or `invite_accepted`, sent once to
+the inviter when their friend accepts: "your friend said yes. / your story for
+two is next."), so the app can tell which was opened. A `duet_moved` tap should open the desk like any other; the next beat
 of that story is the one that opens with the other player's texts. It never carries a name or a line of story.
 
 ### `DELETE /api/v1/me`
@@ -1247,10 +1248,12 @@ the memory of the worker reading it, and nowhere else.
 ## Stories for two
 
 One player invites another; both get the same premise from opposite sides,
-each as their own story, offered as their next one. What crosses between the
-two sides comes later; for now the other player is a character on each side,
-by the first name they gave. All three routes speak first names only, never an
-account's email or id.
+each as their own story, offered as their next one. The other player is a
+character on each side, by the first name they gave, and what one side does that
+the other's character would know crosses as texts (see crossings below). When
+the invite is accepted the inviter gets an `invite_accepted` notification, if
+theirs are on. All three routes speak first names only, never an account's
+email or id.
 
 ### `POST /api/v1/invites`
 
@@ -1392,12 +1395,22 @@ as the next story with `fromChatGPT: true`. Not idempotent: sending the same
 note twice makes its stories twice (and uses the allowance twice), so the app
 sends a link once.
 
+Each request logs one `chatgpt_link_request` line in the web service: its
+`outcome`, `stories`, `durationMs` (the whole request), `situationsMs` (the
+model sorting the note) and `queueMs` (moderation and queuing). Counts and
+times only, never the note.
+
 ### Opening the app from a link
 
 `https://www.brambleworld.com/open/…` is a universal link: with the iPhone app
 installed it opens on the desk (`/open/story#…` sends its note to
-`POST /api/v1/stories/from-chatgpt` first); without it, a page points to the
-app. The fragment never reaches the website.
+`POST /api/v1/stories/from-chatgpt` first). Without the app, or when the link
+was opened inside another app's browser (ChatGPT's, where universal links don't
+open apps), a page offers **open in bramble**, the app's own scheme with the same
+path and fragment (`bramble://open/story#…`, built in the browser), and the app
+for a player without it. The fragment never reaches the website. Each render of
+that page logs `open_page_viewed` with its `kind` (`story` or `desk`) and
+nothing else.
 `/.well-known/apple-app-site-association` claims `/open` and `/open/*` for
 `K555FJZF47.com.brambleworld.BrambleMobile`, and nothing else.
 

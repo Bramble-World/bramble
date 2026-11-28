@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 26, 2026">
+    <LegalPage title="Privacy Policy" effective="November 28, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -177,18 +177,21 @@ export default function Privacy() {
         chatgpt&rdquo; button in the app opens ChatGPT with that request, and ChatGPT replies with a
         link that holds up to five situations from what it knows about you, each with the first
         names of the people in it and who they are to you. What ChatGPT put in the link is in the
-        part after the &ldquo;#&rdquo;, which your browser never sends to our website. When you tap
-        the link, the Bramble app opens and sends it to our server straight away, without showing it
-        to you first: tapping it is your ok. We send it to OpenAI to sort it into the situations we
-        can write stories from. That step leaves out anything about health (including sexual
-        health), mental-health crises or self-harm, money or debt, legal trouble, addresses and
-        other details that identify someone, school or work logistics, anything sexual, and anything
-        too thin to make a story, whatever ChatGPT put in the link. We keep only the situations it
-        picked, never the rest of what the link held, and each one then goes the way a story asked
-        for in ChatGPT does, below. So that a link the app sends twice (if it lost the first answer)
-        makes its stories only once, we keep a one-way fingerprint of the link and your account,
-        which can&rsquo;t be turned back into what the link said, and what we answered, both for 30
-        minutes. You can make up to five stories a day, however you ask.
+        part after the &ldquo;#&rdquo;, which your browser never sends to our website. If the link
+        opens our website instead of the app (inside ChatGPT&rsquo;s browser, say), the page reads
+        that part only in your browser, to hand it to the app when you tap &ldquo;open in
+        bramble&rdquo;. When you tap the link, the Bramble app opens and sends it to our server
+        straight away, without showing it to you first: tapping it is your ok. We send it to OpenAI
+        to sort it into the situations we can write stories from. That step leaves out anything
+        about health (including sexual health), mental-health crises or self-harm, money or debt,
+        legal trouble, addresses and other details that identify someone, school or work logistics,
+        anything sexual, and anything too thin to make a story, whatever ChatGPT put in the link. We
+        keep only the situations it picked, never the rest of what the link held, and each one then
+        goes the way a story asked for in ChatGPT does, below. So that a link the app sends twice
+        (if it lost the first answer) makes its stories only once, we keep a one-way fingerprint of
+        the link and your account, which can&rsquo;t be turned back into what the link said, and
+        what we answered, both for 30 minutes. You can make up to five stories a day, however you
+        ask.
       </p>
       <p>
         We first send it to OpenAI&rsquo;s moderation service; if it talks about self-harm, abuse or
@@ -213,22 +216,23 @@ export default function Privacy() {
         keeps just the six-letter code (never a name) on your iPhone until you accept it, turn it
         down, the invite is no longer open, or 7 days pass, so it&rsquo;s still there after you sign
         up. When someone with an account accepts, we record who accepted and when, and they give the
-        first name they want you to know them by. You each get your own side of the same story, in
-        your own account: the other person is a character in it by the first name they gave. Neither
-        of you can see the other&rsquo;s side, any of the other&rsquo;s other stories, or anything
-        else in the other&rsquo;s account. Some of what you do in your side reaches theirs: when one
-        of your choices is something their character would know about (you told them, texted them,
-        showed them, or they were there), a short note of what happened is kept with their side, and
-        their next beat opens with texts from your character about it, written by our story model
-        (OpenAI) for their side. They see only that beat, never your words, your choices themselves
-        or the rest of your side; what you keep to yourself stays in your side. Nothing you type
-        crosses, and you can&rsquo;t message each other. If you haven&rsquo;t played your side for 3
-        days, nothing new reaches it until you do. When something reaches their side while
-        they&rsquo;re away, we may send them one notification saying their story for two moved,
-        which never says who or what. If one of you deletes their account, the other&rsquo;s side
-        stays theirs and carries on, with the character who was the person who left renamed to a
-        made-up first name everywhere in it, so nothing in it is linked to them any more; anything
-        of theirs that hadn&rsquo;t yet reached it is deleted.
+        first name they want you to know them by. If your notifications are on, we send you one
+        saying your friend said yes, which never says who. You each get your own side of the same
+        story, in your own account: the other person is a character in it by the first name they
+        gave. Neither of you can see the other&rsquo;s side, any of the other&rsquo;s other stories,
+        or anything else in the other&rsquo;s account. Some of what you do in your side reaches
+        theirs: when one of your choices is something their character would know about (you told
+        them, texted them, showed them, or they were there), a short note of what happened is kept
+        with their side, and their next beat opens with texts from your character about it, written
+        by our story model (OpenAI) for their side. They see only that beat, never your words, your
+        choices themselves or the rest of your side; what you keep to yourself stays in your side.
+        Nothing you type crosses, and you can&rsquo;t message each other. If you haven&rsquo;t
+        played your side for 3 days, nothing new reaches it until you do. When something reaches
+        their side while they&rsquo;re away, we may send them one notification saying their story
+        for two moved, which never says who or what. If one of you deletes their account, the
+        other&rsquo;s side stays theirs and carries on, with the character who was the person who
+        left renamed to a made-up first name everywhere in it, so nothing in it is linked to them
+        any more; anything of theirs that hadn&rsquo;t yet reached it is deleted.
       </p>
 
       <h3>Reporting a story</h3>

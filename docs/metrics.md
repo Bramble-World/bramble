@@ -132,7 +132,23 @@ one: both sides are written) and `duet_started` with `side` (`a` the inviter's,
 `b` the invitee's) when a player starts their side. No codes, names or ids
 beyond the player's own. A side's beats are `beat_played` with `origin: duet`.
 Acceptance rate: `invite_accepted` / `invite_created`. Both playing:
-duets with `duet_started` for both sides. The premise stock is in the logs, not
+duets with `duet_started` for both sides.
+
+**The inviter's funnel** (since 2026-11-28), all on the inviter's own person, so
+no id joins the two players: `invite_created` → `invite_was_accepted` (their
+friend accepted) → `duet_partner_started` with `side` (their friend started
+their side; it's recorded for each player when the other starts). `push_sent`
+with `kind: invite_accepted` is "your friend said yes." to the inviter, and
+`notification_opened` with the same kind its tap.
+
+The app's own invite events (iOS): `invite_shared` with `outcome` (`shared`,
+`cancelled`, `limit`, `failed`), `invite_code_entered` with `from` (`link`,
+`typed`, `settings`, `people`, `paused`), `invite_accept_answered` with
+`outcome` (`accepted`, `used`, `own`, `expired`, `unknown`, `failed`; named
+`invite_accepted` in builds before 2026-11-28, which also counted failures, so
+count acceptances from the server's `invite_accepted`) and `invite_declined`.
+The invite page sends no analytics; it logs `invite_page_viewed` with its state
+(`open`, `accepted`, `expired`, `missing`), never the code. The premise stock is in the logs, not
 analytics: `duet-premise-sweep` logs `stock`, `written`, `rejected` and `failed`
 each run, and a high `rejected` means the writer prompt needs work.
 

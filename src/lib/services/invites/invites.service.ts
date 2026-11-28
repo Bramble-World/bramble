@@ -2,8 +2,10 @@ import { randomInt } from 'node:crypto';
 import { and, asc, count, eq, gt, gte, isNull, min } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/index';
-import { invites } from '@/db/schema/tables';
+import { env } from '@/env';
+import { invites, users } from '@/db/schema/tables';
 import { track } from '@/lib/analytics/analytics';
+import { withIosClient } from '@/lib/analytics/client-context';
 import {
   InviteExpiredError,
   InviteUsedError,
@@ -13,6 +15,9 @@ import {
 } from '@/lib/utils/errors';
 import { isUniqueViolation } from '../guests/guests.claim';
 import { createDuet, pickPremise } from '../duets/duets.service';
+import { apnsConfigured } from '../push/apns';
+import { MESSAGES } from '../push/push.policy';
+import { sendToUser } from '../push/push.service';
 
 /**
  * Invites to a story for two (`invites`, `duets`).
@@ -144,7 +149,7 @@ export async function acceptInvite(
     if (invite.inviterUserId === userId) throw new OwnInviteError();
     if (invite.acceptedAt) {
       if (invite.acceptedByUserId === userId && invite.duetId) {
-        return { duetId: invite.duetId, created: false };
+        return { duetId: invite.duetId, created: false, inviter: invite.inviterUserId };
       }
       throw new InviteUsedError();
     }
@@ -161,9 +166,39 @@ export async function acceptInvite(
       .update(invites)
       .set({ acceptedByUserId: userId, acceptedAt: now, duetId, updatedAt: now })
       .where(eq(invites.id, invite.id));
-    return { duetId, created: true };
+    return { duetId, created: true, inviter: invite.inviterUserId };
   });
 
-  if (result.created) await track(userId, { name: 'invite_accepted', properties: {} });
+  if (result.created) {
+    await track(userId, { name: 'invite_accepted', properties: {} });
+    await track(result.inviter, { name: 'invite_was_accepted', properties: {} });
+    await announceInviteAccepted(result.inviter);
+  }
   return { duetId: result.duetId };
+}
+
+/**
+ * "your friend said yes. / your story for two is next.": once, to the inviter,
+ * when their invite is accepted, if their notifications are on. Never who. Not
+ * held for quiet hours: it answers something they just did. Its failure never
+ * fails the accept.
+ */
+export async function announceInviteAccepted(inviterUserId: string): Promise<void> {
+  if (env.PUSH_ENABLED !== 'true' || !apnsConfigured()) return;
+  try {
+    const [inviter] = await db
+      .select({ pushEnabled: users.pushEnabled })
+      .from(users)
+      .where(eq(users.id, inviterUserId))
+      .limit(1);
+    if (!inviter?.pushEnabled) return;
+    const sent = await sendToUser(inviterUserId, MESSAGES.invite_accepted, 'invite_accepted');
+    if (sent.delivered > 0) {
+      await withIosClient(() =>
+        track(inviterUserId, { name: 'push_sent', properties: { kind: 'invite_accepted' } })
+      );
+    }
+  } catch {
+    // A notification that didn't go is not worth failing an accepted invite over.
+  }
 }

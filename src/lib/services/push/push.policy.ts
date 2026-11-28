@@ -44,6 +44,11 @@ export const MESSAGES: Record<PushKind, PushMessage> = {
     title: 'your story for two just moved.',
     body: 'something happened. see what’s waiting.',
   },
+  // To the inviter, when their friend accepts (invites.service.ts). Never who.
+  invite_accepted: {
+    title: 'your friend said yes.',
+    body: 'your story for two is next.',
+  },
 };
 
 /** Away this long before "your story for two just moved". */
