@@ -189,6 +189,20 @@ export type AnalyticsEvent =
       properties: Record<string, never>;
     }
   | {
+      /**
+       * The inviter's own record that their invite was accepted (`invite_accepted`
+       * is the accepter's). With `invite_created` and `duet_partner_started`, the
+       * inviter's funnel, without any id joining the two players.
+       */
+      name: 'invite_was_accepted';
+      properties: Record<string, never>;
+    }
+  | {
+      /** The other player started their side of a story for two, recorded against this one. */
+      name: 'duet_partner_started';
+      properties: { side: 'a' | 'b' };
+    }
+  | {
       /** A player started their side of a story for two: `a` the inviter's, `b` the invitee's. */
       name: 'duet_started';
       properties: { side: 'a' | 'b' };
@@ -219,7 +233,13 @@ export type AnalyticsEvent =
       name: 'push_sent';
       properties: {
         /** An enum: what a notification says is decided by this, and never stored. */
-        kind: 'battery_back' | 'story_waiting' | 'story_ready' | 'reply_arrived' | 'duet_moved';
+        kind:
+          | 'battery_back'
+          | 'story_waiting'
+          | 'story_ready'
+          | 'reply_arrived'
+          | 'duet_moved'
+          | 'invite_accepted';
         /** For story_waiting: which wording went (push.policy.ts). Never the words or a count. */
         copy?: 'today' | 'texts' | 'choice';
       };

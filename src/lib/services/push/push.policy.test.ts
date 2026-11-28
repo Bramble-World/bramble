@@ -125,6 +125,8 @@ describe('every notification', () => {
       'pick up where you left off.',
       'your story for two just moved.',
       'something happened. see what’s waiting.',
+      'your friend said yes.',
+      'your story for two is next.',
     ]);
   });
 });
