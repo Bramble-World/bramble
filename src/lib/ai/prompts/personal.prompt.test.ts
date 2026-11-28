@@ -63,5 +63,7 @@ describe('the prompts for a player’s own story', () => {
     });
     expect(spoils.system).toContain('its hook or opening lines gave too much away');
     expect(spoils.prompt).toBe(personalRewritePrompt.render({ context, targetBeats: 20 }).prompt);
+    const weak = personalRewritePrompt.render({ context, targetBeats: 20, fix: 'low_quality' });
+    expect(weak.system).toContain('An earlier version scored low as a story to play');
   });
 });

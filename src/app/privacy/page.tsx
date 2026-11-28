@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" effective="November 26, 2026">
+    <LegalPage title="Privacy Policy" effective="November 28, 2026">
       <p>
         Bramble turns conversations you choose, or on iPhone the people you name, into interactive
         stories you can play. That means handling some of the most personal data there is, so this
@@ -177,18 +177,21 @@ export default function Privacy() {
         chatgpt&rdquo; button in the app opens ChatGPT with that request, and ChatGPT replies with a
         link that holds up to five situations from what it knows about you, each with the first
         names of the people in it and who they are to you. What ChatGPT put in the link is in the
-        part after the &ldquo;#&rdquo;, which your browser never sends to our website. When you tap
-        the link, the Bramble app opens and sends it to our server straight away, without showing it
-        to you first: tapping it is your ok. We send it to OpenAI to sort it into the situations we
-        can write stories from. That step leaves out anything about health (including sexual
-        health), mental-health crises or self-harm, money or debt, legal trouble, addresses and
-        other details that identify someone, school or work logistics, anything sexual, and anything
-        too thin to make a story, whatever ChatGPT put in the link. We keep only the situations it
-        picked, never the rest of what the link held, and each one then goes the way a story asked
-        for in ChatGPT does, below. So that a link the app sends twice (if it lost the first answer)
-        makes its stories only once, we keep a one-way fingerprint of the link and your account,
-        which can&rsquo;t be turned back into what the link said, and what we answered, both for 30
-        minutes. You can make up to five stories a day, however you ask.
+        part after the &ldquo;#&rdquo;, which your browser never sends to our website. If the link
+        opens our website instead of the app (inside ChatGPT&rsquo;s browser, say), the page reads
+        that part only in your browser, to hand it to the app when you tap &ldquo;open in
+        bramble&rdquo;. When you tap the link, the Bramble app opens and sends it to our server
+        straight away, without showing it to you first: tapping it is your ok. We send it to OpenAI
+        to sort it into the situations we can write stories from. That step leaves out anything
+        about health (including sexual health), mental-health crises or self-harm, money or debt,
+        legal trouble, addresses and other details that identify someone, school or work logistics,
+        anything sexual, and anything too thin to make a story, whatever ChatGPT put in the link. We
+        keep only the situations it picked, never the rest of what the link held, and each one then
+        goes the way a story asked for in ChatGPT does, below. So that a link the app sends twice
+        (if it lost the first answer) makes its stories only once, we keep a one-way fingerprint of
+        the link and your account, which can&rsquo;t be turned back into what the link said, and
+        what we answered, both for 30 minutes. You can make up to five stories a day, however you
+        ask.
       </p>
       <p>
         We first send it to OpenAI&rsquo;s moderation service; if it talks about self-harm, abuse or
