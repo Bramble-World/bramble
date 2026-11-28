@@ -27,12 +27,20 @@ export const metadata: Metadata = {
  * opens `/invite/<code>` in it instead (`/.well-known/apple-app-site-association`).
  * Without it, this shows the code to type after installing: iOS doesn't carry
  * a link through a fresh install, and nothing here tries to (no fingerprinting).
+ * Each view logs `invite_page_viewed` with the invite's state only.
  */
 export default async function InvitePage({ params }: { params: Promise<{ code: string }> }) {
   // Per request: the invite's state and the store link both change.
   await connection();
   const page = await resolveInvite((await params).code, (code) => readInvite(code));
   if (page.kind === 'redirect') redirect(`/invite/${page.code}`);
+  // How often an invite lands here, and in what state: never the code or the name.
+  console.info(
+    JSON.stringify({
+      event: 'invite_page_viewed',
+      state: page.kind === 'missing' ? 'missing' : page.invite.state,
+    })
+  );
   if (page.kind === 'missing') notFound();
 
   return (

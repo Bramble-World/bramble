@@ -241,8 +241,9 @@ A notification's payload carries `kind` (`battery_back`, `story_waiting`,
 `story_ready` when a story asked for in ChatGPT has been written, or
 `reply_arrived` when a reply someone in a story owed has been written; see
 "Replies later"; or `duet_moved` when, in a story for two, the other player did
-something this player's side will open with), so the app can tell which was
-opened. A `duet_moved` tap should open the desk like any other; the next beat
+something this player's side will open with; or `invite_accepted`, sent once to
+the inviter when their friend accepts: "your friend said yes. / your story for
+two is next."), so the app can tell which was opened. A `duet_moved` tap should open the desk like any other; the next beat
 of that story is the one that opens with the other player's texts. It never carries a name or a line of story.
 
 ### `DELETE /api/v1/me`
@@ -1247,10 +1248,12 @@ the memory of the worker reading it, and nowhere else.
 ## Stories for two
 
 One player invites another; both get the same premise from opposite sides,
-each as their own story, offered as their next one. What crosses between the
-two sides comes later; for now the other player is a character on each side,
-by the first name they gave. All three routes speak first names only, never an
-account's email or id.
+each as their own story, offered as their next one. The other player is a
+character on each side, by the first name they gave, and what one side does that
+the other's character would know crosses as texts (see crossings below). When
+the invite is accepted the inviter gets an `invite_accepted` notification, if
+theirs are on. All three routes speak first names only, never an account's
+email or id.
 
 ### `POST /api/v1/invites`
 
